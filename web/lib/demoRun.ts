@@ -1,0 +1,77 @@
+import type { Run, TreeNode } from './types';
+
+/*
+ * Stand-in data until the run pipeline lands. It exists so the tree can be built
+ * and looked at against real frames rather than grey boxes — the component's
+ * whole premise is that nodes are images, and grey boxes would hide every
+ * layout problem worth finding.
+ */
+export const demoRun: Run = {
+  id: 'demo',
+  uid: 'demo',
+  avatarId: 'maya',
+  goal: 'A 15-second ad where I actually use the serum, in my kitchen. Should feel filmed, not shot.',
+  aspect: '9:16',
+  seconds: 15,
+  status: 'running',
+  plan: [
+    { stepNo: 1, instruction: 'Put her in a real room', rationale: 'A blank wall reads as a set. Kitchens are where this product is actually used.', status: 'done' },
+    { stepNo: 2, instruction: "Move to arm's-length framing", rationale: 'Nobody films themselves on a tripod. The camera has to be a hand.', status: 'done' },
+    { stepNo: 3, instruction: 'Light it from the window', rationale: 'Retried once — the first pass went full studio and lost the room.', status: 'retried' },
+    { stepNo: 4, instruction: 'Get the product to the lens', rationale: 'The bottle has to be legible in the first two seconds or the scroll wins.', status: 'running' },
+    { stepNo: 5, instruction: 'Loosen the expression', rationale: 'Mid-sentence beats posed. A closed mouth reads as a photograph.', status: 'pending' },
+    { stepNo: 6, instruction: 'Render the 15 seconds', rationale: 'The approved frame becomes the first frame of the clip.', status: 'pending' },
+  ],
+  createdAt: 0,
+  updatedAt: 0,
+};
+
+const t = (n: number) => n * 1000;
+
+export const demoNodes: TreeNode[] = [
+  { id: 'root', parentId: null, stepNo: 0, kind: 'avatar', status: 'achieved', frameUrl: '/img/av-front.jpg', createdAt: t(1) },
+  {
+    id: 'n1', parentId: 'root', stepNo: 1, kind: 'frame', status: 'achieved', frameUrl: '/img/f1.jpg',
+    instruction: 'Put her in a real room',
+    rationale: 'A blank wall reads as a set. Kitchens are where this product is actually used, so the room has to carry that.',
+    verdict: 'met',
+    criticRubric: 'does the room look lived in?',
+    criticNotes: '"The counter has objects that were not placed for the shot. That is what separates a room from a set."',
+    createdAt: t(2),
+  },
+  {
+    id: 'n2', parentId: 'n1', stepNo: 2, kind: 'frame', status: 'achieved', frameUrl: '/img/f2.jpg',
+    instruction: "Move to arm's-length framing",
+    rationale: 'Nobody films themselves on a tripod. The camera has to read as a hand at the end of an arm.',
+    verdict: 'met',
+    criticRubric: 'could a person holding a phone have taken this?',
+    criticNotes: '"Framing is off-centre and slightly high, which is where a held phone naturally sits. It reads as a hand."',
+    createdAt: t(3),
+  },
+  // The discarded attempt stays on the canvas. It is the proof of autonomy.
+  {
+    id: 'n3x', parentId: 'n2', stepNo: 3, kind: 'frame', status: 'failed', frameUrl: '/img/fx.jpg',
+    discarded: true,
+    instruction: 'Light it from the window',
+    rationale: 'First attempt at relighting.',
+    verdict: 'failed',
+    criticRubric: 'would a phone have produced this light?',
+    criticNotes: '"Lit her like a beauty campaign — clean gradient on the cheek, no room left behind her. That is the opposite of the goal."',
+    createdAt: t(4),
+  },
+  {
+    id: 'n3', parentId: 'n2', stepNo: 3, kind: 'frame', status: 'partial', frameUrl: '/img/f3.jpg',
+    instruction: 'Light it from the window',
+    rationale: 'Overhead room light flattens the face and puts a shadow under the jaw that no phone video has. Side light is what a real kitchen gives at that hour.',
+    verdict: 'partial',
+    criticRubric: 'would a phone have produced this light?',
+    criticNotes: '"Retried with the source pushed to one side and the background allowed to blow out slightly, which is what a real window does. The falloff is right now."',
+    createdAt: t(5),
+  },
+  {
+    id: 'n4', parentId: 'n3', stepNo: 4, kind: 'frame', status: 'generating', frameUrl: '/img/f4.jpg',
+    instruction: 'Get the product to the lens',
+    rationale: 'The bottle has to be legible in the first two seconds or the scroll wins.',
+    createdAt: t(6),
+  },
+];

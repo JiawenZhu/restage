@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    a { color: #3987e5; } a:hover { color: #6fa8ec; }
+    .ui { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .tnum { font-variant-numeric: tabular-nums; }
+    @keyframes rs-pulse { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.25; } }
+    .rs-cursor { animation: rs-pulse 1.6s ease-in-out infinite; }
+  </style>
+</helmet>
+
+<div class="ui" style="width: 1400px; background: #0d0d0d; color: #ffffff; padding: 40px; -webkit-font-smoothing: antialiased;">
+
+  <h2 style="margin: 0 0 4px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em;">Component sheet</h2>
+  <p style="margin: 0 0 32px; font-size: 14px; color: #898781;">Status is never carried by colour alone &mdash; every state pairs its colour with a glyph or a word.</p>
+
+  <!-- nodes -->
+  <p style="margin: 0 0 14px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">NODE &mdash; SIX STATUSES</p>
+  <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px;">
+
+    <div>
+      <div style="position: relative; height: 108px;">
+        <div class="rs-cursor" style="position: absolute; inset: -7px; border: 2px solid #3987e5; border-radius: 13px;"></div>
+        <div style="position: absolute; inset: 0; border-radius: 8px; border: 2px solid #3987e5; overflow: hidden; background: #232322;">
+          <svg viewBox="0 0 160 108" style="display: block; width: 100%; height: 100%; opacity: 0.45;"><rect width="160" height="108" fill="#ded3c2"></rect><rect y="74" width="160" height="34" fill="#c6b8a1"></rect><rect x="64" y="28" width="26" height="48" rx="4" fill="#f6f1e8"></rect></svg>
+          <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+            <span style="display: flex; align-items: center; gap: 5px; background: rgba(0,0,0,0.72); color: #6fa8ec; font-size: 9.5px; font-weight: 700; padding: 4px 9px; border-radius: 20px;"><span class="rs-cursor" style="width: 5px; height: 5px; border-radius: 50%; background: #3987e5; display: block;"></span>GENERATING</span>
+          </div>
+        </div>
+      </div>
+      <p style="margin: 16px 0 0; font-size: 12.5px; font-weight: 600; color: #3987e5;">generating</p>
+      <p style="margin: 2px 0 0; font-size: 11.5px; color: #6d6b66;">pulse ring, label inside</p>
+    </div>
+
+    <div>
+      <div style="height: 108px; border-radius: 8px; border: 2px solid #0ca30c; overflow: hidden; background: #232322; position: relative;">
+        <svg viewBox="0 0 160 108" style="display: block; width: 100%; height: 100%;"><rect width="160" height="108" fill="#ded3c2"></rect><rect y="74" width="160" height="34" fill="#c6b8a1"></rect><rect x="64" y="28" width="26" height="48" rx="4" fill="#f6f1e8"></rect></svg>
+        <span style="position: absolute; top: 6px; right: 6px; width: 17px; height: 17px; border-radius: 50%; background: #0ca30c; display: flex; align-items: center; justify-content: center;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+      </div>
+      <p style="margin: 16px 0 0; font-size: 12.5px; font-weight: 600; color: #0ca30c;">achieved</p>
+      <p style="margin: 2px 0 0; font-size: 11.5px; color: #6d6b66;">check glyph, corner</p>
+    </div>
+
+    <div>
+      <div style="height: 108px; border-radius: 8px; border: 2px solid #fab219; overflow: hidden; background: #232322; position: relative;">
+        <svg viewBox="0 0 160 108" style="display: block; width: 100%; height: 100%;"><rect width="160" height="108" fill="#e3d8c7"></rect><rect y="74" width="160" height="34" fill="#c9bba4"></rect><rect x="64" y="26" width="26" height="50" rx="4" fill="#f6f1e8"></rect></svg>
+        <span style="position: absolute; top: 6px; right: 6px; display: flex; align-items: center; gap: 3px; background: #33260c; border: 1px solid rgba(250,178,25,0.5); color: #fab219; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 20px;">1&times;</span>
+      </div>
+      <p style="margin: 16px 0 0; font-size: 12.5px; font-weight: 600; color: #fab219;">partial &middot; retried</p>
+      <p style="margin: 2px 0 0; font-size: 11.5px; color: #6d6b66;">retry count, corner</p>
+    </div>
+
+    <div>
+      <div style="height: 108px; border-radius: 8px; border: 2px solid #d03b3b; overflow: hidden; background: #232322; position: relative; opacity: 0.55;">
+        <svg viewBox="0 0 160 108" style="display: block; width: 100%; height: 100%; filter: saturate(0.25);"><rect width="160" height="108" fill="#d8d4cd"></rect><rect y="74" width="160" height="34" fill="#c6c2ba"></rect><rect x="64" y="30" width="26" height="46" rx="4" fill="#eae6df"></rect></svg>
+        <span style="position: absolute; top: 6px; right: 6px; width: 17px; height: 17px; border-radius: 50%; background: #d03b3b; display: flex; align-items: center; justify-content: center;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></span>
+      </div>
+      <p style="margin: 16px 0 0; font-size: 12.5px; font-weight: 600; color: #d03b3b;">failed &middot; discarded</p>
+      <p style="margin: 2px 0 0; font-size: 11.5px; color: #6d6b66;">stays on canvas</p>
+    </div>
+
+    <div>
+      <div style="height: 108px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.22); overflow: hidden; background: #232322; opacity: 0.35;">
+        <svg viewBox="0 0 160 108" style="display: block; width: 100%; height: 100%; filter: saturate(0.15);"><rect width="160" height="108" fill="#ded4c5"></rect><rect y="74" width="160" height="34" fill="#c6b9a4"></rect><rect x="52" y="28" width="26" height="48" rx="4" fill="#f2ece2"></rect><rect x="88" y="38" width="22" height="38" rx="4" fill="#e6ddd0"></rect></svg>
+      </div>
+      <p style="margin: 16px 0 0; font-size: 12.5px; font-weight: 600; color: #898781;">rejected by you</p>
+      <p style="margin: 2px 0 0; font-size: 11.5px; color: #6d6b66;">35%, desaturated</p>
+    </div>
+
+    <div>
+      <div style="position: relative; height: 108px;">
+        <div style="position: absolute; inset: -6px; border: 2px solid #ffffff; border-radius: 13px;"></div>
+        <div style="position: absolute; inset: 0; border-radius: 8px; border: 2px solid #0ca30c; overflow: hidden; background: #232322; box-shadow: 0 8px 24px rgba(0,0,0,0.55);">
+          <svg viewBox="0 0 160 108" style="display: block; width: 100%; height: 100%;"><rect width="160" height="108" fill="#ded3c2"></rect><rect y="74" width="160" height="34" fill="#c6b8a1"></rect><rect x="64" y="28" width="26" height="48" rx="4" fill="#f6f1e8"></rect></svg>
+        </div>
+      </div>
+      <p style="margin: 16px 0 0; font-size: 12.5px; font-weight: 600; color: #ffffff;">current selection</p>
+      <p style="margin: 2px 0 0; font-size: 11.5px; color: #6d6b66;">white ring, raised</p>
+    </div>
+  </div>
+
+  <!-- edges -->
+  <p style="margin: 40px 0 14px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">EDGE &mdash; VERDICT BADGE AT MIDPOINT</p>
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; background: #131312; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 24px;">
+    <div style="position: relative; height: 62px;">
+      <svg viewBox="0 0 360 62" style="display: block; width: 100%; height: 100%;"><path d="M8 31 C120 31 240 31 352 31" fill="none" stroke="rgba(255,255,255,0.24)" stroke-width="2"></path></svg>
+      <span style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; background: #132a13; border: 1px solid rgba(12,163,12,0.45); color: #0ca30c; font-size: 9.5px; font-weight: 700; padding: 3px 8px; border-radius: 20px;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>MET</span>
+    </div>
+    <div style="position: relative; height: 62px;">
+      <svg viewBox="0 0 360 62" style="display: block; width: 100%; height: 100%;"><path d="M8 31 C120 31 240 31 352 31" fill="none" stroke="rgba(255,255,255,0.24)" stroke-width="2"></path></svg>
+      <span style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; background: #33260c; border: 1px solid rgba(250,178,25,0.45); color: #fab219; font-size: 9.5px; font-weight: 700; padding: 3px 8px; border-radius: 20px;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"></path></svg>RETRIED 1&times;</span>
+    </div>
+    <div style="position: relative; height: 62px;">
+      <svg viewBox="0 0 360 62" style="display: block; width: 100%; height: 100%;"><path d="M8 46 C110 46 150 20 352 14" fill="none" stroke="rgba(208,59,59,0.55)" stroke-width="2" stroke-dasharray="5 4"></path></svg>
+      <span style="position: absolute; left: 46%; top: 42%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; background: #2c1414; border: 1px solid rgba(208,59,59,0.45); color: #d03b3b; font-size: 9.5px; font-weight: 700; padding: 3px 8px; border-radius: 20px;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>DISCARDED</span>
+    </div>
+  </div>
+
+  <!-- plan rows -->
+  <p style="margin: 40px 0 14px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">PLAN ROW &mdash; FOUR STATES</p>
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+
+    <div style="background: #1a1a19; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px; display: flex; gap: 11px;">
+      <span style="width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.22); flex-shrink: 0; box-sizing: border-box;"></span>
+      <div><p style="margin: 0; font-size: 13px; font-weight: 600; color: #898781;">Grade toward phone colour</p><p style="margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; color: #6d6b66;">Slight green in the shadows, highlights clipped.</p><p style="margin: 7px 0 0; font-size: 11px; font-weight: 600; color: #6d6b66;">PENDING</p></div>
+    </div>
+
+    <div style="background: rgba(57,135,229,0.09); border: 1px solid rgba(57,135,229,0.4); border-radius: 10px; padding: 14px; display: flex; gap: 11px; position: relative;">
+      <div style="position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; background: #3987e5; border-radius: 2px;"></div>
+      <span class="rs-cursor" style="width: 20px; height: 20px; border-radius: 50%; border: 2px solid #3987e5; background: #1a1a19; flex-shrink: 0; box-sizing: border-box;"></span>
+      <div><p style="margin: 0; font-size: 13px; font-weight: 600;">Add a hand entering frame</p><p style="margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; color: #c3c2b7;">Contact is the shortest path to the format the feed rewards.</p><p style="margin: 7px 0 0; font-size: 11px; font-weight: 600; color: #6fa8ec;">RUNNING</p></div>
+    </div>
+
+    <div style="background: #1a1a19; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px; display: flex; gap: 11px;">
+      <span style="width: 20px; height: 20px; border-radius: 50%; background: #0ca30c; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+      <div><p style="margin: 0; font-size: 13px; font-weight: 600;">Replace the seamless backdrop</p><p style="margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; color: #898781;">Studio white is the strongest tell that a shot is not user-generated.</p><p style="margin: 7px 0 0; font-size: 11px; font-weight: 600; color: #0ca30c;">DONE</p></div>
+    </div>
+
+    <div style="background: #1a1a19; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px; display: flex; gap: 11px;">
+      <span style="width: 20px; height: 20px; border-radius: 50%; background: #fab219; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"></path></svg></span>
+      <div><p style="margin: 0; font-size: 13px; font-weight: 600;">Soften the key light</p><p style="margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; color: #898781;">Retried once &mdash; the first pass went flat and the bottle stopped sitting down.</p><p style="margin: 7px 0 0; font-size: 11px; font-weight: 600; color: #fab219;">RETRIED 1&times;</p></div>
+    </div>
+  </div>
+
+  <!-- taste chips -->
+  <p style="margin: 40px 0 14px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">TASTE CHIP</p>
+  <div style="display: flex; flex-wrap: wrap; gap: 9px; align-items: center;">
+    <span style="font-size: 12.5px; color: #c3c2b7; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 6px 13px;">avoids warm palettes</span>
+    <span style="font-size: 12.5px; color: #c3c2b7; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 6px 13px;">rejects visible branding</span>
+    <span style="font-size: 12.5px; color: #6d6b66; border: 1px dashed rgba(255,255,255,0.16); border-radius: 20px; padding: 6px 13px;">crop tightness &middot; 2 signals</span>
+    <span style="margin-left: 10px; font-size: 12px; color: #6d6b66;">settled &middot; still learning</span>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#3987e5","options":["#3987e5","#0ca30c","#fab219","#d03b3b"]}}'>
+class Component extends DCLogic {
+  renderVals() { return { accent: this.props.accent ?? '#3987e5' }; }
+}
+</script>
+</body>
+</html>

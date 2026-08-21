@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    a { color: #3987e5; } a:hover { color: #6fa8ec; }
+    .ui { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .tnum { font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div class="ui" style="width: 1920px; height: 1080px; background: #0d0d0d; color: #ffffff; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; height: 76px; flex-shrink: 0; padding: 0 24px; background: #1a1a19; border-bottom: 1px solid rgba(255,255,255,0.10);">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path><path d="M14 13.5l1.6-1.6a2 2 0 0 1 2.8 0L21 15"></path></svg>
+      <span style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em;">Restage</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <span style="font-size: 13px; color: #898781;">Welcome back</span>
+      <div style="width: 28px; height: 28px; border-radius: 50%; background: #232322; border: 1px solid rgba(255,255,255,0.14);"></div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-grow: 1; min-height: 0;">
+
+    <!-- plan panel with taste model EXPANDED -->
+    <div style="width: 340px; flex-shrink: 0; background: #1a1a19; border-right: 1px solid rgba(255,255,255,0.10); display: flex; flex-direction: column; padding: 18px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">TASTE MODEL</span>
+
+      <div style="margin-top: 14px; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 16px;">
+        <p style="margin: 0; font-size: 13.5px; line-height: 1.6; color: #ffffff;">&ldquo;You rejected warm palettes in your last three sessions, so I&rsquo;m starting cool.&rdquo;</p>
+        <p class="tnum" style="margin: 10px 0 0; font-size: 12px; color: #898781;">Built from 7 sessions &middot; 11 rejections</p>
+      </div>
+
+      <p style="margin: 22px 0 10px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">WHAT IT LEARNED</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 7px;">
+        <span style="font-size: 12.5px; color: #c3c2b7; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 6px 13px;">avoids warm palettes</span>
+        <span style="font-size: 12.5px; color: #c3c2b7; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 6px 13px;">rejects visible branding</span>
+        <span style="font-size: 12.5px; color: #c3c2b7; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 6px 13px;">prefers minimal styling</span>
+        <span style="font-size: 12.5px; color: #c3c2b7; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 6px 13px;">keeps one product in frame</span>
+        <span style="font-size: 12.5px; color: #c3c2b7; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 6px 13px;">no visible hands on food</span>
+      </div>
+
+      <p style="margin: 22px 0 10px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">STILL LEARNING</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 7px;">
+        <span style="font-size: 12.5px; color: #6d6b66; background: transparent; border: 1px dashed rgba(255,255,255,0.16); border-radius: 20px; padding: 6px 13px;">crop tightness &middot; 2 signals</span>
+        <span style="font-size: 12.5px; color: #6d6b66; background: transparent; border: 1px dashed rgba(255,255,255,0.16); border-radius: 20px; padding: 6px 13px;">depth of field &middot; 1 signal</span>
+      </div>
+
+      <div style="flex-grow: 1;"></div>
+      <p style="margin: 0; font-size: 12px; line-height: 1.55; color: #6d6b66;">Every rejection you make edits this list. Nothing here was typed by you.</p>
+    </div>
+
+    <!-- previous sessions -->
+    <div style="flex-grow: 1; min-width: 0; padding: 34px 40px; background: #0d0d0d; background-image: radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px); background-size: 26px 26px; overflow: hidden;">
+      <h2 style="margin: 0 0 4px; font-size: 26px; font-weight: 700; letter-spacing: -0.02em;">Pick up where you left off</h2>
+      <p style="margin: 0 0 24px; font-size: 14.5px; color: #898781;">Or start a new run &mdash; the agent already knows how you like it.</p>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+
+        <div style="background: #1a1a19; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; overflow: hidden;">
+          <svg viewBox="0 0 300 170" style="display: block; width: 100%; height: auto;">
+            <rect width="300" height="170" fill="#d8ccb8"></rect><rect y="118" width="300" height="52" fill="#bfb096"></rect>
+            <rect x="120" y="42" width="50" height="78" rx="6" fill="#f2ece0" transform="rotate(-8 145 81)"></rect>
+            <path d="M196 170 q-8 -48 13 -70 q17 -18 36 -12 l0 82 z" fill="#c2a689"></path>
+          </svg>
+          <div style="padding: 14px 16px;">
+            <p style="margin: 0; font-size: 13.5px; font-weight: 600;">Serum bottle &mdash; creator look</p>
+            <p class="tnum" style="margin: 5px 0 0; font-size: 12px; color: #898781;">6 steps &middot; 1 retry &middot; 2 days ago</p>
+          </div>
+        </div>
+
+        <div style="background: #1a1a19; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; overflow: hidden;">
+          <svg viewBox="0 0 300 170" style="display: block; width: 100%; height: auto;">
+            <rect width="300" height="170" fill="#efe9e0"></rect><rect y="112" width="300" height="58" fill="#d8c9b4"></rect>
+            <rect x="196" y="24" width="80" height="56" rx="3" fill="#f7f2e8"></rect><rect x="196" y="24" width="80" height="56" rx="3" fill="none" stroke="#c2ae94" stroke-width="3"></rect>
+            <rect x="30" y="74" width="128" height="46" rx="5" fill="#f5f1ea"></rect><rect x="30" y="62" width="128" height="18" rx="5" fill="#e4dbcd"></rect>
+            <circle cx="176" cy="92" r="12" fill="#8fa47f"></circle>
+          </svg>
+          <div style="padding: 14px 16px;">
+            <p style="margin: 0; font-size: 13.5px; font-weight: 600;">Loft bedroom &mdash; $300 read</p>
+            <p class="tnum" style="margin: 5px 0 0; font-size: 12px; color: #898781;">5 steps &middot; 0 retries &middot; 5 days ago</p>
+          </div>
+        </div>
+
+        <div style="border: 1.5px dashed rgba(255,255,255,0.18); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 220px;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+          <p style="margin: 0; font-size: 14px; font-weight: 600; color: #c3c2b7;">New run</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#3987e5","options":["#3987e5","#0ca30c","#fab219","#d03b3b"]}}'>
+class Component extends DCLogic {
+  renderVals() { return { accent: this.props.accent ?? '#3987e5' }; }
+}
+</script>
+</body>
+</html>

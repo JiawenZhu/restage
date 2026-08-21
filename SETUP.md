@@ -12,15 +12,17 @@ can be run from here.
 ## 1. Create the project — **[cli]**
 
 ```bash
-firebase projects:create restage-app --display-name "Restage"
+firebase projects:create restage-studio --display-name "Restage"
 ```
 
-`restage-app` may be taken; if so Firebase will say so and you pick another. The
-project id is **permanent** and appears in URLs and bucket names, so choose it
-the way you would choose a domain.
+**Done — the project is `restage-studio`.** `restage-app` was already taken by
+someone else: GCP project ids are globally unique, not per-account, so they go
+the way domains do. The display name is still "Restage"; only the id differs,
+exactly as CareerVivid runs under `jastalk-firebase`.
 
-This creates a real Google Cloud project under your account. It costs nothing on
-its own, but it is a real resource — say the word and I will run it.
+The id is permanent and shows up in the sign-in domain
+(`restage-studio.firebaseapp.com`) and the default storage bucket, so it is not
+purely internal.
 
 ## 2. Turn on the products — **[you]**
 
@@ -82,7 +84,7 @@ Then delete the download.
 default-deny: every path has to earn access explicitly.
 
 ```bash
-firebase use <project-id>
+firebase use restage-studio   # already set in .firebaserc
 firebase deploy --only firestore:rules,storage
 ```
 

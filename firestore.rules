@@ -1,0 +1,59 @@
+rules_version = '2';
+
+/*
+ * Default deny. Every path below has to earn its access explicitly — a rule set
+ * that starts permissive and adds restrictions leaks the paths nobody thought
+ * about, which for this product means one user's face and another user's runs.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Profile and preferences.
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+
+      // Enrolment captures are biometric-adjacent. Only the owner, ever — no
+      // "public avatars" path, no sharing by link.
+      match /avatars/{avatarId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // The taste model is written by the server as it learns from rejections.
+      // The client may read it — the whole point is that it is legible — but
+      // must not edit it, or "what the agent learned" becomes user-authored.
+      match /taste/{attribute} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+
+    // A run and its tree.
+    match /runs/{runId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+
+      // Only the goal and status are the user's to change. Everything else —
+      // the plan, the verdicts, the credit cost — is the server's account of
+      // what happened, and a client that can rewrite it can fake the record.
+      allow update: if signedIn()
+                    && resource.data.uid == request.auth.uid
+                    && request.resource.data.diff(resource.data)
+                         .affectedKeys().hasOnly(['goal', 'status', 'updatedAt']);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+
+      // Nodes are written by the server only. A client that could write a node
+      // could award itself a passing critic verdict.
+      match /nodes/{nodeId} {
+        allow read: if signedIn() && get(/databases/$(database)/documents/runs/$(runId)).data.uid == request.auth.uid;
+        allow write: if false;
+      }
+    }
+  }
+}

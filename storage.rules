@@ -1,0 +1,34 @@
+rules_version = '2';
+
+/*
+ * Firebase Storage holds enrolment captures and generated frames. Finished
+ * videos live in R2 behind signed URLs and never appear here.
+ */
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Enrolment captures: the owner writes them, the owner reads them, nobody
+    // else touches them at any point.
+    match /avatars/{uid}/{captureId} {
+      allow read: if isOwner(uid);
+      allow write: if isOwner(uid)
+                   && request.resource.size < 8 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(jpeg|png|webp|heic)');
+    }
+
+    // Frames the agent produced. Written server-side; the owner may read them
+    // to see their own tree.
+    match /frames/{uid}/{runId}/{frameId} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

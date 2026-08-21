@@ -8,3 +8,8 @@ dist/
 # Generated media — regenerate rather than commit
 /out/
 *.mp4
+
+# Next.js
+web/node_modules/
+web/.next/
+web/next-env.d.ts

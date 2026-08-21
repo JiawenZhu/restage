@@ -79,17 +79,23 @@ app/
 — the plan, the tree and the inspector are panes of the same page, because the
 whole point is that you watch it happen rather than click through steps.
 
-## 3. Long-running work — **DECIDED: job rows + SSE, polling as fallback**
+## 3. Long-running work — **DECIDED: job rows + Firestore onSnapshot**
+
+*(Revised. This section originally specified SSE; the note at the end explains
+why that was a wheel we already owned.)*
 
 Measured against the real API: **a frame is ~14s, a Veo clip ~41s.** A six-step
 plan is therefore ~90s of frames, and a run has to survive a refresh.
 
 - Every generation is a **row**, not an in-memory promise. Refresh, reconnect,
   or come back tomorrow and the run is still there.
-- The tree subscribes to `/api/runs/:id/events` (**SSE**) and appends nodes as
-  they land. SSE and not WebSocket because the traffic is one-directional.
-- Poll `GET /api/runs/:id` every 3s if SSE drops. The borrowed studio already
-  polls; we keep that as the fallback rather than the primary.
+- The tree subscribes with Firestore's **`onSnapshot`** and appends nodes as
+  they land. Choosing Firestore already bought a live channel: it pushes the
+  same updates, survives a refresh for free, and needs no endpoint kept alive.
+  An SSE route would have been a second implementation of what the database
+  does, with its own reconnection bugs.
+- The orchestrator writes each node the moment it exists rather than at the end,
+  so what the client receives is the agent's progress, not a poll of it.
 
 **This is why the plan runs on frames and not video.** A tree of Veo calls
 would be minutes per branch, and the retry loop — the thing that proves

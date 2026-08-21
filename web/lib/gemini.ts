@@ -236,12 +236,28 @@ specific about the pixels: "the shadow under the jaw is gone" beats "lighting
 improved". Say what is still wrong even when the verdict is met.
 
 Default to a harsher verdict when uncertain. A critic that passes everything is
-not a critic, and the retry it declines to ask for is the whole product.`;
+not a critic, and the retry it declines to ask for is the whole product.
+
+Then decide worthRetry separately from the verdict. Ask yourself whether a
+second attempt would plausibly do better, not whether the frame is perfect:
+
+  true  — a specific, nameable thing went wrong that a smaller or more targeted
+          change could fix
+  false — the step did what it could, or the shortfall is inherent to the
+          instruction and another attempt would land in the same place
+
+Most "partial" results are good enough to build on. Say true only when you can
+name what the retry should do differently, because every true costs the user
+another twenty seconds of waiting.`;
 
 export interface Critique {
   verdict: Verdict;
   notes: string;
   rubric: string;
+  /** The critic's own call on whether another attempt would help. */
+  worthRetry: boolean;
+  /** What the retry should do differently. Empty when worthRetry is false. */
+  retryHint: string;
 }
 
 export type Verdict = 'met' | 'partial' | 'failed';
@@ -276,8 +292,10 @@ export async function critique(args: {
             verdict: { type: 'string', enum: ['met', 'partial', 'failed'] },
             notes: { type: 'string' },
             rubric: { type: 'string', description: 'the question you judged against, one line' },
+            worthRetry: { type: 'boolean' },
+            retryHint: { type: 'string', description: 'what a retry should do differently; empty if worthRetry is false' },
           },
-          required: ['verdict', 'notes', 'rubric'],
+          required: ['verdict', 'notes', 'rubric', 'worthRetry', 'retryHint'],
         },
       },
     }),

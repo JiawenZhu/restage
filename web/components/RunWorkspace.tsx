@@ -10,8 +10,14 @@ import type { Run, TreeNode } from '@/lib/types';
  * route a client component for no gain.
  */
 export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
-  const [selectedId, setSelectedId] = useState<string | null>('n3');
+  const [pinned, setPinned] = useState<string | null>(null);
+
+  // Until the user pins one, follow the agent: the newest node is where the work
+  // is, so the inspector reads as narration rather than something to operate.
+  const newest = nodes.length ? nodes[nodes.length - 1].id : null;
+  const selectedId = pinned ?? newest;
   const selected = nodes.find((n) => n.id === selectedId) ?? null;
+  const setSelectedId = setPinned;
 
   return (
     <div className="flex min-h-0 flex-1">

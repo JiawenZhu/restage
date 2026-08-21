@@ -31,6 +31,32 @@ Next.js specifically, not Vite + a separate API, for three reasons:
 CareerVivid is Vite + Firebase Functions. We port its **logic**, not its
 runtime — see §7.
 
+## 1b. Versions — **DECIDED: latest stable, checked not assumed**
+
+Read off npm on the day this was written, not from memory:
+
+| | |
+|---|---|
+| next | **16.3.2** |
+| react / react-dom | **19.2.8** |
+| tailwindcss | **4.3.3** |
+| typescript | **7.0.2** |
+| firebase / firebase-admin | **12.18.0** / **14.3.0** |
+| @aws-sdk/client-s3 (+ presigner) | **3.1116.0** |
+| zod | **4.4.3** |
+
+Two of those cost work, and it is better to know now:
+
+- **Tailwind 4 against the studio's Tailwind 3.** Tailwind 4 drops
+  `tailwind.config.js` for CSS-first configuration. The borrowed components'
+  class names mostly survive; the config and a few utilities do not. Budget a
+  pass over `ImageStudio` and `VideoStudio` rather than expecting a clean drop.
+- **Next 16 against their Next 15.** Same App Router, but expect small
+  adjustments where their components meet framework APIs.
+
+React needed no change: 19.2.8 is the current stable and there is no React 20 —
+everything published above it is a 19.3 canary.
+
 ## 2. Routing — **DECIDED: file-based App Router**
 
 ```

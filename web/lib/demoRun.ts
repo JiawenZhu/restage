@@ -31,7 +31,7 @@ const t = (n: number) => n * 1000;
 export const demoNodes: TreeNode[] = [
   { id: 'root', parentId: null, stepNo: 0, kind: 'avatar', status: 'achieved', frameUrl: '/img/av-front.jpg', createdAt: t(1) },
   {
-    id: 'n1', parentId: 'root', stepNo: 1, kind: 'frame', status: 'achieved', frameUrl: '/img/f1.jpg',
+    id: 'n1', label: 'Kitchen scene', parentId: 'root', stepNo: 1, kind: 'frame', status: 'achieved', frameUrl: '/img/f1.jpg',
     instruction: 'Put her in a real room',
     rationale: 'A blank wall reads as a set. Kitchens are where this product is actually used, so the room has to carry that.',
     verdict: 'met',
@@ -40,7 +40,7 @@ export const demoNodes: TreeNode[] = [
     createdAt: t(2),
   },
   {
-    id: 'n2', parentId: 'n1', stepNo: 2, kind: 'frame', status: 'achieved', frameUrl: '/img/f2.jpg',
+    id: 'n2', label: "Arm's-length framing", parentId: 'n1', stepNo: 2, kind: 'frame', status: 'achieved', frameUrl: '/img/f2.jpg',
     instruction: "Move to arm's-length framing",
     rationale: 'Nobody films themselves on a tripod. The camera has to read as a hand at the end of an arm.',
     verdict: 'met',
@@ -50,7 +50,7 @@ export const demoNodes: TreeNode[] = [
   },
   // The discarded attempt stays on the canvas. It is the proof of autonomy.
   {
-    id: 'n3x', parentId: 'n2', stepNo: 3, kind: 'frame', status: 'failed', frameUrl: '/img/fx.jpg',
+    id: 'n3x', label: 'Window light', parentId: 'n2', stepNo: 3, kind: 'frame', status: 'failed', frameUrl: '/img/fx.jpg',
     discarded: true,
     instruction: 'Light it from the window',
     rationale: 'First attempt at relighting.',
@@ -60,7 +60,7 @@ export const demoNodes: TreeNode[] = [
     createdAt: t(4),
   },
   {
-    id: 'n3', parentId: 'n2', stepNo: 3, kind: 'frame', status: 'partial', frameUrl: '/img/f3.jpg',
+    id: 'n3', label: 'Window light', parentId: 'n2', stepNo: 3, kind: 'frame', status: 'partial', frameUrl: '/img/f3.jpg',
     instruction: 'Light it from the window',
     rationale: 'Overhead room light flattens the face and puts a shadow under the jaw that no phone video has. Side light is what a real kitchen gives at that hour.',
     verdict: 'partial',
@@ -69,7 +69,7 @@ export const demoNodes: TreeNode[] = [
     createdAt: t(5),
   },
   {
-    id: 'n4', parentId: 'n3', stepNo: 4, kind: 'frame', status: 'generating', frameUrl: '/img/f4.jpg',
+    id: 'n4', label: 'Product to lens', parentId: 'n3', stepNo: 4, kind: 'frame', status: 'generating', frameUrl: '/img/f4.jpg',
     instruction: 'Get the product to the lens',
     rationale: 'The bottle has to be legible in the first two seconds or the scroll wins.',
     createdAt: t(6),

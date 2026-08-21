@@ -18,6 +18,8 @@ export type Verdict = 'met' | 'partial' | 'failed';
 
 export interface PlanStep {
   stepNo: number;
+  /** 2-4 words naming the change — the canvas caption. */
+  label?: string;
   instruction: string;
   /** Never truncated to nothing in the UI: it is what proves the agent reasoned. */
   rationale: string;
@@ -32,6 +34,7 @@ export interface TreeNode {
   kind: 'avatar' | 'frame' | 'video';
   status: NodeStatus;
 
+  label?: string;
   instruction?: string;
   rationale?: string;
 

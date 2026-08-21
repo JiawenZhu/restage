@@ -290,8 +290,16 @@ export function VersionTree({
                 <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-ink-3">you rejected this</span>
               )}
               {!n.discarded && n.status !== 'rejected' && n.kind === 'frame' && (
+                <span className="absolute bottom-1.5 left-1.5 flex max-w-[calc(100%-12px)] items-baseline gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                  <span className="tnum shrink-0">{n.stepNo}</span>
+                  {(n.label || n.instruction) && (
+                    <span className="truncate font-medium">{n.label ?? n.instruction}</span>
+                  )}
+                </span>
+              )}
+              {n.kind === 'video' && n.status !== 'generating' && (
                 <span className="absolute bottom-1.5 left-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                  <span className="tnum">{n.stepNo}</span>
+                  final clip
                 </span>
               )}
             </button>
@@ -305,7 +313,7 @@ export function VersionTree({
             style={{ left: cardLeft, top: hoveredPos.y }}
           >
             <p className="text-[10px] font-bold tracking-[0.1em] text-ink-3">
-              {hovered.kind === 'avatar' ? 'SOURCE AVATAR' : hovered.kind === 'video' ? 'RENDERED CLIP' : `STEP ${hovered.stepNo}`}
+              {hovered.kind === 'avatar' ? 'SOURCE AVATAR' : hovered.kind === 'video' ? 'RENDERED CLIP' : `STEP ${hovered.stepNo}${hovered.label ? ` — ${hovered.label}` : ''}`}
               <span className="ml-1.5 font-semibold normal-case tracking-normal text-ink-4">· {STATUS_WORD[hovered.status] ?? hovered.status}</span>
             </p>
             {hovered.instruction && (

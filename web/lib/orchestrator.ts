@@ -16,7 +16,7 @@ if (typeof window !== 'undefined') {
 }
 
 import { adminDb } from './firebaseAdmin';
-import { critique, generateFrame, planRun } from './gemini';
+import { critique, generateFrame, planRun, verifyIdentity } from './gemini';
 import type { Aspect } from './types';
 
 /** One retry. A second failure keeps both attempts visible and moves on, because
@@ -125,6 +125,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
           stepNo: step.stepNo,
           kind: 'frame',
           status: 'generating',
+          label: step.label ?? null,
           instruction: step.instruction,
           rationale: step.rationale,
           createdAt: Date.now(),
@@ -145,24 +146,31 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
           const isFirst = parentId === 'root';
           const refs = isFirst ? [avatar] : [parentImage, avatar];
           const prompt = isFirst
-            ? `Build the opening frame of a UGC ad, ${args.aspect}. The person is the one in the reference photo — keep the face identical.\n` +
+            ? `Build the opening frame of a UGC ad, ${args.aspect}. The person is EXACTLY the one in the reference photo — same face geometry, same glasses if worn, same hairstyle, same clothing. Do not idealize, slim, or beautify the face.\n` +
               `${step.instruction}\n\n` +
               `Realistic photograph, authentic phone-shot creator content. No text, no logos, no watermarks.${retryNote}`
             : `The FIRST image is the current frame. Apply exactly one change to it:\n` +
               `${step.instruction}\n\n` +
               `Keep everything else in the frame — the scene, clothing, camera position and props — unchanged. ` +
-              `The SECOND image is the identity reference: the face must stay identical to it. ` +
+              `The SECOND image is the identity reference: the person must remain EXACTLY that person — same face geometry, same glasses if worn, same hairline. Do not idealize, slim, or beautify the face. ` +
               `Realistic photograph. No text, no logos, no watermarks.${retryNote}`;
 
           const frame = await generateFrame({ prompt, aspect: args.aspect, refs });
           const url = toDataUrl(frame.bytes, frame.mimeType);
 
-          const verdict = await critique({
-            instruction: step.instruction,
-            rationale: step.rationale,
-            before: parentImage,
-            after: { data: frame.bytes, mimeType: frame.mimeType },
-          });
+          // Critique and identity run in parallel — the identity check is a
+          // separate call because the combined one was measured to wave through
+          // a visibly different person from a real run.
+          const [verdict, identity] = await Promise.all([
+            critique({
+              instruction: step.instruction,
+              rationale: step.rationale,
+              avatar,
+              before: parentImage,
+              after: { data: frame.bytes, mimeType: frame.mimeType },
+            }),
+            verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType }),
+          ]);
 
           // Two real runs settled how this gate works. Keyed on `failed` alone,
           // no retry ever fired: the critic returned partial five times out of
@@ -173,8 +181,22 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
           // So the critic decides. It is the only party that has looked at both
           // frames, and it is told that a `true` costs the user twenty seconds,
           // so it should only say so when it can name what to do differently.
-          const unsatisfactory = verdict.verdict === 'failed' || (verdict.verdict === 'partial' && verdict.worthRetry);
-          const canRetry = unsatisfactory && verdict.worthRetry && attempt < MAX_RETRIES_PER_STEP;
+          // Identity overrides everything. The user's run proved why: the face
+          // drifted person-by-person across six steps and the critic never
+          // objected, because nothing asked it to. A frame with the wrong face
+          // is failed regardless of how well the edit landed, always worth one
+          // retry, and never allowed to become the base image for later steps —
+          // advancing on a wrong face is exactly how drift compounds.
+          // HONEST CEILING, measured against the user's own drifted run: both
+          // the flash and pro verifiers passed a frame whose face the user
+          // immediately rejected. This gate catches gross swaps (a different
+          // person outright — verified), not subtle drift. Subtle drift needs
+          // face-embedding comparison (ArcFace-class), which is the Python
+          // worker's first job. Until then the human Reject is the last line.
+          const wrongFace = !identity.samePerson || !verdict.faceMatches;
+          const unsatisfactory =
+            wrongFace || verdict.verdict === 'failed' || (verdict.verdict === 'partial' && verdict.worthRetry);
+          const canRetry = unsatisfactory && (wrongFace || verdict.worthRetry) && attempt < MAX_RETRIES_PER_STEP;
 
           await nodeRef.update({
             frameUrl: url,
@@ -183,11 +205,17 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             criticRubric: verdict.rubric,
             // A rejected attempt stays on the canvas. Hiding it would make the
             // tree tidier and delete the evidence that the agent self-corrected.
-            status: verdict.verdict === 'failed' ? 'failed' : verdict.verdict === 'partial' ? 'partial' : 'achieved',
+            status: wrongFace || verdict.verdict === 'failed' ? 'failed' : verdict.verdict === 'partial' ? 'partial' : 'achieved',
             discarded: canRetry,
           });
 
-          lastCritique = { verdict: verdict.verdict, notes: verdict.notes, retryHint: verdict.retryHint };
+          lastCritique = {
+            verdict: wrongFace ? 'failed' : verdict.verdict,
+            notes: verdict.notes,
+            retryHint: wrongFace
+              ? `The face no longer matches the enrolled person. Differences seen: ${identity.differences || 'face geometry changed'}. Restore the exact face from the identity reference. ${verdict.retryHint}`.trim()
+              : verdict.retryHint,
+          };
 
           if (!unsatisfactory) {
             parentId = nodeRef.id;
@@ -195,10 +223,14 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             landed = true;
             await markStep(attempt > 0 ? 'retried' : 'done');
           } else if (!canRetry) {
-            // Out of retries: keep the node as the line's end rather than
-            // pretending the step succeeded.
-            parentId = nodeRef.id;
-            parentImage = { data: frame.bytes, mimeType: frame.mimeType };
+            // Out of retries. An imperfect frame with the RIGHT face still
+            // advances — it is a usable base. A frame with the WRONG face does
+            // not: the node stays on the tree as a visible dead end, and the
+            // next step continues from the last good parent.
+            if (!wrongFace) {
+              parentId = nodeRef.id;
+              parentImage = { data: frame.bytes, mimeType: frame.mimeType };
+            }
             landed = true;
             await markStep('retried');
           }

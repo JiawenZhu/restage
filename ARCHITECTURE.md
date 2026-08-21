@@ -231,6 +231,25 @@ prompt. A model told "reply with JSON" wraps it in prose often enough that
 parsing becomes the flakiest part of the pipeline; a schema makes the shape the
 API's problem.
 
+## Identity — the measured ceiling
+
+The face is the product, and holding it has three layers:
+
+1. **Generation-side anchoring** — the enrolment photo rides along as a
+   reference on every frame, and edit steps receive the previous frame as the
+   image being changed. This is the primary defence.
+2. **A dedicated VLM identity check** per frame, run in parallel with the
+   critic. Measured honestly: it catches a gross swap (a different person
+   outright), and it does NOT catch subtle drift — both the flash and pro
+   verifiers passed a frame from a real run whose face the owner immediately
+   rejected. Prompting does not fix this; it was tried with feature-by-feature
+   enumeration on both models.
+3. **Face-embedding comparison (ArcFace-class, via insightface) is the real
+   gate for subtle drift** — objective cosine distance, milliseconds, and the
+   industry standard. It is the Python worker's first job, ahead of video
+   editing. Until it lands, the human Reject is the last line of defence, which
+   is one more reason the tree keeps every frame visible.
+
 ## Provisioned
 
 - **R2 bucket `video-renders`** — Standard class, **public access disabled**.

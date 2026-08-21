@@ -183,6 +183,9 @@ last approved one is rendered to video. So every step must be a visible change t
 one image, not an instruction about editing or pacing.
 
 For each step write:
+- label: 2-4 words naming the change, for a thumbnail caption ("Kitchen scene",
+  "Pick up bottle", "Window light"). A user glancing at the canvas reads only
+  this, so it must say what the step is FOR.
 - instruction: what changes in the frame, imperative, one line
 - rationale: WHY, in terms of what a viewer would notice. This is read by the
   user and is what shows you reasoned rather than pattern-matched. Never generic.
@@ -192,6 +195,7 @@ crop last, because each later step depends on the earlier one surviving.`;
 
 export interface PlannedStep {
   stepNo: number;
+  label: string;
   instruction: string;
   rationale: string;
 }
@@ -210,10 +214,11 @@ export async function planRun(goal: string, aspect: Aspect, seconds: number): Pr
             type: 'object',
             properties: {
               stepNo: { type: 'integer' },
+              label: { type: 'string', description: '2-4 words naming the change, thumbnail caption' },
               instruction: { type: 'string' },
               rationale: { type: 'string' },
             },
-            required: ['stepNo', 'instruction', 'rationale'],
+            required: ['stepNo', 'label', 'instruction', 'rationale'],
           },
         },
       },
@@ -226,7 +231,17 @@ export async function planRun(goal: string, aspect: Aspect, seconds: number): Pr
 
 const CRITIC_SYSTEM = `You judge whether one edit to a frame achieved what it claimed.
 
-You see the frame before, the frame after, and the instruction. Decide:
+You see the person's ENROLMENT PHOTO, the frame before, the frame after, and the
+instruction.
+
+FIRST, before anything else: is the person in AFTER the same person as the
+enrolment photo? Compare face geometry, glasses, hairline, and clothing (unless
+the instruction changed clothing). Faces drift step by step in generated images,
+and a drifted face makes the whole product worthless — the user is buying THEIR
+face in the ad. Set faceMatches accordingly, and be strict: "a similar-looking
+person" is false.
+
+THEN decide the verdict for the edit itself:
   met     — the change happened and the frame is better for it
   partial — the change happened but overshot or lost something
   failed  — the change did not happen, or made the frame worse
@@ -254,6 +269,8 @@ export interface Critique {
   verdict: Verdict;
   notes: string;
   rubric: string;
+  /** Is the person in AFTER still the enrolled person? Strict. */
+  faceMatches: boolean;
   /** The critic's own call on whether another attempt would help. */
   worthRetry: boolean;
   /** What the retry should do differently. Empty when worthRetry is false. */
@@ -265,6 +282,9 @@ export type Verdict = 'met' | 'partial' | 'failed';
 export async function critique(args: {
   instruction: string;
   rationale: string;
+  /** The enrolment photo. Identity is judged against THIS, not against `before`
+   *  — judging against the previous frame is how drift compounds unseen. */
+  avatar: { data: Buffer | Uint8Array; mimeType: string };
   before: { data: Buffer | Uint8Array; mimeType: string };
   after: { data: Buffer | Uint8Array; mimeType: string };
 }): Promise<Critique> {
@@ -276,6 +296,8 @@ export async function critique(args: {
       contents: [
         {
           parts: [
+            { text: 'ENROLMENT PHOTO (the identity that must hold):' },
+            { inlineData: { mimeType: args.avatar.mimeType, data: Buffer.from(args.avatar.data).toString('base64') } },
             { text: 'BEFORE:' },
             { inlineData: { mimeType: args.before.mimeType, data: Buffer.from(args.before.data).toString('base64') } },
             { text: 'AFTER:' },
@@ -292,10 +314,11 @@ export async function critique(args: {
             verdict: { type: 'string', enum: ['met', 'partial', 'failed'] },
             notes: { type: 'string' },
             rubric: { type: 'string', description: 'the question you judged against, one line' },
+            faceMatches: { type: 'boolean', description: 'is the person in AFTER the same person as the enrolment photo — strict' },
             worthRetry: { type: 'boolean' },
             retryHint: { type: 'string', description: 'what a retry should do differently; empty if worthRetry is false' },
           },
-          required: ['verdict', 'notes', 'rubric', 'worthRetry', 'retryHint'],
+          required: ['verdict', 'notes', 'rubric', 'faceMatches', 'worthRetry', 'retryHint'],
         },
       },
     }),
@@ -305,4 +328,85 @@ export async function critique(args: {
   const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('critic returned nothing');
   return JSON.parse(text) as Critique;
+}
+
+/* ── identity verification ────────────────────────────────────────────────── */
+
+const VERIFIER_SYSTEM = `You are a strict face-identity comparator, in the manner
+of a border officer: your only question is whether two photographs show the SAME
+individual person.
+
+Work in this order, and do not skip ahead:
+1. Describe person A's face, feature by feature: face width and shape, jawline,
+   cheek fullness, eye shape and spacing, eyebrows, nose bridge and tip, lips,
+   hairline and hair, glasses frame shape if any.
+2. Describe person B's face the same way.
+3. List every concrete difference you found.
+4. Only then decide samePerson.
+
+Rules:
+- "A similar-looking person of the same demographic" is NOT the same person.
+- Different lighting, expression, angle or camera do not count as differences;
+  different face GEOMETRY does — jaw width, cheek fullness, eye spacing,
+  nose shape are geometry.
+- When you are uncertain, samePerson is false. A false negative costs one
+  retry; a false positive puts a stranger's face in the user's ad.`;
+
+export interface IdentityCheck {
+  differences: string;
+  samePerson: boolean;
+}
+
+/**
+ * A dedicated call, separate from critique(). The combined check was measured
+ * to fail: asked to judge an edit AND identity at once, the model approved a
+ * visibly different person from the user's own run. One job per call, and the
+ * schema puts the analysis before the verdict so the decision follows the
+ * evidence rather than preceding it.
+ */
+export async function verifyIdentity(
+  avatar: { data: Buffer | Uint8Array; mimeType: string },
+  frame: { data: Buffer | Uint8Array; mimeType: string },
+): Promise<IdentityCheck> {
+  const res = await fetch(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: VERIFIER_SYSTEM }] },
+      contents: [
+        {
+          parts: [
+            { text: 'Person A (the enrolled identity):' },
+            { inlineData: { mimeType: avatar.mimeType, data: Buffer.from(avatar.data).toString('base64') } },
+            { text: 'Person B (the generated frame):' },
+            { inlineData: { mimeType: frame.mimeType, data: Buffer.from(frame.data).toString('base64') } },
+            { text: 'Compare them.' },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          // Property order is deliberate: the model writes the feature analysis
+          // and differences BEFORE the boolean, so the verdict is forced to
+          // follow its own evidence.
+          properties: {
+            featuresA: { type: 'string' },
+            featuresB: { type: 'string' },
+            differences: { type: 'string' },
+            samePerson: { type: 'boolean' },
+          },
+          required: ['featuresA', 'featuresB', 'differences', 'samePerson'],
+          propertyOrdering: ['featuresA', 'featuresB', 'differences', 'samePerson'],
+        },
+      },
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(scrub(json?.error?.message ?? `identity check failed (${res.status})`));
+  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('identity check returned nothing');
+  const parsed = JSON.parse(text) as IdentityCheck & { featuresA: string; featuresB: string };
+  return { differences: parsed.differences, samePerson: parsed.samePerson };
 }

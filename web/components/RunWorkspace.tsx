@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { VersionTree } from './VersionTree';
 import { useUser } from './AuthGate';
+import { PromptComposer } from './PromptComposer';
 import type { Run, TreeNode } from '@/lib/types';
 
 /*
@@ -10,8 +11,21 @@ import type { Run, TreeNode } from '@/lib/types';
  * are two views of the same thing — hoisting it any higher would make the whole
  * route a client component for no gain.
  */
+const EDIT_KEYWORDS = [
+  'warmer light',
+  'cooler light',
+  'closer crop',
+  'wider shot',
+  'more candid',
+  'hold the product higher',
+  'look at the camera',
+  'natural skin texture',
+  'keep the exact face',
+];
+
 export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
   const [pinned, setPinned] = useState<string | null>(null);
+  const [regenTarget, setRegenTarget] = useState<TreeNode | null>(null);
 
   // Until the user pins one, follow the agent: the newest node is where the work
   // is, so the inspector reads as narration rather than something to operate.
@@ -23,14 +37,18 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
     <div className="flex min-h-0 flex-1">
       <PlanPanel run={run} />
 
-      <section className="min-w-0 flex-1">
+      <section className="relative min-w-0 flex-1">
         <VersionTree
           nodes={nodes}
           aspect={run.aspect}
           selectedId={selectedId}
           onSelect={setPinned}
+          onRegenerate={(id) => setRegenTarget(nodes.find((n) => n.id === id) ?? null)}
           storageKey={run.id}
         />
+        {regenTarget && (
+          <RegeneratePanel run={run} node={regenTarget} onClose={() => setRegenTarget(null)} />
+        )}
       </section>
 
       <Inspector node={selected} run={run} />
@@ -236,5 +254,73 @@ function Inspector({ node, run }: { node: TreeNode | null; run: Run }) {
         )}
       </div>
     </aside>
+  );
+}
+
+
+function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onClose: () => void }) {
+  const { user } = useUser();
+  const [prompt, setPrompt] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function go() {
+    if (prompt.trim().length < 4 || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      if (user) headers.authorization = `Bearer ${await user.getIdToken()}`;
+      const res = await fetch(`/api/runs/${run.id}/regenerate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ nodeId: node.id, instruction: prompt.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'regenerate failed');
+      onClose(); // the new sibling arrives on the tree via the live subscription
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'regenerate failed');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rs-enter absolute right-4 top-4 z-40 w-[420px] rounded-card border border-line bg-panel p-4 shadow-[0_22px_50px_-16px_rgba(0,0,0,0.45)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">
+            REGENERATE · STEP {node.stepNo}
+            {node.label ? ` — ${node.label.toUpperCase()}` : ''}
+          </p>
+          <p className="mt-1 text-[12.5px] leading-snug text-ink-2">
+            A new attempt from the same base frame. The old one stays on the tree — nothing is overwritten.
+          </p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close" className="rounded-md p-1 text-ink-3 hover:bg-subtle hover:text-ink">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M18 6L6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <div className="mt-3">
+        <PromptComposer
+          purpose="edit"
+          keywords={EDIT_KEYWORDS}
+          placeholder="Say or type what should change — one thing at a time."
+          onPrompt={(finalPrompt) => setPrompt(finalPrompt)}
+        />
+      </div>
+
+      {error && <p className="mt-2 text-[12.5px] text-crit">{error}</p>}
+
+      <button
+        type="button"
+        disabled={prompt.trim().length < 4 || busy}
+        onClick={go}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-accent py-2.5 text-[13.5px] font-semibold text-white disabled:opacity-40"
+      >
+        {busy ? 'Starting…' : 'Generate new attempt'}
+      </button>
+    </div>
   );
 }

@@ -52,12 +52,15 @@ export function VersionTree({
   aspect,
   selectedId,
   onSelect,
+  onRegenerate,
   storageKey,
 }: {
   nodes: TreeNode[];
   aspect: Aspect;
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+  /** Opens the regenerate panel for a node. Wired by the workspace. */
+  onRegenerate?: (id: string) => void;
   storageKey?: string;
 }) {
   const w = NODE_W[aspect];
@@ -67,6 +70,14 @@ export function VersionTree({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const suppressClick = useRef(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Cut connections are the viewer's arrangement, like drag positions: they
+  // hide an edge, they do not rewrite parentId — the tree's record of what was
+  // edited from what is history, and history is not editable.
+  const [cutIds, setCutIds] = useState<Set<string>>(new Set());
+  const [edgeHover, setEdgeHover] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
 
   // Load saved positions once per run. localStorage throws in some privacy
   // modes; losing a layout preference is not worth losing the page.
@@ -75,10 +86,37 @@ export function VersionTree({
     try {
       const raw = localStorage.getItem(`rs-tree-${storageKey}`);
       if (raw) setOffsets(JSON.parse(raw));
+      const cuts = localStorage.getItem(`rs-cut-${storageKey}`);
+      if (cuts) setCutIds(new Set(JSON.parse(cuts)));
     } catch {
       /* keep defaults */
     }
   }, [storageKey]);
+
+  // The menu closes the way every menu should: Esc, or clicking anywhere else.
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenu(null);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menu]);
+
+  const setCut = (id: string, cut: boolean) => {
+    setCutIds((prev) => {
+      const next = new Set(prev);
+      if (cut) next.add(id);
+      else next.delete(id);
+      if (storageKey) {
+        try {
+          localStorage.setItem(`rs-cut-${storageKey}`, JSON.stringify([...next]));
+        } catch {
+          /* session-only is fine */
+        }
+      }
+      return next;
+    });
+    setEdgeHover(null);
+  };
 
   const persist = (next: Offsets) => {
     if (!storageKey) return;
@@ -169,19 +207,20 @@ export function VersionTree({
       : 0;
 
   return (
-    <div
-      className="relative h-full w-full overflow-auto"
-      style={{
-        backgroundImage: 'radial-gradient(var(--border-subtle) 1px, transparent 1px)',
-        backgroundSize: '26px 26px',
-      }}
-    >
-      <div className="relative" style={{ width: extent.w, height: extent.h }}>
+    <div ref={wrapRef} className="relative h-full w-full" onClick={() => menu && setMenu(null)}>
+      <div
+        className="relative h-full w-full overflow-auto"
+        style={{
+          backgroundImage: 'radial-gradient(var(--border-subtle) 1px, transparent 1px)',
+          backgroundSize: '26px 26px',
+        }}
+      >
+        <div className="relative" style={{ width: extent.w, height: extent.h }}>
         {/* edges under the nodes — they follow drags live, since they derive
             from the same position map */}
         <svg className="pointer-events-none absolute inset-0" width={extent.w} height={extent.h} aria-hidden>
           {laid.map((n) => {
-            if (!n.parentId) return null;
+            if (!n.parentId || cutIds.has(n.id)) return null;
             const a = pos.get(n.parentId);
             const b = pos.get(n.id);
             if (!a || !b) return null;
@@ -194,23 +233,53 @@ export function VersionTree({
             const d = `M${x1} ${y1} C${mid} ${y1} ${mid} ${y2} ${x2} ${y2}`;
 
             return (
-              <path
-                key={`e-${n.id}`}
-                d={d}
-                fill="none"
-                strokeWidth={2}
-                stroke={n.discarded ? 'var(--crit)' : 'var(--border-strong)'}
-                strokeDasharray={n.discarded ? '5 4' : undefined}
-                opacity={n.discarded ? 0.55 : 1}
-              />
+              <g key={`e-${n.id}`}>
+                <path
+                  d={d}
+                  fill="none"
+                  strokeWidth={2}
+                  stroke={edgeHover?.id === n.id ? 'var(--accent)' : n.discarded ? 'var(--crit)' : 'var(--border-strong)'}
+                  strokeDasharray={n.discarded ? '5 4' : undefined}
+                  opacity={n.discarded ? 0.55 : 1}
+                />
+                {/* invisible fat twin: the hover target an edge needs to be cuttable */}
+                {!n.discarded && (
+                  <path
+                    d={d}
+                    fill="none"
+                    strokeWidth={16}
+                    stroke="transparent"
+                    className="pointer-events-auto"
+                    onPointerEnter={() => setEdgeHover({ id: n.id, x: (x1 + x2) / 2, y: (y1 + y2) / 2 })}
+                    onPointerLeave={() => setEdgeHover((cur) => (cur?.id === n.id ? null : cur))}
+                  />
+                )}
+              </g>
             );
           })}
         </svg>
 
+        {/* scissors on the hovered edge */}
+        {edgeHover && (
+          <button
+            type="button"
+            aria-label="Cut this connection"
+            onPointerEnter={() => setEdgeHover(edgeHover)}
+            onClick={() => setCut(edgeHover.id, true)}
+            className="absolute z-20 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-line-strong bg-panel text-ink-2 shadow-[0_6px_18px_-6px_rgba(0,0,0,0.35)] hover:border-crit hover:text-crit"
+            style={{ left: edgeHover.x, top: edgeHover.y }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
+              <path d="M8.1 8.1 20 20M8.1 15.9 20 4" />
+            </svg>
+          </button>
+        )}
+
         {/* verdict badges at edge midpoints. A discarded stub carries none — the
             word under it already says so, and the badge was the collision. */}
         {laid.map((n) => {
-          if (!n.parentId || !n.verdict || n.discarded) return null;
+          if (!n.parentId || !n.verdict || n.discarded || cutIds.has(n.id)) return null;
           const a = pos.get(n.parentId);
           const b = pos.get(n.id);
           if (!a || !b) return null;
@@ -239,7 +308,12 @@ export function VersionTree({
               }}
               aria-label={`${n.kind === 'avatar' ? 'Source avatar' : n.kind === 'video' ? 'Rendered clip' : `Step ${n.stepNo}`}${n.instruction ? `: ${n.instruction}` : ''}`}
               aria-pressed={selected}
-              className={`absolute touch-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                const r = wrapRef.current?.getBoundingClientRect();
+                if (r) setMenu({ x: e.clientX - r.left, y: e.clientY - r.top, nodeId: n.id });
+              }}
+              className={`rs-enter absolute touch-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
               style={{ left: p.x, top: p.y, width: p.w, height: p.h }}
             >
               {selected && <span className="pointer-events-none absolute -inset-[7px] rounded-[14px] border-2 border-ink" />}
@@ -286,6 +360,9 @@ export function VersionTree({
               {n.discarded && (
                 <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-crit">discarded</span>
               )}
+              {cutIds.has(n.id) && !n.discarded && (
+                <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-ink-3">disconnected — right-click to reconnect</span>
+              )}
               {n.status === 'rejected' && (
                 <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-ink-3">you rejected this</span>
               )}
@@ -325,7 +402,81 @@ export function VersionTree({
             <p className="mt-2 border-t border-line pt-1.5 text-[10.5px] text-ink-4">Click to inspect · drag to move</p>
           </div>
         )}
+        </div>
       </div>
+
+      {/* legend — fixed to the pane, not the scrolled canvas */}
+      <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-4 rounded-card border border-line bg-panel/90 px-3.5 py-2 backdrop-blur-sm">
+        {(
+          [
+            ['border-good', 'achieved'],
+            ['border-warn', 'partial'],
+            ['border-accent', 'generating'],
+            ['border-crit', 'discarded'],
+          ] as const
+        ).map(([cls, word]) => (
+          <span key={word} className="flex items-center gap-1.5 text-[11px] text-ink-2">
+            <span className={`block h-[9px] w-[9px] rounded-[2px] border-2 ${cls}`} />
+            {word}
+          </span>
+        ))}
+      </div>
+
+      {/* right-click menu */}
+      {menu && (() => {
+        const target = laid.find((n) => n.id === menu.nodeId);
+        if (!target) return null;
+        const isCut = cutIds.has(target.id);
+        const item =
+          'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] hover:bg-subtle disabled:opacity-40';
+        return (
+          <div
+            className="rs-enter absolute z-40 w-[230px] rounded-card border border-line bg-panel p-1.5 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.45)]"
+            style={{ left: Math.min(menu.x, (wrapRef.current?.clientWidth ?? 9999) - 240), top: menu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-bold tracking-[0.1em] text-ink-4">
+              {target.kind === 'avatar' ? 'AVATAR' : target.kind === 'video' ? 'CLIP' : `STEP ${target.stepNo}${target.label ? ` · ${target.label}` : ''}`}
+            </p>
+            {target.kind === 'frame' && onRegenerate && (
+              <button type="button" className={item} onClick={() => { setMenu(null); onRegenerate(target.id); }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M1 4v6h6" /><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10" /></svg>
+                Regenerate from same base…
+              </button>
+            )}
+            <button type="button" className={item} onClick={() => { setMenu(null); onSelect?.(target.id); }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /></svg>
+              Inspect
+            </button>
+            {target.parentId && !target.discarded && (
+              <button type="button" className={item} onClick={() => { setCut(target.id, !isCut); setMenu(null); }}>
+                {isCut ? (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 12h12M15 6l6 6-6 6" /><path d="M3 5v14" /></svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M8.1 8.1 20 20M8.1 15.9 20 4" /></svg>
+                )}
+                {isCut ? 'Reconnect' : 'Cut connection'}
+              </button>
+            )}
+            {offsets[target.id] && (
+              <button
+                type="button"
+                className={item}
+                onClick={() => {
+                  const next = { ...offsets };
+                  delete next[target.id];
+                  setOffsets(next);
+                  persist(next);
+                  setMenu(null);
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 12h18M12 3v18" /></svg>
+                Reset position
+              </button>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

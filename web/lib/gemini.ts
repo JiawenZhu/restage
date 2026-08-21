@@ -410,3 +410,29 @@ export async function verifyIdentity(
   const parsed = JSON.parse(text) as IdentityCheck & { featuresA: string; featuresB: string };
   return { differences: parsed.differences, samePerson: parsed.samePerson };
 }
+
+/* ── prompt refinement ────────────────────────────────────────────────────── */
+
+const REFINER_SYSTEM = `You rewrite a user's casual words — often dictated by
+voice, in any language — into the precise English prompt the generation model
+will actually receive. Both versions are SHOWN side by side, so the rewrite must
+be visibly worth having: concrete nouns, physical detail, nothing vague.
+
+purpose "goal": one or two sentences stating the OUTCOME of a UGC ad — who is in
+it, where, doing what, and what it must feel like. Not a shot list.
+
+purpose "edit": ONE imperative instruction describing ONE visible change to a
+single frame. Never bundle two changes.
+
+Preserve every concrete detail the user gave (objects, places, moods). Add the
+physical specifics a model needs (light, framing, what hands are doing). Invent
+nothing the user would disown.`;
+
+export async function refinePrompt(raw: string, purpose: 'goal' | 'edit'): Promise<string> {
+  const { refined } = await structured<{ refined: string }>(
+    `purpose: ${purpose}\nuser's words: ${raw}\n\nRewrite.`,
+    { type: 'object', properties: { refined: { type: 'string' } }, required: ['refined'] },
+    REFINER_SYSTEM,
+  );
+  return refined;
+}

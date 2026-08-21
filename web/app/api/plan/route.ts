@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireUid } from '@/lib/firebaseAdmin';
 import { z } from 'zod';
 import { planRun } from '@/lib/gemini';
 
@@ -17,6 +18,13 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
+  // These calls cost real money; they were anonymous before auth existed.
+  try {
+    await requireUid(req);
+  } catch {
+    return NextResponse.json({ error: 'sign in first' }, { status: 401 });
+  }
+
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: 'goal, aspect and seconds are required' }, { status: 400 });

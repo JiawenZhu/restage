@@ -255,3 +255,98 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
     await touch({ status: 'failed' }).catch(() => {});
   }
 }
+
+/**
+ * Regenerate one node as a NEW SIBLING — same parent, adjusted instruction.
+ * Deliberately not an overwrite: the tree records what happened, and rewriting
+ * a node would falsify that record. The old attempt stays visible; the new one
+ * appears beside it and goes through the same critic and identity gate as any
+ * other frame.
+ */
+export async function regenerateNode(args: {
+  runId: string;
+  uid: string;
+  sourceNodeId: string;
+  instruction: string;
+}): Promise<string> {
+  const db = adminDb();
+  const runRef = db.collection('runs').doc(args.runId);
+  const runSnap = await runRef.get();
+  if (!runSnap.exists || runSnap.data()!.uid !== args.uid) throw new Error('no such run');
+  const run = runSnap.data()!;
+
+  const sourceSnap = await runRef.collection('nodes').doc(args.sourceNodeId).get();
+  const source = sourceSnap.data();
+  if (!sourceSnap.exists || source?.kind !== 'frame') throw new Error('that node cannot be regenerated');
+
+  const parentId: string = source.parentId ?? 'root';
+  const parentSnap = await runRef.collection('nodes').doc(parentId).get();
+  const parentUrl: string | undefined = parentSnap.data()?.frameUrl;
+  if (!parentUrl) throw new Error('the base frame is missing');
+
+  const rootSnap = await runRef.collection('nodes').doc('root').get();
+  const avatarUrl: string | undefined = rootSnap.data()?.frameUrl;
+  if (!avatarUrl) throw new Error('the avatar is missing');
+
+  const decode = (u: string) => {
+    const m = u.match(/^data:([^;]+);base64,(.+)$/);
+    if (!m) throw new Error('unreadable frame');
+    return { mimeType: m[1], data: Buffer.from(m[2], 'base64') };
+  };
+  const parentImage = decode(parentUrl);
+  const avatarImage = decode(avatarUrl);
+
+  const nodeRef = runRef.collection('nodes').doc();
+  await nodeRef.set({
+    parentId,
+    stepNo: source.stepNo,
+    kind: 'frame',
+    status: 'generating',
+    label: source.label ? `${source.label} · redo` : 'redo',
+    instruction: args.instruction,
+    rationale: 'Regenerated on request, from the same base frame.',
+    createdAt: Date.now(),
+  });
+
+  void (async () => {
+    try {
+      const isFromAvatar = parentId === 'root';
+      const prompt = isFromAvatar
+        ? `Build the opening frame of a UGC ad, ${run.aspect}. The person is EXACTLY the one in the reference photo — same face geometry, same glasses if worn, same hairstyle. Do not idealize or beautify.\n${args.instruction}\n\nRealistic photograph, authentic phone-shot creator content. No text, no logos.`
+        : `The FIRST image is the current frame. Apply exactly one change to it:\n${args.instruction}\n\nKeep everything else unchanged. The SECOND image is the identity reference: the person must remain EXACTLY that person. Do not idealize or beautify the face. Realistic photograph. No text, no logos.`;
+
+      const frame = await generateFrame({
+        prompt,
+        aspect: run.aspect,
+        refs: isFromAvatar ? [avatarImage] : [parentImage, avatarImage],
+      });
+
+      const [verdict, identity] = await Promise.all([
+        critique({
+          instruction: args.instruction,
+          rationale: 'User-directed regeneration.',
+          avatar: avatarImage,
+          before: parentImage,
+          after: { data: frame.bytes, mimeType: frame.mimeType },
+        }),
+        verifyIdentity(avatarImage, { data: frame.bytes, mimeType: frame.mimeType }),
+      ]);
+
+      const wrongFace = !identity.samePerson || !verdict.faceMatches;
+      await nodeRef.update({
+        frameUrl: `data:${frame.mimeType};base64,${frame.bytes.toString('base64')}`,
+        verdict: wrongFace ? 'failed' : verdict.verdict,
+        criticNotes: wrongFace ? `The face no longer matches the enrolled person. ${identity.differences}` : verdict.notes,
+        criticRubric: verdict.rubric,
+        status: wrongFace || verdict.verdict === 'failed' ? 'failed' : verdict.verdict === 'partial' ? 'partial' : 'achieved',
+      });
+    } catch (err) {
+      await nodeRef.update({
+        status: 'failed',
+        criticNotes: `Regeneration failed: ${err instanceof Error ? err.message : 'unknown'}`,
+      });
+    }
+  })();
+
+  return nodeRef.id;
+}

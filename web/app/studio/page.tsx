@@ -5,11 +5,15 @@ import { useRef, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { AuthButton, useUser } from '@/components/AuthGate';
 import type { Aspect } from '@/lib/types';
+import { PromptComposer } from '@/components/PromptComposer';
 
-const EXAMPLES = [
-  'A 15-second ad where I actually use the product, in my kitchen',
-  'Make it feel filmed on a phone, not shot by an agency',
-  'Something that survives the first two seconds of a scroll',
+const GOAL_KEYWORDS = [
+  'in my kitchen',
+  'I hold the product',
+  'talking to camera',
+  'feels filmed on a phone',
+  'morning window light',
+  'survives the first two seconds',
 ];
 
 export default function NewRun() {
@@ -88,21 +92,16 @@ export default function NewRun() {
         </div>
 
         <p className="mt-7 text-[10.5px] font-bold tracking-[0.12em] text-ink-3">THE GOAL</p>
-        <div className="mt-2.5 rounded-card border border-line bg-panel p-5">
-          <textarea
-            rows={2}
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            placeholder="Describe the outcome you want — not the shots."
-            className="w-full resize-none bg-transparent text-[19px] leading-snug outline-none placeholder:text-ink-4"
+        {/* Two cards: the user's words stay visible, and the model-facing
+            rewrite appears beside them. What gets planned is the refined one
+            when it exists, the raw one otherwise. */}
+        <div className="mt-2.5">
+          <PromptComposer
+            purpose="goal"
+            keywords={GOAL_KEYWORDS}
+            placeholder="Say or type the outcome you want — not the shots."
+            onPrompt={(finalPrompt) => setGoal(finalPrompt)}
           />
-          <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
-            {EXAMPLES.map((e) => (
-              <button key={e} type="button" onClick={() => setGoal(e)} className="rounded-chip border border-line-strong bg-elevated px-3.5 py-2 text-[13px] text-ink-2 hover:border-accent">
-                {e}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="mt-7 grid gap-5 sm:grid-cols-2">

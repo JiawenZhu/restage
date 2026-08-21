@@ -146,9 +146,10 @@ export async function downloadRendered(videoUri: string): Promise<Buffer> {
 
 /* ── planning and criticism ───────────────────────────────────────────────── */
 
-// gemini-2.5-flash still appears in the models list but is closed to new
-// projects — the API answers with a redirect to 3.6. Listed does not mean usable.
-const TEXT_MODEL = process.env.RESTAGE_TEXT_MODEL ?? 'gemini-3.6-flash';
+// Verified with a real call, not read off the models list: 2.5-flash is still
+// listed and is closed to new projects, so the endpoint's inventory is not a
+// statement about access.
+const TEXT_MODEL = process.env.RESTAGE_TEXT_MODEL ?? 'gemini-3.7-flash';
 
 /**
  * Both calls below use responseSchema rather than asking for JSON in the prompt.

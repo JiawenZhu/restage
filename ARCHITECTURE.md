@@ -203,14 +203,22 @@ which is the entire reason the product is interesting.
 
 | | |
 |---|---|
-| plan (6 steps, `gemini-3.6-flash`) | ~7s |
+| plan (6 steps, `gemini-3.7-flash`) | ~6s |
 | frame, with avatar reference | ~14-18s |
-| critique of one step (two images in) | ~4.7s |
+| critique of one step (two images in) | ~5-9s |
 | video render (`veo-3.1-fast`) | ~41s |
 
 **`gemini-2.5-flash` is listed by the models endpoint but closed to new
-projects** — the API answers with a redirect to 3.6. Listed is not the same as
-usable, and only a real call surfaces the difference.
+projects** — the API answers with a redirect. Listed is not the same as usable,
+and only a real call surfaces the difference, so the model here was picked by
+calling it rather than by reading the inventory.
+
+**3.7 judges harder than 3.6, which is the point.** On the same pair of frames
+3.6 passed a relight outright; 3.7 returned `partial` and named why — the props
+had been altered and the contrast pushed. It noticed that the step changed
+things it was not asked to change. The critic's own instructions say to lean
+harsh when uncertain, because a critic that passes everything is not one, so a
+stricter model is an asset here rather than friction.
 
 Plan and critique both use `responseSchema` rather than asking for JSON in the
 prompt. A model told "reply with JSON" wraps it in prose often enough that

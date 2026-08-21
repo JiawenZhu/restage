@@ -48,7 +48,22 @@ export const adminAuth = () => getAuth(admin());
 export async function requireUid(req: Request): Promise<string> {
   const header = req.headers.get('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) throw new Error('unauthenticated');
+
+  if (!token) {
+    // Development-only escape hatch, so the loop can be exercised before a
+    // sign-in provider is switched on.
+    //
+    // It is gated on NODE_ENV === 'development', which Next sets to
+    // 'production' in every build. That is not a convention this code is
+    // trusting — `next build` bakes the value in, so the branch is unreachable
+    // in a deployed app even if RESTAGE_DEV_UID were somehow set there. The
+    // env var is required on top so it never fires by accident in a teammate's
+    // checkout.
+    const devUid = process.env.RESTAGE_DEV_UID;
+    if (process.env.NODE_ENV === 'development' && devUid) return devUid;
+    throw new Error('unauthenticated');
+  }
+
   const decoded = await adminAuth().verifyIdToken(token);
   return decoded.uid;
 }

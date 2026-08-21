@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { VersionTree } from './VersionTree';
+import { useUser } from './AuthGate';
 import type { Run, TreeNode } from '@/lib/types';
 
 /*
@@ -17,17 +18,22 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
   const newest = nodes.length ? nodes[nodes.length - 1].id : null;
   const selectedId = pinned ?? newest;
   const selected = nodes.find((n) => n.id === selectedId) ?? null;
-  const setSelectedId = setPinned;
 
   return (
     <div className="flex min-h-0 flex-1">
       <PlanPanel run={run} />
 
       <section className="min-w-0 flex-1">
-        <VersionTree nodes={nodes} aspect={run.aspect} selectedId={selectedId} onSelect={setSelectedId} />
+        <VersionTree
+          nodes={nodes}
+          aspect={run.aspect}
+          selectedId={selectedId}
+          onSelect={setPinned}
+          storageKey={run.id}
+        />
       </section>
 
-      <Inspector node={selected} />
+      <Inspector node={selected} run={run} />
     </div>
   );
 }
@@ -52,8 +58,14 @@ function PlanPanel({ run }: { run: Run }) {
     <aside className="flex w-[300px] shrink-0 flex-col border-r border-line bg-panel">
       <p className="px-[18px] pb-3 pt-[18px] text-[11px] font-bold tracking-[0.12em] text-ink-3">PLAN</p>
 
-      <div className="relative flex flex-1 flex-col gap-0.5 px-3.5">
-        {/* hairline connector, so the steps read as a sequence not a checklist */}
+      {run.status === 'planning' && (
+        <div className="flex items-center gap-2.5 px-[18px] pb-3">
+          <span className="rs-cursor block h-[7px] w-[7px] rounded-full bg-accent" />
+          <span className="text-[13px] text-ink-2">Decomposing the goal…</span>
+        </div>
+      )}
+
+      <div className="relative flex flex-1 flex-col gap-0.5 overflow-y-auto px-3.5 pb-3">
         <span className="absolute bottom-3.5 left-[27px] top-3.5 w-px bg-line" />
 
         {run.plan.map((s) => {
@@ -71,8 +83,8 @@ function PlanPanel({ run }: { run: Run }) {
               </span>
               <div className="min-w-0">
                 <p className={`text-[13.5px] font-semibold ${s.status === 'pending' ? 'text-ink-3' : ''}`}>{s.instruction}</p>
-                {/* Two lines, never truncated to nothing: the rationale is what
-                    proves the agent reasoned rather than pattern-matched. */}
+                {/* Never truncated to nothing: the rationale is what proves the
+                    agent reasoned rather than pattern-matched. */}
                 <p className={`mt-0.5 text-xs leading-snug ${running ? 'text-ink-2' : s.status === 'pending' ? 'text-ink-4' : 'text-ink-3'}`}>
                   {s.rationale}
                 </p>
@@ -81,53 +93,94 @@ function PlanPanel({ run }: { run: Run }) {
           );
         })}
       </div>
-
-      <div className="border-t border-line px-[18px] py-3.5">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold tracking-[0.12em] text-ink-3">TASTE MODEL</span>
-          <span className="tnum text-[11px] text-ink-4">7 sessions</span>
-        </div>
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
-          {['never studio lighting', 'no retouched skin'].map((c) => (
-            <span key={c} className="rounded-chip border border-line bg-elevated px-2.5 py-1 text-[11.5px] text-ink-2">
-              {c}
-            </span>
-          ))}
-        </div>
-      </div>
     </aside>
   );
 }
 
 const VERDICT_STYLE = {
   met: { border: 'border-good/35', text: 'text-good', label: 'CRITIC · ACHIEVED' },
-  partial: { border: 'border-warn/35', text: 'text-warn', label: 'CRITIC · PARTIAL, RETRIED ONCE' },
-  failed: { border: 'border-crit/35', text: 'text-crit', label: 'CRITIC · REJECTED, RETRIED' },
+  partial: { border: 'border-warn/35', text: 'text-warn', label: 'CRITIC · PARTIAL' },
+  failed: { border: 'border-crit/35', text: 'text-crit', label: 'CRITIC · REJECTED' },
 } as const;
 
-function Inspector({ node }: { node: TreeNode | null }) {
+function Inspector({ node, run }: { node: TreeNode | null; run: Run }) {
+  const { user } = useUser();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   if (!node) {
     return (
-      <aside className="w-[372px] shrink-0 border-l border-line bg-panel p-[18px]">
+      <aside className="w-[400px] shrink-0 border-l border-line bg-panel p-[18px]">
         <p className="text-[13px] leading-relaxed text-ink-4">Select a node to see what produced it.</p>
       </aside>
     );
   }
 
   const v = node.verdict ? VERDICT_STYLE[node.verdict] : null;
+  const rendering = run.status === 'rendering';
+  const canRender = node.kind === 'frame' && !!node.frameUrl && !rendering && run.status !== 'planning';
+
+  async function renderVideo() {
+    if (!user || !node) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/runs/${run.id}/render`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ nodeId: node.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'render failed to start');
+      // The new video node lands via the live subscription; nothing else to do.
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'render failed to start');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <aside className="flex w-[372px] shrink-0 flex-col border-l border-line bg-panel">
+    <aside className="flex w-[400px] shrink-0 flex-col border-l border-line bg-panel">
       <p className="px-[18px] pb-3 pt-[18px] text-[11px] font-bold tracking-[0.12em] text-ink-3">
-        {node.kind === 'avatar' ? 'SOURCE AVATAR' : `STEP ${node.stepNo}`}
+        {node.kind === 'avatar' ? 'SOURCE AVATAR' : node.kind === 'video' ? 'RENDERED CLIP' : `STEP ${node.stepNo}`}
       </p>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-[18px]">
-        {node.frameUrl && (
-          <div className="overflow-hidden rounded-card border border-line">
+      <div className="min-h-0 flex-1 overflow-y-auto px-[18px] pb-4">
+        {node.kind === 'video' && node.videoUrl ? (
+          <video
+            src={node.videoUrl}
+            poster={node.frameUrl}
+            controls
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full rounded-card border border-line bg-black"
+          />
+        ) : node.frameUrl ? (
+          /* object-contain, never object-cover: a 9:16 frame in a smaller box
+             was being cropped, and the crop took the face — the one thing the
+             whole product is about showing. Contain shows the entire frame. */
+          <div className="flex items-center justify-center overflow-hidden rounded-card border border-line bg-subtle">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={node.frameUrl} alt="" className="max-h-[260px] w-full object-cover" />
+            <img src={node.frameUrl} alt="" className="max-h-[440px] w-auto max-w-full object-contain" />
           </div>
+        ) : (
+          <div className="flex h-40 items-center justify-center rounded-card border border-line bg-subtle">
+            <span className="flex items-center gap-2 text-[12px] text-ink-3">
+              <span className="rs-cursor block h-[6px] w-[6px] rounded-full bg-accent" />
+              generating…
+            </span>
+          </div>
+        )}
+
+        {node.kind === 'video' && node.status === 'generating' && (
+          <p className="mt-3 flex items-center gap-2 text-[13px] text-ink-2">
+            <span className="rs-cursor block h-[6px] w-[6px] rounded-full bg-accent" />
+            Rendering — about 40 seconds.
+          </p>
         )}
 
         {node.instruction && (
@@ -144,8 +197,6 @@ function Inspector({ node }: { node: TreeNode | null }) {
           </>
         )}
 
-        {/* The critic block is the single most persuasive element in the
-            interface, so it gets real presence rather than a toast. */}
         {v && node.criticNotes && (
           <div className={`mt-4 rounded-card border bg-elevated p-3.5 ${v.border}`}>
             <span className={`text-[11.5px] font-bold tracking-[0.06em] ${v.text}`}>{v.label}</span>
@@ -160,15 +211,29 @@ function Inspector({ node }: { node: TreeNode | null }) {
       </div>
 
       <div className="flex flex-col gap-2 border-t border-line px-[18px] py-3.5">
-        <button type="button" className="flex items-center justify-center gap-2 rounded-lg bg-accent py-3 text-[13.5px] font-semibold text-white">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
-          Render this frame to video
-        </button>
-        <div className="grid grid-cols-3 gap-1.5">
-          <button type="button" className="rounded-lg border border-line-strong py-2.5 text-[12.5px] font-semibold text-ink-2">Accept</button>
-          <button type="button" className="rounded-lg border border-crit/40 py-2.5 text-[12.5px] font-semibold text-crit">Reject</button>
-          <button type="button" className="rounded-lg border border-line-strong py-2.5 text-[12.5px] font-semibold text-ink-2">Branch</button>
-        </div>
+        {error && <p className="text-[12.5px] text-crit">{error}</p>}
+
+        {node.kind === 'video' && node.videoUrl ? (
+          <a
+            href={node.videoUrl}
+            download
+            className="flex items-center justify-center gap-2 rounded-lg bg-accent py-3 text-[13.5px] font-semibold text-white"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
+            Download clip
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled={!canRender || busy || !user}
+            onClick={renderVideo}
+            title={!user ? 'Sign in first' : undefined}
+            className="flex items-center justify-center gap-2 rounded-lg bg-accent py-3 text-[13.5px] font-semibold text-white disabled:opacity-40"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
+            {rendering ? 'Rendering…' : busy ? 'Starting…' : 'Render this frame to video'}
+          </button>
+        )}
       </div>
     </aside>
   );

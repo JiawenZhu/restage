@@ -38,6 +38,8 @@ export interface TreeNode {
   /** Firebase Storage path for a frame; R2 key for a rendered clip. */
   frameUrl?: string;
   videoKey?: string;
+  /** Signed playback URL for a finished clip (7-day expiry). */
+  videoUrl?: string;
 
   verdict?: Verdict;
   /** The critic in its own voice — the most persuasive element in the interface. */

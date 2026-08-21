@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { RunWorkspace } from './RunWorkspace';
+import { demoRun, demoNodes } from '@/lib/demoRun';
 import type { Run, TreeNode } from '@/lib/types';
 
 /*
@@ -20,11 +21,19 @@ export function LiveRun({ runId }: { runId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const database = db();
+    if (runId === 'demo') {
+      setRun(demoRun);
+      setNodes(demoNodes);
+      return;
+    }
+
     const unsubRun = onSnapshot(
-      doc(database, 'runs', runId),
+      doc(db, 'runs', runId),
       (snap) => {
-        if (!snap.exists()) { setError('That run does not exist, or is not yours.'); return; }
+        if (!snap.exists()) {
+          setError('That run does not exist, or is not yours.');
+          return;
+        }
         setRun({ id: snap.id, ...(snap.data() as Omit<Run, 'id'>) });
       },
       // A rules rejection lands here. Saying so beats an empty screen that looks
@@ -33,12 +42,15 @@ export function LiveRun({ runId }: { runId: string }) {
     );
 
     const unsubNodes = onSnapshot(
-      query(collection(database, 'runs', runId, 'nodes'), orderBy('createdAt')),
+      query(collection(db, 'runs', runId, 'nodes'), orderBy('createdAt')),
       (snap) => setNodes(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<TreeNode, 'id'>) }))),
       () => {},
     );
 
-    return () => { unsubRun(); unsubNodes(); };
+    return () => {
+      unsubRun();
+      unsubNodes();
+    };
   }, [runId]);
 
   if (error) {

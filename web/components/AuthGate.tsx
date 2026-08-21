@@ -12,7 +12,13 @@ import { signInWithGoogle, signOutUser, watchAuth } from '@/lib/firebase';
 export function useUser() {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
-  useEffect(() => watchAuth((u) => { setUser(u); setReady(true); }), []);
+  useEffect(() => {
+    const unsub = watchAuth((u: User | null) => {
+      setUser(u);
+      setReady(true);
+    });
+    return () => unsub();
+  }, []);
   return { user, ready };
 }
 
@@ -29,7 +35,13 @@ export function AuthButton() {
         disabled={busy}
         onClick={async () => {
           setBusy(true);
-          try { await signInWithGoogle(); } finally { setBusy(false); }
+          try {
+            await signInWithGoogle();
+          } catch (err: any) {
+            console.error('Sign in error:', err);
+          } finally {
+            setBusy(false);
+          }
         }}
         className="rounded-lg bg-primary px-4 py-2 text-[13px] font-semibold text-primary-ink disabled:opacity-60"
       >
@@ -41,7 +53,11 @@ export function AuthButton() {
   return (
     <div className="flex items-center gap-2.5">
       <span className="max-w-[160px] truncate text-[13px] text-ink-3">{user.email}</span>
-      <button type="button" onClick={() => signOutUser()} className="rounded-lg border border-line-strong px-3 py-1.5 text-[12.5px] font-medium text-ink-2">
+      <button
+        type="button"
+        onClick={() => signOutUser()}
+        className="rounded-lg border border-line-strong px-3 py-1.5 text-[12.5px] font-medium text-ink-2 hover:bg-subtle"
+      >
         Sign out
       </button>
     </div>

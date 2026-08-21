@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
-import type { Aspect, LaidOutNode, TreeNode } from '@/lib/types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Aspect, TreeNode } from '@/lib/types';
 import { flatten, layoutTree } from '@/lib/types';
 
 /*
@@ -14,13 +14,18 @@ import { flatten, layoutTree } from '@/lib/types';
  *   2. verdict badges on the edges, where self-correction becomes visible
  *   3. discarded attempts left on the canvas beside the retry that replaced them
  *
- * Hiding a failure would make the tree tidier and would delete the proof.
+ * Nodes are draggable. The auto-layout is a starting arrangement, not an
+ * artefact — this is a whiteboard, and rearranging it is how people think on
+ * one. Dragged positions are the viewer's, so they live in localStorage rather
+ * than Firestore: layout preference is not run data, and the nodes collection
+ * is server-write-only on purpose.
  */
 
 const NODE_W = { '9:16': 108, '16:9': 176 } as const;
 const NODE_H = { '9:16': 192, '16:9': 99 } as const;
 const GAP_X = 76;
 const GAP_Y = 34;
+const DRAG_THRESHOLD = 4;
 
 const STATUS_RING: Record<string, string> = {
   generating: 'border-accent',
@@ -31,38 +36,79 @@ const STATUS_RING: Record<string, string> = {
   pending: 'border-line',
 };
 
+const STATUS_WORD: Record<string, string> = {
+  generating: 'generating',
+  achieved: 'achieved',
+  partial: 'partial',
+  failed: 'discarded',
+  rejected: 'rejected by you',
+  pending: 'pending',
+};
+
+type Offsets = Record<string, { x: number; y: number }>;
+
 export function VersionTree({
   nodes,
   aspect,
   selectedId,
   onSelect,
+  storageKey,
 }: {
   nodes: TreeNode[];
   aspect: Aspect;
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+  storageKey?: string;
 }) {
   const w = NODE_W[aspect];
   const h = NODE_H[aspect];
+
+  const [offsets, setOffsets] = useState<Offsets>({});
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const suppressClick = useRef(false);
+
+  // Load saved positions once per run. localStorage throws in some privacy
+  // modes; losing a layout preference is not worth losing the page.
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const raw = localStorage.getItem(`rs-tree-${storageKey}`);
+      if (raw) setOffsets(JSON.parse(raw));
+    } catch {
+      /* keep defaults */
+    }
+  }, [storageKey]);
+
+  const persist = (next: Offsets) => {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(`rs-tree-${storageKey}`, JSON.stringify(next));
+    } catch {
+      /* session-only is fine */
+    }
+  };
 
   const laid = useMemo(() => flatten(layoutTree(nodes)), [nodes]);
 
   const pos = useMemo(() => {
     const m = new Map<string, { x: number; y: number; w: number; h: number }>();
     for (const n of laid) {
-      // A discarded attempt is drawn small and stubbed above its parent rather
-      // than taking a lane, so the main line stays a straight read.
       const small = n.discarded;
       const nw = small ? Math.round(w * 0.66) : w;
       const nh = small ? Math.round(h * 0.66) : h;
-      const x = 24 + n.depth * (w + GAP_X);
-      const y = small ? 8 : 132 + n.lane * (h + GAP_Y);
-      // Offset right of the sibling it was replaced by, so the two edges out of
-      // the shared parent do not overlap and neither do their labels.
-      m.set(n.id, { x: small ? x + Math.round(w * 0.55) : x, y, w: nw, h: nh });
+      const baseX = 24 + n.depth * (w + GAP_X);
+      const baseY = small ? 8 : 132 + n.lane * (h + GAP_Y);
+      const off = offsets[n.id] ?? { x: 0, y: 0 };
+      m.set(n.id, {
+        x: (small ? baseX + Math.round(w * 0.55) : baseX) + off.x,
+        y: baseY + off.y,
+        w: nw,
+        h: nh,
+      });
     }
     return m;
-  }, [laid, w, h]);
+  }, [laid, w, h, offsets]);
 
   const extent = useMemo(() => {
     let mx = 0;
@@ -71,8 +117,56 @@ export function VersionTree({
       mx = Math.max(mx, p.x + p.w);
       my = Math.max(my, p.y + p.h);
     }
-    return { w: mx + 140, h: my + 90 };
+    return { w: mx + 300, h: my + 120 };
   }, [pos]);
+
+  function startDrag(e: React.PointerEvent, id: string) {
+    // Primary button only; keyboard users still select through click.
+    if (e.button !== 0) return;
+    e.preventDefault();
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const base = offsets[id] ?? { x: 0, y: 0 };
+    let moved = false;
+    let latest = offsets;
+
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (!moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      if (!moved) {
+        moved = true;
+        setDragging(true);
+        setHoveredId(null);
+      }
+      latest = { ...latest, [id]: { x: base.x + dx, y: base.y + dy } };
+      setOffsets(latest);
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setDragging(false);
+      if (moved) {
+        suppressClick.current = true; // the click after a drag is not a select
+        persist(latest);
+      }
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  const hovered = hoveredId ? laid.find((n) => n.id === hoveredId) : null;
+  const hoveredPos = hovered ? pos.get(hovered.id) : null;
+  // Flip the card left when it would run off the right edge.
+  const cardLeft =
+    hovered && hoveredPos
+      ? hoveredPos.x + hoveredPos.w + 270 > extent.w
+        ? hoveredPos.x - 260
+        : hoveredPos.x + hoveredPos.w + 12
+      : 0;
 
   return (
     <div
@@ -83,7 +177,8 @@ export function VersionTree({
       }}
     >
       <div className="relative" style={{ width: extent.w, height: extent.h }}>
-        {/* edges under the nodes */}
+        {/* edges under the nodes — they follow drags live, since they derive
+            from the same position map */}
         <svg className="pointer-events-none absolute inset-0" width={extent.w} height={extent.h} aria-hidden>
           {laid.map((n) => {
             if (!n.parentId) return null;
@@ -96,7 +191,6 @@ export function VersionTree({
             const x2 = b.x;
             const y2 = b.y + b.h / 2;
             const mid = (x1 + x2) / 2;
-            // Curves, not right angles — the tree should read as growth.
             const d = `M${x1} ${y1} C${mid} ${y1} ${mid} ${y2} ${x2} ${y2}`;
 
             return (
@@ -113,7 +207,8 @@ export function VersionTree({
           })}
         </svg>
 
-        {/* verdict badges at edge midpoints — where self-correction shows */}
+        {/* verdict badges at edge midpoints. A discarded stub carries none — the
+            word under it already says so, and the badge was the collision. */}
         {laid.map((n) => {
           if (!n.parentId || !n.verdict || n.discarded) return null;
           const a = pos.get(n.parentId);
@@ -132,10 +227,19 @@ export function VersionTree({
             <button
               key={n.id}
               type="button"
-              onClick={() => onSelect?.(n.id)}
-              aria-label={`${n.kind === 'avatar' ? 'Source avatar' : `Step ${n.stepNo}`}${n.instruction ? `: ${n.instruction}` : ''}`}
+              onPointerDown={(e) => startDrag(e, n.id)}
+              onPointerEnter={() => !dragging && setHoveredId(n.id)}
+              onPointerLeave={() => setHoveredId((cur) => (cur === n.id ? null : cur))}
+              onClick={() => {
+                if (suppressClick.current) {
+                  suppressClick.current = false;
+                  return;
+                }
+                onSelect?.(n.id);
+              }}
+              aria-label={`${n.kind === 'avatar' ? 'Source avatar' : n.kind === 'video' ? 'Rendered clip' : `Step ${n.stepNo}`}${n.instruction ? `: ${n.instruction}` : ''}`}
               aria-pressed={selected}
-              className="absolute"
+              className={`absolute touch-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
               style={{ left: p.x, top: p.y, width: p.w, height: p.h }}
             >
               {selected && <span className="pointer-events-none absolute -inset-[7px] rounded-[14px] border-2 border-ink" />}
@@ -150,7 +254,7 @@ export function VersionTree({
               >
                 {n.frameUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={n.frameUrl} alt="" className="h-full w-full object-cover" />
+                  <img src={n.frameUrl} alt="" draggable={false} className="h-full w-full select-none object-cover" />
                 ) : (
                   <span className="flex h-full w-full items-center justify-center text-[10px] text-ink-4">no frame</span>
                 )}
@@ -159,7 +263,15 @@ export function VersionTree({
                   <span className="absolute inset-0 flex items-center justify-center bg-black/45">
                     <span className="flex items-center gap-1.5 rounded-chip bg-black/70 px-2.5 py-1.5 text-[9px] font-bold tracking-[0.05em] text-accent">
                       <span className="rs-cursor block h-[5px] w-[5px] rounded-full bg-accent" />
-                      GENERATING
+                      {n.kind === 'video' ? 'RENDERING' : 'GENERATING'}
+                    </span>
+                  </span>
+                )}
+
+                {n.kind === 'video' && n.status !== 'generating' && (
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" className="ml-0.5" aria-hidden><path d="M8 5v14l11-7z" /></svg>
                     </span>
                   </span>
                 )}
@@ -171,19 +283,13 @@ export function VersionTree({
                 )}
               </span>
 
-              {/* Status is never colour alone — every node that carries one also
-                  says it in words. */}
               {n.discarded && (
-                <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-crit">
-                  discarded
-                </span>
+                <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-crit">discarded</span>
               )}
               {n.status === 'rejected' && (
-                <span className="absolute -bottom-5 left-0 whitespace-nowrap text-[10.5px] font-semibold text-ink-3">
-                  you rejected this
-                </span>
+                <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-ink-3">you rejected this</span>
               )}
-              {!n.discarded && n.status !== 'rejected' && n.kind !== 'avatar' && (
+              {!n.discarded && n.status !== 'rejected' && n.kind === 'frame' && (
                 <span className="absolute bottom-1.5 left-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-semibold text-white">
                   <span className="tnum">{n.stepNo}</span>
                 </span>
@@ -191,15 +297,38 @@ export function VersionTree({
             </button>
           );
         })}
+
+        {/* hover card — more than the node can carry, less than the inspector */}
+        {hovered && hoveredPos && !dragging && (
+          <div
+            className="pointer-events-none absolute z-30 w-[248px] rounded-card border border-line bg-panel/95 p-3 shadow-[0_14px_34px_-14px_rgba(0,0,0,0.4)] backdrop-blur-sm"
+            style={{ left: cardLeft, top: hoveredPos.y }}
+          >
+            <p className="text-[10px] font-bold tracking-[0.1em] text-ink-3">
+              {hovered.kind === 'avatar' ? 'SOURCE AVATAR' : hovered.kind === 'video' ? 'RENDERED CLIP' : `STEP ${hovered.stepNo}`}
+              <span className="ml-1.5 font-semibold normal-case tracking-normal text-ink-4">· {STATUS_WORD[hovered.status] ?? hovered.status}</span>
+            </p>
+            {hovered.instruction && (
+              <p className="mt-1.5 line-clamp-2 text-[12.5px] font-medium leading-snug">{hovered.instruction}</p>
+            )}
+            {hovered.criticNotes && (
+              <p className="mt-1.5 line-clamp-3 text-[11.5px] leading-snug text-ink-2">{hovered.criticNotes}</p>
+            )}
+            <p className="mt-2 border-t border-line pt-1.5 text-[10.5px] text-ink-4">Click to inspect · drag to move</p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 function VerdictBadge({ verdict, x, y }: { verdict: 'met' | 'partial' | 'failed'; x: number; y: number }) {
+  /* PARTIAL says what the critic said. It used to say RETRIED, which read as a
+     failure on every edge of a real run — a partial that was never retried is
+     not a retry, and the discarded stub already marks the ones that were. */
   const style = {
     met: { cls: 'bg-good-soft text-good border-good/45', label: 'MET' },
-    partial: { cls: 'bg-warn-soft text-warn border-warn/45', label: 'RETRIED' },
+    partial: { cls: 'bg-warn-soft text-warn border-warn/45', label: 'PARTIAL' },
     failed: { cls: 'bg-crit-soft text-crit border-crit/45', label: 'DISCARDED' },
   }[verdict];
 

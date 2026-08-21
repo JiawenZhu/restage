@@ -135,13 +135,26 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             attempt > 0 && lastCritique
               ? `\n\nA previous attempt at this step was judged ${lastCritique.verdict}. Fix specifically this: ${lastCritique.retryHint || lastCritique.notes}\nChange nothing else.`
               : '';
-          const prompt =
-            `The same person as the reference photo, ${args.aspect} frame.\n` +
-            `${step.instruction}\n\n` +
-            `Keep the face identical to the reference. Realistic photograph, ` +
-            `authentic phone-shot creator content. No text, no logos, no watermarks.${retryNote}`;
 
-          const frame = await generateFrame({ prompt, aspect: args.aspect, refs: [avatar] });
+          // The first step builds the opening frame from the avatar. Every step
+          // after that EDITS the previous frame — passing it as the first
+          // reference is what a real run proved necessary: with only the avatar
+          // as input, each step repainted the whole scene, the critic objected
+          // that nothing was refined in place, and the retry repeated the same
+          // mistake because it had the same inputs.
+          const isFirst = parentId === 'root';
+          const refs = isFirst ? [avatar] : [parentImage, avatar];
+          const prompt = isFirst
+            ? `Build the opening frame of a UGC ad, ${args.aspect}. The person is the one in the reference photo — keep the face identical.\n` +
+              `${step.instruction}\n\n` +
+              `Realistic photograph, authentic phone-shot creator content. No text, no logos, no watermarks.${retryNote}`
+            : `The FIRST image is the current frame. Apply exactly one change to it:\n` +
+              `${step.instruction}\n\n` +
+              `Keep everything else in the frame — the scene, clothing, camera position and props — unchanged. ` +
+              `The SECOND image is the identity reference: the face must stay identical to it. ` +
+              `Realistic photograph. No text, no logos, no watermarks.${retryNote}`;
+
+          const frame = await generateFrame({ prompt, aspect: args.aspect, refs });
           const url = toDataUrl(frame.bytes, frame.mimeType);
 
           const verdict = await critique({

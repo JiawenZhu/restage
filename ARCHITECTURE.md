@@ -64,27 +64,38 @@ plan is therefore ~90s of frames, and a run has to survive a refresh.
 would be minutes per branch, and the retry loop — the thing that proves
 autonomy — would be unwatchable.
 
-## 4. Database — **DECIDED: Postgres + Prisma**
+## 4. Data — **DECIDED: Firebase for structure, R2 for the video files**
 
-The version tree is relational and self-referencing:
+Split by what the thing *is*, not by convenience:
+
+| Lives in | What |
+|---|---|
+| **Firestore** | profiles, preferences, the taste model, runs, tree nodes, and the **pointer** to each video |
+| **Firebase Storage** | avatar captures and generated frames — small, read rarely, tied to a user |
+| **Cloudflare R2** | the finished video files |
+
+R2 for video specifically because **egress is free there and $0.12/GB on
+Firebase**. A video product stores once and plays many times, so the bill lives
+in egress, not storage. Frames and avatars stay on Firebase Storage: they are
+small, and keeping them beside the auth that owns them is worth more than the
+egress saving on a 20 KB JPEG.
 
 ```
-Avatar   id, userId, angles[], createdAt
-Run      id, userId, avatarId, goal, aspect ('9:16'|'16:9'), seconds, status
-Node     id, runId, parentId → Node.id, stepNo, kind ('frame'|'video'),
-         instruction, rationale, imageUrl, videoUrl,
-         verdict ('met'|'partial'|'failed'), criticNotes, status
-Taste    id, userId, attribute, weight, sessions
+users/{uid}                       profile, preferences
+users/{uid}/avatars/{id}          three capture paths, label, createdAt
+runs/{runId}                      uid, avatarId, goal, aspect, seconds, status
+runs/{runId}/nodes/{nodeId}       parentId, stepNo, kind, instruction, rationale,
+                                  frameUrl, videoKey → R2, verdict, criticNotes
+users/{uid}/taste/{attribute}     weight, sessions
 ```
 
-`Node.parentId` pointing at `Node.id` is the whole tree. Postgres does that
-with a recursive CTE in one query. Firestore — which CareerVivid uses — has no
-joins and no recursive reads, so the same tree becomes N round trips or a
-denormalised blob that fights every partial update. This is the one place we
-should NOT follow CareerVivid.
-
-Prisma because the borrowed project already uses it, so its schema conventions
-carry over.
+**Correcting an earlier recommendation in this document.** It previously argued
+for Postgres because the tree is self-referencing and Firestore has no recursive
+read. That reasoning holds for large or deep trees and is overweighted here: a
+run has six to ten nodes, always scoped to one run. `runs/{id}/nodes` is a
+single collection query that returns all of them, and the tree is assembled in
+memory. Standing up a second database for a ten-node tree costs more than it
+saves.
 
 ## 5. Python — **DECIDED: a separate worker, for editing only**
 
@@ -110,16 +121,16 @@ worker/
 block a request. Design the interface as a queue from day one — a job row in,
 a file out — so the swap is a runner change, not a rewrite.
 
-## 6. Storage — **OPEN**
+## 6. Auth — **DECIDED: Firebase Auth, its own project**
 
-Avatars, frames and clips need object storage with signed URLs.
+Firebase Auth on a **new Firebase project**, separate from CareerVivid's. The
+sign-in flow is borrowed from CareerVivid — including the render-gate fix, so
+the sign-in page paints before the SDK resolves — but the project, the users and
+the data are this product's own.
 
-- **Firebase Storage** — we already know it, already have the project, and the
-  CareerVivid auth we are porting is Firebase.
-- **Cloudflare R2** — no egress fees, which matters if the library page shows
-  many videos.
-
-Leaning R2 for video egress, Firebase for speed of getting started. Your call.
+Firebase Auth rather than NextAuth because the user record and the Firestore
+data are then the same identity: `uid` is the document key, and security rules
+can be written against `request.auth.uid` without a mapping layer.
 
 ## 7. What we port from CareerVivid — logic, never UI
 
@@ -129,7 +140,7 @@ Leaning R2 for video egress, Firebase for speed of getting started. Your call.
 | **Agent turn-runner** (`functions/src/agent/turnRunner.ts`) | Its plan → execute → judge → retry loop is exactly this product's shape |
 | **Auth flow** | Including the render-gate fix — the sign-in page must not wait on the SDK before painting |
 
-**Not** its UI, and **not** Firestore for the tree (§4).
+**Not** its UI. Its Firestore shape, on the other hand, carries over — see §4.
 
 ## 8. What we take from `open-generative-ai` (MIT)
 
@@ -157,12 +168,13 @@ which is the entire reason the product is interesting.
 
 ---
 
-## Open questions
+## Open
 
-1. **Storage** — R2 or Firebase (§6).
-2. **The Arcads dashboard reference.** Its dashboard is behind a login, so it
-   cannot be seen from here. Screenshots are needed before the UI is matched to
-   it; the current artboards are our own direction, not theirs.
-3. **Auth provider** — reuse Firebase Auth (fastest, matches the port) or
-   NextAuth (matches the borrowed project). Mixing Firebase Auth with Postgres
-   works but means two systems.
+1. **R2 is not enabled yet.** The Cloudflare dashboard redirects to the plan
+   page: enabling it completes a transaction, accepts the terms, and binds a
+   payment method on auto-renew. It reads $0.00/month until the free tier is
+   exceeded — 10 GB, which is roughly 5,000 clips at the ~2 MB a 15-second
+   render measured. Waiting on a go-ahead before clicking it.
+
+2. **Theme.** Light is the default and matches Arcads; dark ships behind the
+   toggle and gets a pass later to look more premium.

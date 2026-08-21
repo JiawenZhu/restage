@@ -5,18 +5,23 @@ and **OPEN** where it is a real trade and needs your call.
 
 ---
 
-## 1. Framework — **DECIDED: Next.js 15 (App Router) + React 19**
+## 1. Framework — **DECIDED: Next.js 16 (App Router) + React 19**
 
 Static HTML cannot carry this product: the version tree grows node by node
 while the user watches, so the page has to re-render from live state.
 
 Next.js specifically, not Vite + a separate API, for three reasons:
 
-1. **The studio we are lifting is already Next 15 App Router.**
+1. **The studio we are lifting is already App Router.**
    `open-generative-ai` runs Next 15 / React 19 / Tailwind 3. Its
    `ImageStudio` and `VideoStudio` are ~1300 lines each with ~11 API
    touchpoints. Dropped into the same framework they mostly work; ported to
-   Vite they get rewritten.
+   Vite they get rewritten. We take Next **16** — 16.3.2 is current, 15 is a
+   version behind — so expect small adjustments where their components meet
+   framework APIs.
+
+   React stays at **19**: 19.2.8 is the current stable release and there is no
+   React 20. Everything published above it is a 19.3 canary.
 2. **API routes keep the key server-side by default.** Anything under
    `app/api/*` never reaches the browser. That is the fix for the exact defect
    in the project we are borrowing from, which keeps the key in
@@ -168,13 +173,23 @@ which is the entire reason the product is interesting.
 
 ---
 
+## Provisioned
+
+- **R2 bucket `video-renders`** — Standard class, **public access disabled**.
+  Videos are served through signed URLs or a Worker, never a public bucket, so a
+  key in a page source cannot become an open video host. Named by function
+  rather than `restage-` because the bucket name is permanent and the product
+  name is not.
+
 ## Open
 
-1. **R2 is not enabled yet.** The Cloudflare dashboard redirects to the plan
-   page: enabling it completes a transaction, accepts the terms, and binds a
-   payment method on auto-renew. It reads $0.00/month until the free tier is
-   exceeded — 10 GB, which is roughly 5,000 clips at the ~2 MB a 15-second
-   render measured. Waiting on a go-ahead before clicking it.
+1. **R2 API token.** The server needs S3 credentials for that bucket. A token is
+   shown once at creation and is a secret, so **you create it** — R2 → Manage
+   API tokens → Object Read & Write, scoped to `video-renders` only, not the
+   whole account. Paste the values into `.env` yourself; they should not pass
+   through a chat log.
 
-2. **Theme.** Light is the default and matches Arcads; dark ships behind the
+2. **Firebase project.** A new one, separate from CareerVivid's.
+
+3. **Theme.** Light is the default and matches Arcads; dark ships behind the
    toggle and gets a pass later to look more premium.

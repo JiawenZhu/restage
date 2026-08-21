@@ -4,3 +4,7 @@ dist/
 .env
 .env.*
 *.local
+
+# Generated media — regenerate rather than commit
+/out/
+*.mp4

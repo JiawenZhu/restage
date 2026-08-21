@@ -20,37 +20,46 @@
 <div class="ui" style="width: 1920px; height: 1080px; background: #0d0d0d; color: #ffffff; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased;">
 
   <!-- ── goal bar ────────────────────────────────────────────── -->
-  <div style="display: flex; align-items: center; gap: 18px; height: 76px; flex-shrink: 0; padding: 0 24px; background: #1a1a19; border-bottom: 1px solid rgba(255,255,255,0.10);">
+  <div style="display: flex; align-items: center; gap: 16px; height: 76px; flex-shrink: 0; padding: 0 22px; background: #1a1a19; border-bottom: 1px solid rgba(255,255,255,0.10);">
     <div style="display: flex; align-items: center; gap: 9px; flex-shrink: 0;">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="3"></rect>
-        <path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path>
-        <path d="M14 13.5l1.6-1.6a2 2 0 0 1 2.8 0L21 15"></path>
-      </svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path><path d="M14 13.5l1.6-1.6a2 2 0 0 1 2.8 0L21 15"></path></svg>
       <span style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em;">Restage</span>
     </div>
 
-    <div style="display: flex; align-items: center; gap: 12px; flex-grow: 1; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 11px 16px;">
+    <!-- the avatar in play -->
+    <div style="display: flex; align-items: center; gap: 8px; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 5px 13px 5px 5px; flex-shrink: 0;">
+      <img src="av-front.jpg" alt="" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: block;">
+      <span style="font-size: 13px; font-weight: 600;">Maya</span>
+      <span style="font-size: 11.5px; color: #898781;">your avatar</span>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 11px; flex-grow: 1; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 11px 15px; min-width: 0;">
       <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #898781; flex-shrink: 0;">GOAL</span>
-      <span style="font-size: 16px; color: #ffffff; flex-grow: 1;">This product shot gets 0.8% CTR. Make it look like a creator filmed it on their phone.</span>
+      <span style="font-size: 15.5px; flex-grow: 1;">A 15-second ad where I actually use the serum, in my kitchen. Should feel filmed, not shot.</span>
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#898781" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>
     </div>
 
-    <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
-      <div style="display: flex; align-items: center; gap: 8px; background: rgba(57,135,229,0.13); border: 1px solid rgba(57,135,229,0.4); border-radius: 20px; padding: 7px 14px;">
-        <span class="rs-cursor" style="width: 7px; height: 7px; border-radius: 50%; background: #3987e5; display: block;"></span>
-        <span class="tnum" style="font-size: 13px; font-weight: 600; color: #6fa8ec;">Running &middot; step 4 of 6</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 7px; border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: #c3c2b7;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
-        Interrupt
-      </div>
+    <!-- format: the output aspect is the user's call -->
+    <div style="display: flex; align-items: center; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 8px; padding: 3px; flex-shrink: 0;">
+      <span style="display: flex; align-items: center; gap: 6px; background: #3987e5; color: #ffffff; font-size: 12.5px; font-weight: 600; padding: 6px 12px; border-radius: 6px;">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="7" y="2" width="10" height="20" rx="2"></rect></svg>
+        9:16
+      </span>
+      <span style="display: flex; align-items: center; gap: 6px; color: #898781; font-size: 12.5px; font-weight: 600; padding: 6px 12px;">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="6" width="20" height="12" rx="2"></rect></svg>
+        16:9
+      </span>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; background: rgba(57,135,229,0.13); border: 1px solid rgba(57,135,229,0.4); border-radius: 20px; padding: 7px 14px; flex-shrink: 0;">
+      <span class="rs-cursor" style="width: 7px; height: 7px; border-radius: 50%; background: #3987e5; display: block;"></span>
+      <span class="tnum" style="font-size: 13px; font-weight: 600; color: #6fa8ec;">Step 4 of 6</span>
     </div>
   </div>
 
   <div style="display: flex; flex-grow: 1; min-height: 0;">
 
-    <!-- ── plan panel ────────────────────────────────────────── -->
+    <!-- ── plan ──────────────────────────────────────────────── -->
     <div style="width: 300px; flex-shrink: 0; background: #1a1a19; border-right: 1px solid rgba(255,255,255,0.10); display: flex; flex-direction: column;">
       <div style="display: flex; align-items: center; justify-content: space-between; padding: 18px 18px 12px;">
         <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">PLAN</span>
@@ -60,69 +69,38 @@
       <div style="flex-grow: 1; padding: 0 14px; display: flex; flex-direction: column; gap: 2px; position: relative;">
         <div style="position: absolute; left: 27px; top: 14px; bottom: 14px; width: 1px; background: rgba(255,255,255,0.10);"></div>
 
-        <!-- step 1 done -->
-        <div style="display: flex; gap: 11px; padding: 11px 10px; border-radius: 8px; position: relative;">
-          <div style="width: 20px; height: 20px; border-radius: 50%; background: #0ca30c; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 1;">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
-          </div>
-          <div style="min-width: 0;">
-            <p style="margin: 0; font-size: 13.5px; font-weight: 600; color: #ffffff;">Replace the seamless backdrop</p>
-            <p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #898781;">Studio white is the strongest single tell that a shot is not user-generated.</p>
-          </div>
+        <div style="display: flex; gap: 11px; padding: 11px 10px; position: relative;">
+          <div style="width: 20px; height: 20px; border-radius: 50%; background: #0ca30c; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 1;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></div>
+          <div style="min-width: 0;"><p style="margin: 0; font-size: 13.5px; font-weight: 600;">Put her in a real room</p><p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #898781;">A blank wall reads as a set. Kitchens are where this product is actually used.</p></div>
         </div>
 
-        <!-- step 2 done -->
-        <div style="display: flex; gap: 11px; padding: 11px 10px; border-radius: 8px; position: relative;">
-          <div style="width: 20px; height: 20px; border-radius: 50%; background: #0ca30c; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 1;">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
-          </div>
-          <div style="min-width: 0;">
-            <p style="margin: 0; font-size: 13.5px; font-weight: 600; color: #ffffff;">Break the perfect symmetry</p>
-            <p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #898781;">Hand-held framing is never centred. A few degrees of tilt reads as human.</p>
-          </div>
+        <div style="display: flex; gap: 11px; padding: 11px 10px; position: relative;">
+          <div style="width: 20px; height: 20px; border-radius: 50%; background: #0ca30c; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 1;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></div>
+          <div style="min-width: 0;"><p style="margin: 0; font-size: 13.5px; font-weight: 600;">Move to arm&rsquo;s-length framing</p><p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #898781;">Nobody films themselves on a tripod. The camera has to be a hand.</p></div>
         </div>
 
-        <!-- step 3 retried -->
-        <div style="display: flex; gap: 11px; padding: 11px 10px; border-radius: 8px; position: relative;">
-          <div style="width: 20px; height: 20px; border-radius: 50%; background: #fab219; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 1;">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"></path></svg>
-          </div>
-          <div style="min-width: 0;">
-            <p style="margin: 0; font-size: 13.5px; font-weight: 600; color: #ffffff;">Soften the key light</p>
-            <p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #898781;">The hard shadow reads as a lightbox. Retried once &mdash; first pass went flat.</p>
-          </div>
+        <div style="display: flex; gap: 11px; padding: 11px 10px; position: relative;">
+          <div style="width: 20px; height: 20px; border-radius: 50%; background: #fab219; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 1;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"></path></svg></div>
+          <div style="min-width: 0;"><p style="margin: 0; font-size: 13.5px; font-weight: 600;">Light it from the window</p><p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #898781;">Retried once &mdash; the first pass went full studio and lost the room.</p></div>
         </div>
 
-        <!-- step 4 running -->
-        <div style="display: flex; gap: 11px; padding: 11px 10px; border-radius: 8px; position: relative; background: rgba(57,135,229,0.09);">
+        <div style="display: flex; gap: 11px; padding: 11px 10px; position: relative; background: rgba(57,135,229,0.09); border-radius: 8px;">
           <div style="position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; background: #3987e5; border-radius: 2px;"></div>
           <div class="rs-cursor" style="width: 20px; height: 20px; border-radius: 50%; border: 2px solid #3987e5; flex-shrink: 0; z-index: 1; background: #1a1a19; box-sizing: border-box;"></div>
-          <div style="min-width: 0;">
-            <p style="margin: 0; font-size: 13.5px; font-weight: 600; color: #ffffff;">Add a hand entering frame</p>
-            <p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #c3c2b7;">A person in contact with the product is the shortest path to the format the feed rewards.</p>
-          </div>
+          <div style="min-width: 0;"><p style="margin: 0; font-size: 13.5px; font-weight: 600;">Get the product to the lens</p><p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #c3c2b7;">The bottle has to be legible in the first two seconds or the scroll wins.</p></div>
         </div>
 
-        <!-- step 5 pending -->
-        <div style="display: flex; gap: 11px; padding: 11px 10px; border-radius: 8px; position: relative;">
+        <div style="display: flex; gap: 11px; padding: 11px 10px; position: relative;">
           <div style="width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.22); flex-shrink: 0; z-index: 1; background: #1a1a19; box-sizing: border-box;"></div>
-          <div style="min-width: 0;">
-            <p style="margin: 0; font-size: 13.5px; font-weight: 600; color: #898781;">Grade toward phone colour</p>
-            <p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #6d6b66;">Slight green in the shadows, highlights clipped &mdash; what a phone sensor actually does.</p>
-          </div>
+          <div style="min-width: 0;"><p style="margin: 0; font-size: 13.5px; font-weight: 600; color: #898781;">Loosen the expression</p><p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #6d6b66;">Mid-sentence beats posed. A closed mouth reads as a photograph.</p></div>
         </div>
 
-        <!-- step 6 pending -->
-        <div style="display: flex; gap: 11px; padding: 11px 10px; border-radius: 8px; position: relative;">
+        <div style="display: flex; gap: 11px; padding: 11px 10px; position: relative;">
           <div style="width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.22); flex-shrink: 0; z-index: 1; background: #1a1a19; box-sizing: border-box;"></div>
-          <div style="min-width: 0;">
-            <p style="margin: 0; font-size: 13.5px; font-weight: 600; color: #898781;">Re-crop to 4:5</p>
-            <p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #6d6b66;">The aspect the placement actually serves, cropped last so nothing upstream is wasted.</p>
-          </div>
+          <div style="min-width: 0;"><p style="margin: 0; font-size: 13.5px; font-weight: 600; color: #898781;">Render the 15 seconds</p><p style="margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #6d6b66;">The approved frame becomes the first frame of the clip.</p></div>
         </div>
       </div>
 
-      <!-- taste model, collapsed -->
       <div style="border-top: 1px solid rgba(255,255,255,0.10); padding: 14px 18px 16px;">
         <div style="display: flex; align-items: center; justify-content: space-between;">
           <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">TASTE MODEL</span>
@@ -132,198 +110,131 @@
           </div>
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px;">
-          <span style="font-size: 11.5px; color: #c3c2b7; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 4px 11px;">avoids warm palettes</span>
-          <span style="font-size: 11.5px; color: #c3c2b7; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 4px 11px;">rejects visible branding</span>
+          <span style="font-size: 11.5px; color: #c3c2b7; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 4px 11px;">never studio lighting</span>
+          <span style="font-size: 11.5px; color: #c3c2b7; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 4px 11px;">no retouched skin</span>
         </div>
       </div>
     </div>
 
-    <!-- ── version tree canvas ───────────────────────────────── -->
+    <!-- ── tree: vertical nodes, because the output is vertical ─ -->
     <div style="flex-grow: 1; min-width: 0; position: relative; background: #0d0d0d; background-image: radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px); background-size: 26px 26px;">
 
-      <!-- edge layer -->
-      <svg style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;" viewBox="0 0 1280 980" preserveAspectRatio="none">
-        <path d="M228 348 C268 348 268 348 308 348" fill="none" stroke="rgba(255,255,255,0.24)" stroke-width="2"></path>
-        <path d="M506 348 C546 348 546 348 586 348" fill="none" stroke="rgba(255,255,255,0.24)" stroke-width="2"></path>
-        <path d="M784 348 C824 348 824 348 864 348" fill="none" stroke="rgba(255,255,255,0.24)" stroke-width="2"></path>
-        <path d="M745 300 C760 250 770 224 800 206" fill="none" stroke="rgba(208,59,59,0.55)" stroke-width="2" stroke-dasharray="5 4"></path>
-        <path d="M645 408 C645 470 645 500 645 540" fill="none" stroke="rgba(255,255,255,0.13)" stroke-width="2"></path>
+      <svg style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;" viewBox="0 0 1248 980" preserveAspectRatio="none">
+        <path d="M152 400 C176 400 176 400 200 400" fill="none" stroke="rgba(255,255,255,0.24)" stroke-width="2"></path>
+        <path d="M312 400 C336 400 336 400 360 400" fill="none" stroke="rgba(255,255,255,0.24)" stroke-width="2"></path>
+        <path d="M472 400 C496 400 496 400 520 400" fill="none" stroke="rgba(255,255,255,0.24)" stroke-width="2"></path>
+        <path d="M632 400 C656 400 656 400 680 400" fill="none" stroke="rgba(255,255,255,0.24)" stroke-width="2"></path>
+        <path d="M600 306 C606 250 614 214 640 196" fill="none" stroke="rgba(208,59,59,0.55)" stroke-width="2" stroke-dasharray="5 4"></path>
       </svg>
 
-      <!-- root node -->
-      <div style="position: absolute; left: 48px; top: 288px; width: 180px; height: 120px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.28); overflow: hidden; background: #232322;">
-        <svg viewBox="0 0 180 120" style="display: block; width: 100%; height: 100%;">
-          <rect width="180" height="120" fill="#f2f2f0"></rect>
-          <rect y="86" width="180" height="34" fill="#e4e4e1"></rect>
-          <ellipse cx="90" cy="89" rx="28" ry="4" fill="#d2d2ce"></ellipse>
-          <rect x="76" y="38" width="28" height="52" rx="4" fill="#cfd6dc"></rect>
-          <rect x="76" y="38" width="28" height="16" rx="4" fill="#b9c3cc"></rect>
-        </svg>
-        <span style="position: absolute; top: 7px; left: 7px; background: rgba(0,0,0,0.62); color: #c3c2b7; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; padding: 3px 7px; border-radius: 4px;">SOURCE</span>
+      <!-- root: the avatar itself -->
+      <div style="position: absolute; left: 44px; top: 304px; width: 108px; height: 192px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.28); overflow: hidden; background: #232322;">
+        <img src="av-front.jpg" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover;">
+        <span style="position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.66); color: #c3c2b7; font-size: 8.5px; font-weight: 700; letter-spacing: 0.08em; padding: 3px 6px; border-radius: 4px;">AVATAR</span>
       </div>
 
-      <!-- step 1 achieved -->
-      <div style="position: absolute; left: 326px; top: 288px; width: 180px; height: 120px; border-radius: 8px; border: 2px solid #0ca30c; overflow: hidden; background: #232322;">
-        <svg viewBox="0 0 180 120" style="display: block; width: 100%; height: 100%;">
-          <rect width="180" height="120" fill="#dfd6c8"></rect>
-          <rect y="82" width="180" height="38" fill="#c9bda9"></rect>
-          <rect x="76" y="34" width="28" height="52" rx="4" fill="#f2ece2"></rect>
-          <rect x="76" y="34" width="28" height="16" rx="4" fill="#ded3c3"></rect>
-        </svg>
-        <span style="position: absolute; bottom: 6px; left: 7px; display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.66); color: #ffffff; font-size: 9.5px; font-weight: 600; padding: 3px 7px; border-radius: 4px;">
-          <span class="tnum">1</span> Backdrop
-        </span>
+      <div style="position: absolute; left: 204px; top: 304px; width: 108px; height: 192px; border-radius: 8px; border: 2px solid #0ca30c; overflow: hidden; background: #232322;">
+        <img src="f1.jpg" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover;">
+        <span style="position: absolute; bottom: 5px; left: 6px; background: rgba(0,0,0,0.7); color: #ffffff; font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 4px;"><span class="tnum">1</span> Room</span>
       </div>
 
-      <!-- step 2 achieved -->
-      <div style="position: absolute; left: 604px; top: 288px; width: 180px; height: 120px; border-radius: 8px; border: 2px solid #0ca30c; overflow: hidden; background: #232322;">
-        <svg viewBox="0 0 180 120" style="display: block; width: 100%; height: 100%;">
-          <rect width="180" height="120" fill="#ded4c5"></rect>
-          <rect y="82" width="180" height="38" fill="#c6b9a4"></rect>
-          <rect x="72" y="32" width="30" height="54" rx="4" fill="#f2ece2" transform="rotate(-8 87 59)"></rect>
-          <rect x="72" y="32" width="30" height="16" rx="4" fill="#ded3c3" transform="rotate(-8 87 40)"></rect>
-        </svg>
-        <span style="position: absolute; bottom: 6px; left: 7px; display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.66); color: #ffffff; font-size: 9.5px; font-weight: 600; padding: 3px 7px; border-radius: 4px;">
-          <span class="tnum">2</span> Framing
-        </span>
+      <div style="position: absolute; left: 364px; top: 304px; width: 108px; height: 192px; border-radius: 8px; border: 2px solid #0ca30c; overflow: hidden; background: #232322;">
+        <img src="f2.jpg" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover;">
+        <span style="position: absolute; bottom: 5px; left: 6px; background: rgba(0,0,0,0.7); color: #ffffff; font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 4px;"><span class="tnum">2</span> Framing</span>
       </div>
 
-      <!-- discarded attempt, stubbed off the step-3 edge -->
-      <div style="position: absolute; left: 800px; top: 152px; width: 110px; height: 74px; border-radius: 8px; border: 2px solid rgba(208,59,59,0.8); overflow: hidden; background: #232322; opacity: 0.5;">
-        <svg viewBox="0 0 110 74" style="display: block; width: 100%; height: 100%; filter: saturate(0.25);">
-          <rect width="110" height="74" fill="#d8d4cd"></rect>
-          <rect y="52" width="110" height="22" fill="#c6c2ba"></rect>
-          <rect x="45" y="20" width="19" height="33" rx="3" fill="#eae6df"></rect>
-        </svg>
+      <!-- discarded: the studio-looking attempt -->
+      <div style="position: absolute; left: 640px; top: 132px; width: 72px; height: 128px; border-radius: 8px; border: 2px solid rgba(208,59,59,0.8); overflow: hidden; background: #232322; opacity: 0.5;">
+        <img src="fx.jpg" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover; filter: saturate(0.3);">
       </div>
-      <span style="position: absolute; left: 800px; top: 232px; display: flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; color: #d03b3b;">
+      <span style="position: absolute; left: 722px; top: 182px; display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: #d03b3b; white-space: nowrap;">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>
-        discarded &mdash; went flat
+        discarded &mdash; went full studio
       </span>
 
-      <!-- step 3 partial / retried -->
-      <div style="position: absolute; left: 882px; top: 288px; width: 180px; height: 120px; border-radius: 8px; border: 2px solid #fab219; overflow: hidden; background: #232322;">
-        <svg viewBox="0 0 180 120" style="display: block; width: 100%; height: 100%;">
-          <rect width="180" height="120" fill="#e3d8c7"></rect>
-          <rect y="82" width="180" height="38" fill="#c9bba4"></rect>
-          <path d="M0 74 Q90 62 180 78 L180 120 L0 120 Z" fill="#cdbfa8"></path>
-          <rect x="72" y="30" width="30" height="56" rx="4" fill="#f6f1e8" transform="rotate(-8 87 58)"></rect>
-          <rect x="72" y="30" width="30" height="16" rx="4" fill="#e3d8c8" transform="rotate(-8 87 38)"></rect>
-          <circle cx="30" cy="24" r="17" fill="#f2eade" opacity="0.5"></circle>
-        </svg>
-        <span style="position: absolute; bottom: 6px; left: 7px; display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.66); color: #ffffff; font-size: 9.5px; font-weight: 600; padding: 3px 7px; border-radius: 4px;">
-          <span class="tnum">3</span> Key light
-        </span>
+      <div style="position: absolute; left: 524px; top: 304px; width: 108px; height: 192px; border-radius: 8px; border: 2px solid #fab219; overflow: hidden; background: #232322;">
+        <img src="f3.jpg" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover;">
+        <span style="position: absolute; bottom: 5px; left: 6px; background: rgba(0,0,0,0.7); color: #ffffff; font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 4px;"><span class="tnum">3</span> Window light</span>
       </div>
 
-      <!-- step 4 generating — the agent is here -->
-      <div style="position: absolute; left: 1160px; top: 288px; width: 180px; height: 120px;">
+      <!-- generating: the agent is here -->
+      <div style="position: absolute; left: 684px; top: 304px; width: 108px; height: 192px;">
         <div class="rs-cursor" style="position: absolute; inset: -9px; border: 2px solid #3987e5; border-radius: 14px;"></div>
         <div style="position: absolute; inset: 0; border-radius: 8px; border: 2px solid #3987e5; overflow: hidden; background: #232322;">
-          <svg viewBox="0 0 180 120" style="display: block; width: 100%; height: 100%; opacity: 0.45;">
-            <rect width="180" height="120" fill="#ded3c2"></rect>
-            <rect y="82" width="180" height="38" fill="#c6b8a1"></rect>
-            <rect x="72" y="30" width="30" height="56" rx="4" fill="#f6f1e8" transform="rotate(-8 87 58)"></rect>
-            <path d="M118 120 q-5 -34 8 -50 q10 -13 22 -9 l0 59 z" fill="#c9ae92"></path>
-          </svg>
+          <img src="f4.jpg" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0.4;">
           <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
-            <span style="display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.72); color: #6fa8ec; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; padding: 5px 10px; border-radius: 20px;">
-              <span class="rs-cursor" style="width: 6px; height: 6px; border-radius: 50%; background: #3987e5; display: block;"></span>
+            <span style="display: flex; align-items: center; gap: 5px; background: rgba(0,0,0,0.75); color: #6fa8ec; font-size: 9px; font-weight: 700; letter-spacing: 0.05em; padding: 5px 9px; border-radius: 20px;">
+              <span class="rs-cursor" style="width: 5px; height: 5px; border-radius: 50%; background: #3987e5; display: block;"></span>
               GENERATING
             </span>
           </div>
         </div>
-        <span style="position: absolute; bottom: 6px; left: 7px; display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.66); color: #ffffff; font-size: 9.5px; font-weight: 600; padding: 3px 7px; border-radius: 4px;">
-          <span class="tnum">4</span> Hand in frame
-        </span>
       </div>
 
-      <!-- rejected branch -->
-      <div style="position: absolute; left: 604px; top: 528px; width: 180px; height: 120px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.22); overflow: hidden; background: #232322; opacity: 0.35;">
-        <svg viewBox="0 0 180 120" style="display: block; width: 100%; height: 100%; filter: saturate(0.15);">
-          <rect width="180" height="120" fill="#ded4c5"></rect>
-          <rect y="82" width="180" height="38" fill="#c6b9a4"></rect>
-          <rect x="60" y="32" width="30" height="54" rx="4" fill="#f2ece2"></rect>
-          <rect x="100" y="44" width="26" height="42" rx="4" fill="#e6ddd0"></rect>
-        </svg>
+      <!-- what the tree is for: the render step, still greyed -->
+      <div style="position: absolute; left: 852px; top: 304px; width: 108px; height: 192px; border-radius: 8px; border: 1.5px dashed rgba(255,255,255,0.20); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#55534e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14l11-7z"></path></svg>
+        <span style="font-size: 10px; font-weight: 600; color: #55534e; text-align: center; line-height: 1.4;">render<br>15s clip</span>
       </div>
-      <span style="position: absolute; left: 604px; top: 656px; display: flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; color: #898781;">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>
-        you rejected this &mdash; second product added
-      </span>
 
-      <!-- verdict badges on edges -->
-      <span style="position: absolute; left: 246px; top: 320px; display: flex; align-items: center; gap: 4px; background: #132a13; border: 1px solid rgba(12,163,12,0.45); color: #0ca30c; font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; padding: 3px 8px; border-radius: 20px;">
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
-        MET
-      </span>
-      <span style="position: absolute; left: 524px; top: 320px; display: flex; align-items: center; gap: 4px; background: #132a13; border: 1px solid rgba(12,163,12,0.45); color: #0ca30c; font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; padding: 3px 8px; border-radius: 20px;">
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
-        MET
-      </span>
-      <span style="position: absolute; left: 794px; top: 320px; display: flex; align-items: center; gap: 4px; background: #33260c; border: 1px solid rgba(250,178,25,0.45); color: #fab219; font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; padding: 3px 8px; border-radius: 20px;">
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"></path></svg>
-        RETRIED 1&times;
-      </span>
+      <span style="position: absolute; left: 162px; top: 372px; display: flex; align-items: center; gap: 4px; background: #132a13; border: 1px solid rgba(12,163,12,0.45); color: #0ca30c; font-size: 9px; font-weight: 700; padding: 3px 7px; border-radius: 20px;"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>MET</span>
+      <span style="position: absolute; left: 322px; top: 372px; display: flex; align-items: center; gap: 4px; background: #132a13; border: 1px solid rgba(12,163,12,0.45); color: #0ca30c; font-size: 9px; font-weight: 700; padding: 3px 7px; border-radius: 20px;"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>MET</span>
+      <span style="position: absolute; left: 474px; top: 372px; display: flex; align-items: center; gap: 4px; background: #33260c; border: 1px solid rgba(250,178,25,0.45); color: #fab219; font-size: 9px; font-weight: 700; padding: 3px 7px; border-radius: 20px;"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"></path></svg>RETRIED</span>
 
-      <!-- canvas footer legend -->
-      <div style="position: absolute; left: 24px; bottom: 20px; display: flex; align-items: center; gap: 18px; background: rgba(26,26,25,0.9); border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 9px 14px;">
+      <div style="position: absolute; left: 22px; bottom: 20px; display: flex; align-items: center; gap: 16px; background: rgba(26,26,25,0.9); border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 9px 14px;">
         <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #c3c2b7;"><span style="width: 9px; height: 9px; border-radius: 2px; border: 2px solid #0ca30c; display: block;"></span>achieved</span>
         <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #c3c2b7;"><span style="width: 9px; height: 9px; border-radius: 2px; border: 2px solid #fab219; display: block;"></span>retried</span>
         <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #c3c2b7;"><span style="width: 9px; height: 9px; border-radius: 2px; border: 2px solid #3987e5; display: block;"></span>generating</span>
         <span style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #c3c2b7;"><span style="width: 9px; height: 9px; border-radius: 2px; border: 2px solid #d03b3b; display: block;"></span>discarded</span>
       </div>
+
+      <p style="position: absolute; right: 24px; bottom: 24px; margin: 0; font-size: 11.5px; color: #55534e; text-align: right; line-height: 1.5;">Frames are cheap and fast, so the agent can<br>afford to be wrong. Only the approved frame<br>is rendered to video.</p>
     </div>
 
     <!-- ── inspector ─────────────────────────────────────────── -->
     <div style="width: 372px; flex-shrink: 0; background: #1a1a19; border-left: 1px solid rgba(255,255,255,0.10); display: flex; flex-direction: column;">
       <div style="display: flex; align-items: center; justify-content: space-between; padding: 18px 18px 12px;">
-        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">STEP 3 &middot; KEY LIGHT</span>
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">STEP 3 &middot; WINDOW LIGHT</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#898781" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
       </div>
 
-      <div style="padding: 0 18px; flex-grow: 1; overflow: hidden;">
-        <div style="border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.10); position: relative;">
-          <svg viewBox="0 0 336 224" style="display: block; width: 100%; height: auto;">
-            <rect width="336" height="224" fill="#e3d8c7"></rect>
-            <rect y="152" width="336" height="72" fill="#c9bba4"></rect>
-            <path d="M0 138 Q168 116 336 146 L336 224 L0 224 Z" fill="#cdbfa8"></path>
-            <rect x="134" y="56" width="56" height="104" rx="7" fill="#f6f1e8" transform="rotate(-8 162 108)"></rect>
-            <rect x="134" y="56" width="56" height="30" rx="7" fill="#e3d8c8" transform="rotate(-8 162 71)"></rect>
-            <circle cx="56" cy="44" r="32" fill="#f2eade" opacity="0.5"></circle>
-            <rect x="168" y="0" width="1.5" height="224" fill="rgba(255,255,255,0.8)"></rect>
-            <circle cx="168" cy="112" r="13" fill="rgba(0,0,0,0.55)" stroke="#ffffff" stroke-width="1.5"></circle>
-            <path d="M164 108l-4 4 4 4M172 108l4 4-4 4" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"></path>
-          </svg>
-          <span style="position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.6); color: #c3c2b7; font-size: 9.5px; font-weight: 600; padding: 3px 7px; border-radius: 4px;">BEFORE</span>
-          <span style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); color: #ffffff; font-size: 9.5px; font-weight: 600; padding: 3px 7px; border-radius: 4px;">AFTER</span>
+      <div style="padding: 0 18px; flex-grow: 1; min-height: 0;">
+        <div style="display: flex; gap: 10px;">
+          <div style="flex: 1; border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,0.10); position: relative;">
+            <img src="f2.jpg" alt="" style="display: block; width: 100%; height: 208px; object-fit: cover;">
+            <span style="position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.62); color: #c3c2b7; font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 4px;">STEP 2</span>
+          </div>
+          <div style="flex: 1; border-radius: 9px; overflow: hidden; border: 1px solid rgba(250,178,25,0.4); position: relative;">
+            <img src="f3.jpg" alt="" style="display: block; width: 100%; height: 208px; object-fit: cover;">
+            <span style="position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.62); color: #ffffff; font-size: 9px; font-weight: 600; padding: 3px 6px; border-radius: 4px;">STEP 3</span>
+          </div>
         </div>
 
-        <p style="margin: 16px 0 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">INSTRUCTION</p>
-        <p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: #ffffff;">Diffuse the key light and lift the shadow side by roughly one stop.</p>
+        <p style="margin: 14px 0 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">INSTRUCTION</p>
+        <p style="margin: 0; font-size: 13.5px; line-height: 1.5;">Relight from a window camera-left; let the shadow side fall off naturally.</p>
 
-        <p style="margin: 16px 0 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">WHY</p>
-        <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #c3c2b7;">The hard-edged shadow under the bottle is the signature of a single studio strobe. Phone cameras in a room produce a wide, soft falloff. Softening it removes the second-strongest studio tell after the backdrop.</p>
+        <p style="margin: 14px 0 4px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">WHY</p>
+        <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #c3c2b7;">Overhead room light flattens the face and puts a shadow under the jaw that no phone video has. Window light from the side is what a real kitchen gives you at that hour.</p>
 
-        <!-- critic verdict block -->
-        <div style="margin-top: 18px; background: #232322; border: 1px solid rgba(250,178,25,0.34); border-radius: 10px; padding: 14px;">
+        <div style="margin-top: 16px; background: #232322; border: 1px solid rgba(250,178,25,0.34); border-radius: 10px; padding: 14px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fab219" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"></path></svg>
             <span style="font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; color: #fab219;">CRITIC &middot; PARTIAL, RETRIED ONCE</span>
           </div>
-          <p style="margin: 10px 0 0; font-size: 13px; line-height: 1.6; color: #ffffff;">&ldquo;First pass killed the shadow entirely and the bottle stopped sitting on the surface &mdash; it read as a cut-out. Retried with the fill pulled back so a soft contact shadow survives. The falloff is right now, but the highlight on the shoulder is still harder than a window would give.&rdquo;</p>
-          <p style="margin: 10px 0 0; font-size: 12px; color: #898781;">Judged against: <span style="color: #c3c2b7;">does this read as available light?</span></p>
+          <p style="margin: 10px 0 0; font-size: 13px; line-height: 1.6;">&ldquo;First pass lit her like a beauty campaign &mdash; clean gradient on the cheek, no room left behind her. That is the opposite of the goal. Retried with the source pushed to one side and the background allowed to blow out slightly, which is what a real window does.&rdquo;</p>
+          <p style="margin: 10px 0 0; font-size: 12px; color: #898781;">Judged against: <span style="color: #c3c2b7;">would a phone have produced this light?</span></p>
         </div>
       </div>
 
       <div style="border-top: 1px solid rgba(255,255,255,0.10); padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 8px;">
-        <div style="background: #3987e5; color: #ffffff; font-size: 13.5px; font-weight: 600; padding: 11px; border-radius: 8px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 7px;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v12"></path><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>
-          Branch from here
+        <div style="background: #3987e5; color: #ffffff; font-size: 13.5px; font-weight: 600; padding: 12px; border-radius: 8px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
+          Render this frame to video
         </div>
-        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
-          <div style="border: 1px solid rgba(255,255,255,0.16); color: #c3c2b7; font-size: 13px; font-weight: 600; padding: 10px; border-radius: 8px; text-align: center;">Accept</div>
-          <div style="border: 1px solid rgba(208,59,59,0.4); color: #d03b3b; font-size: 13px; font-weight: 600; padding: 10px; border-radius: 8px; text-align: center;">Reject</div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px;">
+          <div style="border: 1px solid rgba(255,255,255,0.16); color: #c3c2b7; font-size: 12.5px; font-weight: 600; padding: 10px 4px; border-radius: 8px; text-align: center;">Accept</div>
+          <div style="border: 1px solid rgba(208,59,59,0.4); color: #d03b3b; font-size: 12.5px; font-weight: 600; padding: 10px 4px; border-radius: 8px; text-align: center;">Reject</div>
+          <div style="border: 1px solid rgba(255,255,255,0.16); color: #c3c2b7; font-size: 12.5px; font-weight: 600; padding: 10px 4px; border-radius: 8px; text-align: center;">Branch</div>
         </div>
       </div>
     </div>
@@ -334,9 +245,7 @@
 
 <script data-dc-script data-props='{"accent":{"editor":"color","default":"#3987e5","options":["#3987e5","#0ca30c","#fab219","#d03b3b"]}}'>
 class Component extends DCLogic {
-  renderVals() {
-    return { accent: this.props.accent ?? '#3987e5' };
-  }
+  renderVals() { return { accent: this.props.accent ?? '#3987e5' }; }
 }
 </script>
 </body>

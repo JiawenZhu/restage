@@ -7,7 +7,7 @@
 <body>
 <x-dc>
 <helmet>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap">
   <style>
     body { margin: 0; }
     a { color: #3987e5; text-decoration: none; }
@@ -17,328 +17,272 @@
   </style>
 </helmet>
 
-<div class="rs" style="width: 1440px; background: #faf9f7; color: #17171a; -webkit-font-smoothing: antialiased;">
+<div class="rs" style="width: 1440px; background: #faf9f7; color: #14141a; -webkit-font-smoothing: antialiased;">
 
-  <!-- ── nav ─────────────────────────────────────────────────── -->
-  <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px 64px; border-bottom: 1px solid rgba(23,23,26,0.07);">
-    <div style="display: flex; align-items: center; gap: 40px;">
+  <!-- nav -->
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 22px 60px;">
+    <div style="display: flex; align-items: center; gap: 42px;">
       <div style="display: flex; align-items: center; gap: 9px;">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="3"></rect>
-          <path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path>
-          <path d="M14 13.5l1.6-1.6a2 2 0 0 1 2.8 0L21 15"></path>
-        </svg>
-        <span style="font-size: 18px; font-weight: 800; letter-spacing: -0.02em;">Restage</span>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path><path d="M14 13.5l1.6-1.6a2 2 0 0 1 2.8 0L21 15"></path></svg>
+        <span style="font-size: 19px; font-weight: 800; letter-spacing: -0.03em;">Restage</span>
       </div>
-      <div style="display: flex; align-items: center; gap: 26px; font-size: 14px; font-weight: 500; color: #55555c;">
-        <span>How it works</span>
-        <span>Use cases</span>
-        <span>Pricing</span>
+      <div style="display: flex; align-items: center; gap: 26px; font-size: 14px; font-weight: 500; color: #56565f;">
+        <span>How it works</span><span>Formats</span><span>Pricing</span>
       </div>
     </div>
     <div style="display: flex; align-items: center; gap: 18px;">
-      <span style="font-size: 14px; font-weight: 500; color: #55555c;">Log in</span>
-      <div style="background: #3987e5; color: #ffffff; font-size: 14px; font-weight: 600; padding: 10px 18px; border-radius: 8px;">Start free</div>
+      <span style="font-size: 14px; font-weight: 500; color: #56565f;">Log in</span>
+      <div style="background: #14141a; color: #ffffff; font-size: 14px; font-weight: 600; padding: 10px 19px; border-radius: 8px;">Start free</div>
     </div>
   </div>
 
-  <!-- ── hero ────────────────────────────────────────────────── -->
-  <div style="display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 84px 64px 0; text-align: center;">
-    <div style="display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(57,135,229,0.28); background: rgba(57,135,229,0.07); color: #2b6cbb; font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 20px;">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
-      Runs unattended — you watch, you don't click
-    </div>
+  <!-- ── hero ───────────────────────────────────────────────── -->
+  <div style="padding: 44px 60px 0;">
+    <div style="display: grid; grid-template-columns: 600px minmax(0, 1fr); gap: 56px; align-items: center;">
 
-    <h1 style="max-width: 900px; margin: 0; font-size: 68px; line-height: 1.04; font-weight: 800; letter-spacing: -0.035em; text-wrap: balance;">
-      State the outcome.<br>The agent edits until it gets there.
-    </h1>
-
-    <p style="max-width: 660px; margin: 0; font-size: 19px; line-height: 1.55; font-weight: 400; color: #55555c; text-wrap: pretty;">
-      Upload one product shot and say what you need it to do — <em style="font-style: normal; color: #17171a; font-weight: 600;">&ldquo;make this look like a creator filmed it on their phone.&rdquo;</em> Restage plans five to seven edits, runs them on its own, and judges its own work after every step.
-    </p>
-
-    <div style="display: flex; align-items: center; gap: 12px; margin-top: 6px;">
-      <div style="background: #3987e5; color: #ffffff; font-size: 15px; font-weight: 600; padding: 14px 26px; border-radius: 9px;">Start free — no card</div>
-      <div style="display: flex; align-items: center; gap: 8px; border: 1px solid rgba(23,23,26,0.16); color: #17171a; font-size: 15px; font-weight: 600; padding: 14px 22px; border-radius: 9px;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
-        Watch the 4-minute demo
-      </div>
-    </div>
-    <p style="margin: 2px 0 0; font-size: 13px; color: #8b8b93;">First 20 restages free · [YOUR TRIAL TERMS]</p>
-  </div>
-
-  <!-- ── showcase strip: UGC first, room second ──────────────── -->
-  <div style="padding: 68px 64px 0;">
-    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px;">
-
-      <!-- UGC pair -->
-      <div style="border: 1px solid rgba(23,23,26,0.09); background: #ffffff; border-radius: 14px; overflow: hidden;">
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid rgba(23,23,26,0.07);">
-          <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.01em;">UGC ad creative</span>
-          <span style="font-size: 12px; font-weight: 500; color: #8b8b93;">&ldquo;Make it look like a creator filmed it&rdquo;</span>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: rgba(23,23,26,0.07);">
-          <div style="background: #ffffff; padding: 16px;">
-            <svg viewBox="0 0 300 210" style="display: block; width: 100%; height: auto; border-radius: 8px;">
-              <rect width="300" height="210" fill="#f2f2f0"></rect>
-              <rect x="0" y="150" width="300" height="60" fill="#e6e6e3"></rect>
-              <ellipse cx="150" cy="156" rx="46" ry="7" fill="#d4d4d0"></ellipse>
-              <rect x="128" y="66" width="44" height="88" rx="6" fill="#cfd6dc"></rect>
-              <rect x="128" y="66" width="44" height="26" rx="6" fill="#b9c3cc"></rect>
-              <rect x="140" y="52" width="20" height="16" rx="3" fill="#aab5be"></rect>
-            </svg>
-            <p style="margin: 10px 0 0; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #8b8b93;">BEFORE</p>
-          </div>
-          <div style="background: #ffffff; padding: 16px;">
-            <svg viewBox="0 0 300 210" style="display: block; width: 100%; height: auto; border-radius: 8px;">
-              <rect width="300" height="210" fill="#e8ddd0"></rect>
-              <rect x="0" y="0" width="300" height="86" fill="#dccfbd"></rect>
-              <path d="M0 128 Q150 108 300 132 L300 210 L0 210 Z" fill="#cbb9a2"></path>
-              <rect x="122" y="54" width="50" height="98" rx="7" fill="#f4efe7" transform="rotate(-7 147 103)"></rect>
-              <rect x="122" y="54" width="50" height="28" rx="7" fill="#e2d6c5" transform="rotate(-7 147 68)"></rect>
-              <path d="M188 210 q-8 -52 12 -78 q16 -20 34 -14 l0 92 z" fill="#d8c3ab"></path>
-              <circle cx="66" cy="42" r="26" fill="#f0e6d8" opacity="0.55"></circle>
-            </svg>
-            <p style="margin: 10px 0 0; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #2b6cbb;">AFTER · 6 EDITS</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Room pair -->
-      <div style="border: 1px solid rgba(23,23,26,0.09); background: #ffffff; border-radius: 14px; overflow: hidden;">
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid rgba(23,23,26,0.07);">
-          <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.01em;">Short-term rental</span>
-          <span style="font-size: 12px; font-weight: 500; color: #8b8b93;">&ldquo;Lists at $120. Make it read $300.&rdquo;</span>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: rgba(23,23,26,0.07);">
-          <div style="background: #ffffff; padding: 16px;">
-            <svg viewBox="0 0 300 210" style="display: block; width: 100%; height: auto; border-radius: 8px;">
-              <rect width="300" height="210" fill="#e9ecee"></rect>
-              <rect x="0" y="140" width="300" height="70" fill="#d9dde0"></rect>
-              <rect x="196" y="34" width="76" height="62" rx="3" fill="#cfd8de"></rect>
-              <rect x="196" y="34" width="76" height="62" rx="3" fill="none" stroke="#b9c3ca" stroke-width="3"></rect>
-              <rect x="36" y="96" width="120" height="52" rx="4" fill="#cdd2d6"></rect>
-              <rect x="36" y="82" width="120" height="18" rx="4" fill="#c0c6cb"></rect>
-              <rect x="150" y="132" width="26" height="16" rx="2" fill="#c4cace"></rect>
-            </svg>
-            <p style="margin: 10px 0 0; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #8b8b93;">BEFORE</p>
-          </div>
-          <div style="background: #ffffff; padding: 16px;">
-            <svg viewBox="0 0 300 210" style="display: block; width: 100%; height: auto; border-radius: 8px;">
-              <rect width="300" height="210" fill="#efe9e0"></rect>
-              <rect x="0" y="140" width="300" height="70" fill="#d8c9b4"></rect>
-              <rect x="196" y="30" width="80" height="68" rx="3" fill="#f7f2e8"></rect>
-              <rect x="196" y="30" width="80" height="68" rx="3" fill="none" stroke="#c2ae94" stroke-width="3"></rect>
-              <rect x="30" y="92" width="128" height="56" rx="5" fill="#f5f1ea"></rect>
-              <rect x="30" y="78" width="128" height="20" rx="5" fill="#e4dbcd"></rect>
-              <rect x="44" y="70" width="34" height="16" rx="4" fill="#ffffff"></rect>
-              <rect x="86" y="70" width="34" height="16" rx="4" fill="#ffffff"></rect>
-              <rect x="168" y="112" width="16" height="36" rx="2" fill="#b99f7e"></rect>
-              <circle cx="176" cy="106" r="13" fill="#8fa47f"></circle>
-              <rect x="0" y="0" width="300" height="52" fill="#f6efe4" opacity="0.7"></rect>
-            </svg>
-            <p style="margin: 10px 0 0; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #2b6cbb;">AFTER · 5 EDITS</p>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ── how it works ────────────────────────────────────────── -->
-  <div style="padding: 96px 64px 0;">
-    <h2 style="margin: 0 0 8px; font-size: 40px; font-weight: 800; letter-spacing: -0.03em;">Three steps. You do the first one.</h2>
-    <p style="margin: 0 0 40px; font-size: 17px; color: #55555c;">The rest happens while you watch.</p>
-
-    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px;">
-      <div style="border: 1px solid rgba(23,23,26,0.09); background: #ffffff; border-radius: 14px; padding: 26px;">
-        <div style="display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; background: rgba(57,135,229,0.1); color: #2b6cbb; font-size: 15px; font-weight: 800;" class="tnum">1</div>
-        <h3 style="margin: 18px 0 8px; font-size: 20px; font-weight: 700; letter-spacing: -0.015em;">Say what you want it to do</h3>
-        <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #55555c;">Not &ldquo;increase saturation 12%.&rdquo; An outcome: <em style="font-style: normal; color: #17171a;">this needs to stop looking like stock.</em> Outcomes are what the agent can plan against.</p>
-      </div>
-      <div style="border: 1px solid rgba(23,23,26,0.09); background: #ffffff; border-radius: 14px; padding: 26px;">
-        <div style="display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; background: rgba(57,135,229,0.1); color: #2b6cbb; font-size: 15px; font-weight: 800;" class="tnum">2</div>
-        <h3 style="margin: 18px 0 8px; font-size: 20px; font-weight: 700; letter-spacing: -0.015em;">It writes the plan first</h3>
-        <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #55555c;">Five to seven ordered edits, each with the reason it is there. You read the plan before a single pixel moves — and you can cut a step you disagree with.</p>
-      </div>
-      <div style="border: 1px solid rgba(23,23,26,0.09); background: #ffffff; border-radius: 14px; padding: 26px;">
-        <div style="display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; background: rgba(57,135,229,0.1); color: #2b6cbb; font-size: 15px; font-weight: 800;" class="tnum">3</div>
-        <h3 style="margin: 18px 0 8px; font-size: 20px; font-weight: 700; letter-spacing: -0.015em;">It grades its own work</h3>
-        <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #55555c;">After each edit a critic asks whether the step did what it claimed. When it didn&rsquo;t, the agent revises and retries — without waiting for you.</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── differentiator: plan + tree ─────────────────────────── -->
-  <div style="margin: 96px 64px 0; background: #17171a; border-radius: 20px; padding: 56px; color: #ffffff;">
-    <div style="display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 56px; align-items: center;">
       <div>
-        <p style="margin: 0 0 14px; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: #6fa8ec;">WHY IT IS NOT A FILTER</p>
-        <h2 style="margin: 0 0 16px; font-size: 38px; line-height: 1.1; font-weight: 800; letter-spacing: -0.03em;">Every attempt stays on the canvas — including the ones it threw away.</h2>
-        <p style="margin: 0 0 22px; font-size: 16px; line-height: 1.6; color: #b7b7bd;">History is a tree, not an undo stack. When the critic rejects a step, the discarded attempt stays visible beside the retry. That is the part you cannot fake: you can see the machine change its mind.</p>
+        <div style="display: inline-flex; align-items: center; gap: 7px; background: #eef4fc; color: #2b6cbb; font-size: 12.5px; font-weight: 600; padding: 6px 13px; border-radius: 20px;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #3987e5; display: block;"></span>
+          Your face — not a stock actor
+        </div>
+
+        <h1 style="margin: 20px 0 0; font-size: 76px; line-height: 0.95; font-weight: 900; letter-spacing: -0.05em; text-wrap: balance;">
+          Never film another
+          <span style="display: block; color: #3987e5;">UGC ad.</span>
+        </h1>
+
+        <p style="margin: 24px 0 0; font-size: 19px; line-height: 1.55; color: #56565f; max-width: 500px; text-wrap: pretty;">
+          Enrol your face once. Say what the ad needs to do. The agent plans the shots, generates the frames, grades its own work, and hands you a finished clip.
+        </p>
+
+        <div style="display: flex; align-items: center; gap: 11px; margin-top: 30px;">
+          <div style="background: #3987e5; color: #ffffff; font-size: 15px; font-weight: 600; padding: 15px 27px; border-radius: 9px;">Build your avatar — free</div>
+          <div style="display: flex; align-items: center; gap: 9px; border: 1px solid rgba(20,20,26,0.15); font-size: 15px; font-weight: 600; padding: 15px 22px; border-radius: 9px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
+            Watch it work
+          </div>
+        </div>
+        <p style="margin: 14px 0 0; font-size: 13px; color: #8b8b93;">First 20 renders free &middot; [YOUR TRIAL TERMS]</p>
+      </div>
+
+      <!-- the money shot: a vertical clip, with the enrollment behind it -->
+      <div style="position: relative; display: flex; align-items: center; gap: 20px;">
+        <div style="display: flex; flex-direction: column; gap: 10px; flex-shrink: 0;">
+          <img src="av-left.jpg" alt="" style="width: 92px; height: 92px; border-radius: 10px; object-fit: cover; display: block; border: 2px solid rgba(20,20,26,0.1);">
+          <img src="av-front.jpg" alt="" style="width: 92px; height: 92px; border-radius: 10px; object-fit: cover; display: block; border: 2px solid #3987e5;">
+          <img src="av-right.jpg" alt="" style="width: 92px; height: 92px; border-radius: 10px; object-fit: cover; display: block; border: 2px solid rgba(20,20,26,0.1);">
+          <p style="margin: 4px 0 0; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; color: #8b8b93; text-align: center; line-height: 1.5;">ENROL<br>ONCE</p>
+        </div>
+
+        <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="rgba(20,20,26,0.24)" stroke-width="2" stroke-linecap="round" style="flex-shrink: 0;"><path d="M1 7h22M18 3l5 4-5 4"></path></svg>
+
+        <div style="position: relative; flex-grow: 1;">
+          <div style="border-radius: 18px; overflow: hidden; box-shadow: 0 30px 70px -28px rgba(20,20,26,0.45); background: #14141a;">
+            <img src="f4.jpg" alt="" style="display: block; width: 100%; height: 512px; object-fit: cover;">
+          </div>
+          <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;">
+            <span style="width: 64px; height: 64px; border-radius: 50%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
+              <svg width="25" height="25" viewBox="0 0 24 24" fill="#ffffff" style="margin-left: 3px;"><path d="M8 5v14l11-7z"></path></svg>
+            </span>
+          </div>
+          <div style="position: absolute; left: 16px; top: 16px; display: flex; gap: 7px;">
+            <span style="background: rgba(20,20,26,0.72); color: #ffffff; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 5px 10px; border-radius: 5px;">9:16</span>
+            <span style="background: rgba(20,20,26,0.72); color: #ffffff; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 5px 10px; border-radius: 5px;">0:15</span>
+          </div>
+          <div style="position: absolute; right: -14px; bottom: 26px; max-width: 250px; background: rgba(250,249,247,0.95); backdrop-filter: blur(8px); border-radius: 12px; padding: 13px 15px; box-shadow: 0 14px 34px -12px rgba(20,20,26,0.4);">
+            <p style="margin: 0 0 5px; font-size: 10px; font-weight: 800; letter-spacing: 0.14em; color: #8b8b93;">THE GOAL</p>
+            <p style="margin: 0; font-size: 13.5px; line-height: 1.45; font-weight: 500;">&ldquo;A 15-second ad where I actually use it, in my kitchen.&rdquo;</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── the differentiator: the tree ───────────────────────── -->
+  <div style="margin: 110px 60px 0; background: #14141a; border-radius: 22px; padding: 56px; color: #ffffff;">
+    <div style="display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 54px; align-items: center;">
+      <div>
+        <p style="margin: 0 0 14px; font-size: 12px; font-weight: 800; letter-spacing: 0.16em; color: #6fa8ec;">WHY IT DOESN&rsquo;T LOOK GENERATED</p>
+        <h2 style="margin: 0 0 18px; font-size: 40px; line-height: 1.07; font-weight: 800; letter-spacing: -0.035em;">It gets it wrong on purpose, cheaply, before it renders anything.</h2>
+        <p style="margin: 0 0 22px; font-size: 16px; line-height: 1.62; color: #b3b3ba;">Video is slow and expensive, so the agent works in frames first. It generates a still, a critic judges whether the step did what it claimed, and a bad one gets thrown away and retried. Only the frame you approve becomes a clip.</p>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          <div style="display: flex; align-items: flex-start; gap: 10px; font-size: 15px; color: #e4e4e7;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ca30c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><path d="M20 6L9 17l-5-5"></path></svg>
-            <span>Branch from any node and take a different direction</span>
-          </div>
-          <div style="display: flex; align-items: flex-start; gap: 10px; font-size: 15px; color: #e4e4e7;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ca30c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><path d="M20 6L9 17l-5-5"></path></svg>
-            <span>Rejections train a taste model that changes how the next session opens</span>
-          </div>
-          <div style="display: flex; align-items: flex-start; gap: 10px; font-size: 15px; color: #e4e4e7;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ca30c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><path d="M20 6L9 17l-5-5"></path></svg>
-            <span>Interrupt mid-run — the agent stops where it is, not at the end</span>
-          </div>
+          <div style="display: flex; gap: 10px; font-size: 15px; color: #e3e3e7;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5cd67d" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><path d="M20 6L9 17l-5-5"></path></svg><span class="tnum">A frame costs ~14 seconds. A clip costs ~41.</span></div>
+          <div style="display: flex; gap: 10px; font-size: 15px; color: #e3e3e7;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5cd67d" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><path d="M20 6L9 17l-5-5"></path></svg><span>Discarded attempts stay on the canvas &mdash; you see it change its mind</span></div>
+          <div style="display: flex; gap: 10px; font-size: 15px; color: #e3e3e7;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5cd67d" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><path d="M20 6L9 17l-5-5"></path></svg><span>What you rejected changes how the next session opens</span></div>
         </div>
       </div>
 
-      <!-- mini tree -->
-      <div style="background: #0d0d0d; border: 1px solid rgba(255,255,255,0.10); border-radius: 14px; padding: 28px; position: relative;">
-        <svg viewBox="0 0 760 330" style="display: block; width: 100%; height: auto;">
-          <path d="M164 116 C210 116 210 84 256 84" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="2"></path>
-          <path d="M400 84 C446 84 446 84 492 84" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="2"></path>
-          <path d="M400 84 C446 84 446 216 492 216" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="2"></path>
+      <div style="background: #0d0d0d; border: 1px solid rgba(255,255,255,0.10); border-radius: 16px; padding: 26px;">
+        <div style="display: flex; align-items: center; gap: 11px;">
+          <div style="width: 76px; flex-shrink: 0; border-radius: 7px; overflow: hidden; border: 2px solid rgba(255,255,255,0.26);"><img src="av-front.jpg" alt="" style="display: block; width: 100%; height: 132px; object-fit: cover;"></div>
+          <svg width="22" height="11" viewBox="0 0 26 12" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="2" stroke-linecap="round"><path d="M1 6h22M18 2l5 4-5 4"></path></svg>
+          <div style="width: 76px; flex-shrink: 0; border-radius: 7px; overflow: hidden; border: 2px solid #5cd67d;"><img src="f1.jpg" alt="" style="display: block; width: 100%; height: 132px; object-fit: cover;"></div>
+          <svg width="22" height="11" viewBox="0 0 26 12" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="2" stroke-linecap="round"><path d="M1 6h22M18 2l5 4-5 4"></path></svg>
+          <div style="width: 76px; flex-shrink: 0; border-radius: 7px; overflow: hidden; border: 2px solid #5cd67d;"><img src="f2.jpg" alt="" style="display: block; width: 100%; height: 132px; object-fit: cover;"></div>
+          <svg width="22" height="11" viewBox="0 0 26 12" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="2" stroke-linecap="round"><path d="M1 6h22M18 2l5 4-5 4"></path></svg>
+          <div style="position: relative; width: 76px; flex-shrink: 0;">
+            <div style="position: absolute; inset: -6px; border: 2px solid #3987e5; border-radius: 12px;"></div>
+            <div style="border-radius: 7px; overflow: hidden; border: 2px solid #3987e5; position: relative;">
+              <img src="f3.jpg" alt="" style="display: block; width: 100%; height: 132px; object-fit: cover; opacity: 0.45;">
+              <span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; background: rgba(0,0,0,0.4); color: #6fa8ec; font-size: 8.5px; font-weight: 800; letter-spacing: 0.06em;">GENERATING</span>
+            </div>
+          </div>
+        </div>
 
-          <rect x="20" y="72" width="144" height="90" rx="8" fill="#2c2c2e"></rect>
-          <rect x="20" y="132" width="144" height="30" fill="#3a3a3c"></rect>
-          <rect x="52" y="96" width="34" height="36" rx="4" fill="#4a4a4d"></rect>
-          <rect x="20" y="72" width="144" height="90" rx="8" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="2"></rect>
-          <rect x="28" y="80" width="46" height="15" rx="7" fill="rgba(0,0,0,0.55)"></rect>
-          <text x="51" y="91" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="#c3c2b7" text-anchor="middle">SOURCE</text>
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 16px; padding-left: 196px;">
+          <div style="width: 52px; border-radius: 6px; overflow: hidden; border: 2px solid rgba(208,59,59,0.85); opacity: 0.45;"><img src="fx.jpg" alt="" style="display: block; width: 100%; height: 90px; object-fit: cover; filter: saturate(0.25);"></div>
+          <span style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: #d03b3b;">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+            discarded &mdash; it went full studio, so it tried again
+          </span>
+        </div>
 
-          <rect x="256" y="40" width="144" height="90" rx="8" fill="#3a352e"></rect>
-          <rect x="256" y="100" width="144" height="30" fill="#4a4238"></rect>
-          <rect x="288" y="64" width="34" height="36" rx="4" fill="#5b5145"></rect>
-          <rect x="256" y="40" width="144" height="90" rx="8" fill="none" stroke="#0ca30c" stroke-width="2"></rect>
-
-          <rect x="492" y="40" width="144" height="90" rx="8" fill="#40382d"></rect>
-          <rect x="492" y="100" width="144" height="30" fill="#514636"></rect>
-          <rect x="524" y="64" width="34" height="36" rx="4" fill="#655743"></rect>
-          <rect x="492" y="40" width="144" height="90" rx="8" fill="none" stroke="#3987e5" stroke-width="2"></rect>
-          <circle cx="636" cy="40" r="7" fill="none" stroke="#3987e5" stroke-width="2"></circle>
-
-          <rect x="492" y="180" width="96" height="62" rx="8" fill="#2a2a2b" opacity="0.5"></rect>
-          <rect x="492" y="180" width="96" height="62" rx="8" fill="none" stroke="#d03b3b" stroke-width="2" opacity="0.75"></rect>
-          <text x="540" y="216" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="#d03b3b" text-anchor="middle">discarded</text>
-
-          <rect x="196" y="90" width="30" height="16" rx="8" fill="#132a13"></rect>
-          <text x="211" y="102" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="#0ca30c" text-anchor="middle">MET</text>
-          <rect x="428" y="140" width="38" height="16" rx="8" fill="#33260c"></rect>
-          <text x="447" y="152" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="#fab219" text-anchor="middle">RETRY</text>
-        </svg>
-        <div style="display: flex; align-items: center; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.10);">
+        <div style="display: flex; align-items: center; gap: 9px; margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.10);">
           <span style="width: 7px; height: 7px; border-radius: 50%; background: #3987e5;"></span>
-          <span style="font-size: 13px; color: #c3c2b7;">Step 4 of 6 — the agent is working here now</span>
+          <span class="tnum" style="font-size: 13px; color: #b3b3ba;">Step 4 of 6 &mdash; the agent is working here now</span>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── proof ───────────────────────────────────────────────── -->
-  <div style="padding: 96px 64px 0;">
-    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px;">
-      <div style="border: 1px solid rgba(23,23,26,0.09); background: #ffffff; border-radius: 14px; padding: 28px;">
-        <p class="tnum" style="margin: 0; font-size: 44px; font-weight: 800; letter-spacing: -0.03em; color: #17171a;">[X.X]&times;</p>
-        <p style="margin: 6px 0 0; font-size: 15px; color: #55555c;">click-through vs. the original shot &mdash; [YOUR MEASURED RESULT]</p>
-      </div>
-      <div style="border: 1px solid rgba(23,23,26,0.09); background: #ffffff; border-radius: 14px; padding: 28px;">
-        <p class="tnum" style="margin: 0; font-size: 44px; font-weight: 800; letter-spacing: -0.03em; color: #17171a;">[N] min</p>
-        <p style="margin: 6px 0 0; font-size: 15px; color: #55555c;">from upload to a finished set &mdash; [YOUR MEASURED TIME]</p>
-      </div>
-      <div style="border: 1px solid rgba(23,23,26,0.09); background: #ffffff; border-radius: 14px; padding: 28px;">
-        <p class="tnum" style="margin: 0; font-size: 44px; font-weight: 800; letter-spacing: -0.03em; color: #17171a;">[N]</p>
-        <p style="margin: 6px 0 0; font-size: 15px; color: #55555c;">creatives restaged this month &mdash; [YOUR NUMBER]</p>
-      </div>
-    </div>
+  <!-- ── how it works ───────────────────────────────────────── -->
+  <div style="padding: 110px 60px 0;">
+    <h2 style="margin: 0 0 6px; font-size: 44px; font-weight: 800; letter-spacing: -0.035em;">Two things you do. The rest is watching.</h2>
+    <p style="margin: 0 0 42px; font-size: 17.5px; color: #56565f;">Enrolment happens once. After that it is one sentence per ad.</p>
 
-    <div style="display: flex; align-items: center; justify-content: center; gap: 46px; margin-top: 34px; padding: 26px; border-top: 1px solid rgba(23,23,26,0.08); border-bottom: 1px solid rgba(23,23,26,0.08);">
-      <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.1em; color: #a3a3aa;">[CUSTOMER LOGOS]</span>
-      <div style="width: 92px; height: 22px; border-radius: 4px; background: rgba(23,23,26,0.09);"></div>
-      <div style="width: 78px; height: 22px; border-radius: 4px; background: rgba(23,23,26,0.09);"></div>
-      <div style="width: 104px; height: 22px; border-radius: 4px; background: rgba(23,23,26,0.09);"></div>
-      <div style="width: 86px; height: 22px; border-radius: 4px; background: rgba(23,23,26,0.09);"></div>
-      <div style="width: 96px; height: 22px; border-radius: 4px; background: rgba(23,23,26,0.09);"></div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px;">
+      <div style="border: 1px solid rgba(20,20,26,0.09); background: #ffffff; border-radius: 16px; padding: 30px;">
+        <span class="tnum" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; background: #eef4fc; color: #2b6cbb; font-size: 15px; font-weight: 800;">1</span>
+        <h3 style="margin: 20px 0 9px; font-size: 21px; font-weight: 700; letter-spacing: -0.02em;">Three angles, once</h3>
+        <p style="margin: 0; font-size: 15px; line-height: 1.62; color: #56565f;">Left, straight on, right. A single front-on photo gives the model nothing about the sides of your face &mdash; the moment you turn your head it starts inventing.</p>
+      </div>
+      <div style="border: 1px solid rgba(20,20,26,0.09); background: #ffffff; border-radius: 16px; padding: 30px;">
+        <span class="tnum" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; background: #eef4fc; color: #2b6cbb; font-size: 15px; font-weight: 800;">2</span>
+        <h3 style="margin: 20px 0 9px; font-size: 21px; font-weight: 700; letter-spacing: -0.02em;">Say what the ad must do</h3>
+        <p style="margin: 0; font-size: 15px; line-height: 1.62; color: #56565f;">Not a shot list. An outcome: <em style="font-style: normal; color: #14141a; font-weight: 600;">something that survives the first two seconds of a scroll.</em> The plan appears before anything renders.</p>
+      </div>
+      <div style="border: 1px solid rgba(20,20,26,0.09); background: #ffffff; border-radius: 16px; padding: 30px;">
+        <span class="tnum" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; background: #eef4fc; color: #2b6cbb; font-size: 15px; font-weight: 800;">3</span>
+        <h3 style="margin: 20px 0 9px; font-size: 21px; font-weight: 700; letter-spacing: -0.02em;">It grades its own frames</h3>
+        <p style="margin: 0; font-size: 15px; line-height: 1.62; color: #56565f;">A critic checks every step against what it claimed to do. When it falls short the agent revises and retries &mdash; without waiting for you.</p>
+      </div>
     </div>
   </div>
 
-  <!-- ── pricing ─────────────────────────────────────────────── -->
-  <div style="padding: 96px 64px 0;">
-    <h2 style="margin: 0 0 8px; font-size: 40px; font-weight: 800; letter-spacing: -0.03em;">Pricing</h2>
-    <p style="margin: 0 0 40px; font-size: 17px; color: #55555c;">A restage is one goal run end to end, however many edits it takes.</p>
+  <!-- ── formats ────────────────────────────────────────────── -->
+  <div style="padding: 110px 60px 0;">
+    <div style="display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 54px; align-items: center;">
+      <div>
+        <h2 style="margin: 0 0 12px; font-size: 40px; line-height: 1.08; font-weight: 800; letter-spacing: -0.035em;">Vertical or wide. Framed for it from step one.</h2>
+        <p style="margin: 0 0 20px; font-size: 16.5px; line-height: 1.6; color: #56565f;">Pick the ratio before the plan is written and the agent composes every frame for it. A 16:9 ad is not a 9:16 ad with the sides cut off &mdash; the subject sits differently, and so does the product.</p>
+        <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #56565f;">Already approved a frame? Re-render it in the other ratio without paying for the plan again.</p>
+      </div>
+      <div style="display: flex; align-items: flex-end; gap: 20px;">
+        <div style="position: relative; width: 260px; flex-shrink: 0; border-radius: 16px; overflow: hidden; box-shadow: 0 22px 50px -24px rgba(20,20,26,0.4);">
+          <img src="f4.jpg" alt="" style="display: block; width: 100%; height: 462px; object-fit: cover;">
+          <span style="position: absolute; top: 12px; left: 12px; background: #3987e5; color: #ffffff; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 4px 9px; border-radius: 5px;">9:16</span>
+        </div>
+        <div style="position: relative; flex-grow: 1; border-radius: 16px; overflow: hidden; box-shadow: 0 22px 50px -24px rgba(20,20,26,0.4);">
+          <img src="w4.jpg" alt="" style="display: block; width: 100%; height: 300px; object-fit: cover;">
+          <span style="position: absolute; top: 12px; left: 12px; background: rgba(20,20,26,0.76); color: #ffffff; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 4px 9px; border-radius: 5px;">16:9</span>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px;">
-      <div style="border: 1px solid rgba(23,23,26,0.09); background: #ffffff; border-radius: 14px; padding: 30px;">
+  <!-- ── proof ──────────────────────────────────────────────── -->
+  <div style="padding: 110px 60px 0;">
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px;">
+      <div style="border: 1px solid rgba(20,20,26,0.09); background: #ffffff; border-radius: 16px; padding: 30px;">
+        <p class="tnum" style="margin: 0; font-size: 48px; font-weight: 900; letter-spacing: -0.04em;">[X.X]&times;</p>
+        <p style="margin: 8px 0 0; font-size: 15px; color: #56565f;">click-through vs. a studio cut &mdash; [YOUR MEASURED RESULT]</p>
+      </div>
+      <div style="border: 1px solid rgba(20,20,26,0.09); background: #ffffff; border-radius: 16px; padding: 30px;">
+        <p class="tnum" style="margin: 0; font-size: 48px; font-weight: 900; letter-spacing: -0.04em;">[N] min</p>
+        <p style="margin: 8px 0 0; font-size: 15px; color: #56565f;">from one sentence to a finished clip &mdash; [YOUR MEASURED TIME]</p>
+      </div>
+      <div style="border: 1px solid rgba(20,20,26,0.09); background: #ffffff; border-radius: 16px; padding: 30px;">
+        <p class="tnum" style="margin: 0; font-size: 48px; font-weight: 900; letter-spacing: -0.04em;">[N]</p>
+        <p style="margin: 8px 0 0; font-size: 15px; color: #56565f;">ads rendered this month &mdash; [YOUR NUMBER]</p>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: center; gap: 46px; margin-top: 36px; padding: 28px; border-top: 1px solid rgba(20,20,26,0.08); border-bottom: 1px solid rgba(20,20,26,0.08);">
+      <span style="font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; color: #a3a3aa;">[CUSTOMER LOGOS]</span>
+      <div style="width: 92px; height: 22px; border-radius: 4px; background: rgba(20,20,26,0.08);"></div>
+      <div style="width: 78px; height: 22px; border-radius: 4px; background: rgba(20,20,26,0.08);"></div>
+      <div style="width: 104px; height: 22px; border-radius: 4px; background: rgba(20,20,26,0.08);"></div>
+      <div style="width: 86px; height: 22px; border-radius: 4px; background: rgba(20,20,26,0.08);"></div>
+      <div style="width: 96px; height: 22px; border-radius: 4px; background: rgba(20,20,26,0.08);"></div>
+    </div>
+  </div>
+
+  <!-- ── pricing ────────────────────────────────────────────── -->
+  <div style="padding: 110px 60px 0;">
+    <h2 style="margin: 0 0 6px; font-size: 44px; font-weight: 800; letter-spacing: -0.035em;">Pricing</h2>
+    <p style="margin: 0 0 42px; font-size: 17.5px; color: #56565f;">A render is one goal taken from plan to finished clip, retries included.</p>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px;">
+      <div style="border: 1px solid rgba(20,20,26,0.09); background: #ffffff; border-radius: 16px; padding: 32px;">
         <p style="margin: 0; font-size: 15px; font-weight: 700;">Free</p>
-        <p class="tnum" style="margin: 12px 0 4px; font-size: 40px; font-weight: 800; letter-spacing: -0.03em;">$0</p>
-        <p style="margin: 0 0 22px; font-size: 14px; color: #8b8b93;">20 restages, once</p>
-        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: #55555c;">
-          <span>Full plan and version tree</span>
-          <span>Critic verdicts on every step</span>
-          <span>Export at source resolution</span>
+        <p class="tnum" style="margin: 14px 0 4px; font-size: 44px; font-weight: 900; letter-spacing: -0.04em;">$0</p>
+        <p style="margin: 0 0 24px; font-size: 14px; color: #8b8b93;">1 avatar &middot; 20 renders</p>
+        <div style="display: flex; flex-direction: column; gap: 11px; font-size: 14.5px; color: #56565f;">
+          <span>Full plan and version tree</span><span>Critic verdicts on every step</span><span>9:16 and 16:9</span>
         </div>
-        <div style="margin-top: 26px; border: 1px solid rgba(23,23,26,0.16); color: #17171a; font-size: 14px; font-weight: 600; padding: 11px; border-radius: 8px; text-align: center;">Start free</div>
+        <div style="margin-top: 28px; border: 1px solid rgba(20,20,26,0.16); font-size: 14px; font-weight: 600; padding: 12px; border-radius: 9px; text-align: center;">Start free</div>
       </div>
 
-      <div style="border: 2px solid #3987e5; background: #ffffff; border-radius: 14px; padding: 30px; position: relative;">
-        <div style="position: absolute; top: -11px; left: 30px; background: #3987e5; color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; padding: 4px 10px; border-radius: 20px;">FOR UGC TEAMS</div>
+      <div style="border: 2px solid #3987e5; background: #ffffff; border-radius: 16px; padding: 32px; position: relative; box-shadow: 0 22px 50px -26px rgba(57,135,229,0.5);">
+        <div style="position: absolute; top: -11px; left: 32px; background: #3987e5; color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: 0.07em; padding: 4px 11px; border-radius: 20px;">FOR CREATORS</div>
         <p style="margin: 0; font-size: 15px; font-weight: 700;">Studio</p>
-        <p class="tnum" style="margin: 12px 0 4px; font-size: 40px; font-weight: 800; letter-spacing: -0.03em;">$[XX]<span style="font-size: 16px; font-weight: 500; color: #8b8b93;">/mo</span></p>
-        <p style="margin: 0 0 22px; font-size: 14px; color: #8b8b93;">[N] restages a month</p>
-        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: #55555c;">
-          <span>Everything in Free</span>
-          <span>Taste model across sessions</span>
-          <span>Batch a whole product line</span>
-          <span>Brand rules the agent must not break</span>
+        <p class="tnum" style="margin: 14px 0 4px; font-size: 44px; font-weight: 900; letter-spacing: -0.04em;">$[XX]<span style="font-size: 16px; font-weight: 500; color: #8b8b93;">/mo</span></p>
+        <p style="margin: 0 0 24px; font-size: 14px; color: #8b8b93;">3 avatars &middot; [N] renders a month</p>
+        <div style="display: flex; flex-direction: column; gap: 11px; font-size: 14.5px; color: #56565f;">
+          <span>Everything in Free</span><span>Taste model across sessions</span><span>30-second clips</span><span>Brand rules the agent must not break</span>
         </div>
-        <div style="margin-top: 26px; background: #3987e5; color: #ffffff; font-size: 14px; font-weight: 600; padding: 11px; border-radius: 8px; text-align: center;">Start free trial</div>
+        <div style="margin-top: 28px; background: #3987e5; color: #ffffff; font-size: 14px; font-weight: 600; padding: 12px; border-radius: 9px; text-align: center;">Start free trial</div>
       </div>
 
-      <div style="border: 1px solid rgba(23,23,26,0.09); background: #ffffff; border-radius: 14px; padding: 30px;">
+      <div style="border: 1px solid rgba(20,20,26,0.09); background: #ffffff; border-radius: 16px; padding: 32px;">
         <p style="margin: 0; font-size: 15px; font-weight: 700;">Scale</p>
-        <p class="tnum" style="margin: 12px 0 4px; font-size: 40px; font-weight: 800; letter-spacing: -0.03em;">$[XXX]<span style="font-size: 16px; font-weight: 500; color: #8b8b93;">/mo</span></p>
-        <p style="margin: 0 0 22px; font-size: 14px; color: #8b8b93;">[N] restages, [N] seats</p>
-        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: #55555c;">
-          <span>Everything in Studio</span>
-          <span>Shared taste model per brand</span>
-          <span>API and webhook delivery</span>
-          <span>[YOUR SUPPORT TERMS]</span>
+        <p class="tnum" style="margin: 14px 0 4px; font-size: 44px; font-weight: 900; letter-spacing: -0.04em;">$[XXX]<span style="font-size: 16px; font-weight: 500; color: #8b8b93;">/mo</span></p>
+        <p style="margin: 0 0 24px; font-size: 14px; color: #8b8b93;">[N] avatars &middot; [N] seats</p>
+        <div style="display: flex; flex-direction: column; gap: 11px; font-size: 14.5px; color: #56565f;">
+          <span>Everything in Studio</span><span>Shared avatars across the team</span><span>API and webhook delivery</span><span>[YOUR SUPPORT TERMS]</span>
         </div>
-        <div style="margin-top: 26px; border: 1px solid rgba(23,23,26,0.16); color: #17171a; font-size: 14px; font-weight: 600; padding: 11px; border-radius: 8px; text-align: center;">Talk to us</div>
+        <div style="margin-top: 28px; border: 1px solid rgba(20,20,26,0.16); font-size: 14px; font-weight: 600; padding: 12px; border-radius: 9px; text-align: center;">Talk to us</div>
       </div>
     </div>
   </div>
 
-  <!-- ── final CTA ───────────────────────────────────────────── -->
-  <div style="margin: 96px 64px 0; background: #3987e5; border-radius: 20px; padding: 62px; text-align: center; color: #ffffff;">
-    <h2 style="margin: 0 0 12px; font-size: 42px; font-weight: 800; letter-spacing: -0.03em;">Bring one shot you have given up on.</h2>
-    <p style="margin: 0 auto 26px; max-width: 540px; font-size: 17px; line-height: 1.55; color: rgba(255,255,255,0.86);">Say what it needs to do. Watch the plan appear, then watch it get built.</p>
-    <div style="display: inline-block; background: #ffffff; color: #17171a; font-size: 15px; font-weight: 700; padding: 15px 30px; border-radius: 9px;">Start free &mdash; no card</div>
+  <!-- ── final CTA ──────────────────────────────────────────── -->
+  <div style="margin: 110px 60px 0; position: relative; border-radius: 22px; overflow: hidden;">
+    <img src="w4.jpg" alt="" style="display: block; width: 100%; height: 380px; object-fit: cover;">
+    <div style="position: absolute; inset: 0; background: linear-gradient(90deg, rgba(20,20,26,0.92) 0%, rgba(20,20,26,0.74) 48%, rgba(20,20,26,0.12) 100%);"></div>
+    <div style="position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 60px; color: #ffffff; max-width: 700px;">
+      <h2 style="margin: 0 0 14px; font-size: 46px; line-height: 1.05; font-weight: 800; letter-spacing: -0.035em;">Three photos. Then never film again.</h2>
+      <p style="margin: 0 0 28px; font-size: 17.5px; line-height: 1.55; color: rgba(255,255,255,0.84);">Build the avatar in a minute. Watch the first plan write itself.</p>
+      <div style="display: inline-block; align-self: flex-start; background: #ffffff; color: #14141a; font-size: 15px; font-weight: 700; padding: 16px 32px; border-radius: 9px;">Build your avatar &mdash; free</div>
+    </div>
   </div>
 
-  <!-- ── footer ──────────────────────────────────────────────── -->
-  <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 56px; padding: 30px 64px 44px; border-top: 1px solid rgba(23,23,26,0.08);">
+  <!-- footer -->
+  <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 56px; padding: 32px 60px 46px; border-top: 1px solid rgba(20,20,26,0.08);">
     <div style="display: flex; align-items: center; gap: 9px;">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b8b93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="3"></rect>
-        <path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path>
-      </svg>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b8b93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path></svg>
       <span style="font-size: 14px; font-weight: 700; color: #8b8b93;">Restage</span>
     </div>
     <div style="display: flex; align-items: center; gap: 26px; font-size: 13px; color: #8b8b93;">
-      <span>Privacy</span>
-      <span>Terms</span>
-      <span>[YOUR CONTACT]</span>
+      <span>Privacy</span><span>Likeness policy</span><span>[YOUR CONTACT]</span>
     </div>
   </div>
 
 </div>
 </x-dc>
 
-<script data-dc-script data-props='{"accent":{"editor":"color","default":"#3987e5","options":["#3987e5","#17171a","#0ca30c","#d03b3b"]}}'>
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#3987e5","options":["#3987e5","#14141a","#0ca30c","#d03b3b"]}}'>
 class Component extends DCLogic {
-  renderVals() {
-    return { accent: this.props.accent ?? '#3987e5' };
-  }
+  renderVals() { return { accent: this.props.accent ?? '#3987e5' }; }
 }
 </script>
 </body>

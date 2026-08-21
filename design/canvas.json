@@ -4,30 +4,30 @@
     { "id": "page-2", "name": "Product" }
   ],
   "artboards": [
-    { "file": "Main.dc.html", "title": "Landing page", "x": 0, "y": 0, "w": 1440, "h": 3620, "page": "page-1" },
+    { "file": "Main.dc.html", "title": "Landing page", "x": 0, "y": 0, "w": 1440, "h": 3960, "page": "page-1" },
 
-    { "file": "Executing.dc.html", "title": "1 · Executing (hero)", "x": 0, "y": 0, "w": 1920, "h": 1080, "page": "page-2" },
-    { "file": "Inspected.dc.html", "title": "2 · Node inspected", "x": 2040, "y": 0, "w": 1920, "h": 1080, "page": "page-2" },
+    { "file": "Enroll.dc.html", "title": "1 · Build your avatar", "x": 0, "y": 0, "w": 1920, "h": 1080, "page": "page-2" },
+    { "file": "Brief.dc.html", "title": "2 · Brief · format choice", "x": 2040, "y": 0, "w": 1920, "h": 1080, "page": "page-2" },
     { "file": "Planning.dc.html", "title": "3 · Planning", "x": 0, "y": 1220, "w": 1920, "h": 1080, "page": "page-2" },
-    { "file": "Returning.dc.html", "title": "4 · Returning session", "x": 2040, "y": 1220, "w": 1920, "h": 1080, "page": "page-2" },
-    { "file": "Upload.dc.html", "title": "5 · Empty / upload", "x": 0, "y": 2440, "w": 1920, "h": 1080, "page": "page-2" },
-    { "file": "Components.dc.html", "title": "6 · Component sheet", "x": 2040, "y": 2440, "w": 1400, "h": 1060, "page": "page-2" }
+    { "file": "Executing.dc.html", "title": "4 · Executing (hero)", "x": 2040, "y": 1220, "w": 1920, "h": 1080, "page": "page-2" },
+    { "file": "Rendered.dc.html", "title": "5 · Rendered · both ratios", "x": 0, "y": 2440, "w": 1920, "h": 1080, "page": "page-2" },
+    { "file": "Components.dc.html", "title": "6 · Component sheet", "x": 2040, "y": 2440, "w": 1400, "h": 1140, "page": "page-2" }
   ],
   "annotations": [
     {
-      "id": "brief-priority",
+      "id": "brief-flow",
+      "x": 0,
+      "y": -230,
+      "w": 460,
+      "text": "Enrol the face once → state the outcome → the agent plans and runs the FRAMES (cheap, ~14s each) with a critic retrying what falls short → you approve one frame → only that frame is rendered to video (~41s).\n\nFrames are where the agent is allowed to be wrong. Video is where it is not.",
+      "page": "page-2"
+    },
+    {
+      "id": "brief-format",
       "x": 1540,
       "y": 0,
       "w": 300,
-      "text": "PART 1 — priority.\n\nLight, arcads-style: off-white ground, one blue accent, bold geometric sans (Archivo).\n\nUGC leads; short-term rental is the second use case.\n\nEvery number and logo is a marked placeholder — no invented proof."
-    },
-    {
-      "id": "brief-hero",
-      "x": 0,
-      "y": -220,
-      "w": 420,
-      "text": "PART 2 — the dashboard.\n\nFrames 1 and 2 are the ones that get filmed. Autonomy is carried by three things: the plan with per-step reasoning, the pulsing agent cursor on the node being generated, and the discarded attempt left on canvas beside its retry.\n\nNo chat transcript. No linear undo strip. Nothing hidden.",
-      "page": "page-2"
+      "text": "9:16 and 16:9 are both first-class — chosen in the brief, before the plan is written, so every frame is composed for that ratio rather than cropped at the end."
     }
   ],
   "launch": { "view": "canvas", "page": "page-1" }

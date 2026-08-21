@@ -199,6 +199,24 @@ which is the entire reason the product is interesting.
 
 ---
 
+## Measured against the real API
+
+| | |
+|---|---|
+| plan (6 steps, `gemini-3.6-flash`) | ~7s |
+| frame, with avatar reference | ~14-18s |
+| critique of one step (two images in) | ~4.7s |
+| video render (`veo-3.1-fast`) | ~41s |
+
+**`gemini-2.5-flash` is listed by the models endpoint but closed to new
+projects** — the API answers with a redirect to 3.6. Listed is not the same as
+usable, and only a real call surfaces the difference.
+
+Plan and critique both use `responseSchema` rather than asking for JSON in the
+prompt. A model told "reply with JSON" wraps it in prose often enough that
+parsing becomes the flakiest part of the pipeline; a schema makes the shape the
+API's problem.
+
 ## Provisioned
 
 - **R2 bucket `video-renders`** — Standard class, **public access disabled**.

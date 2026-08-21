@@ -143,3 +143,147 @@ export async function downloadRendered(videoUri: string): Promise<Buffer> {
   if (!res.ok) throw new Error(`video download failed (${res.status})`);
   return Buffer.from(await res.arrayBuffer());
 }
+
+/* ── planning and criticism ───────────────────────────────────────────────── */
+
+// gemini-2.5-flash still appears in the models list but is closed to new
+// projects — the API answers with a redirect to 3.6. Listed does not mean usable.
+const TEXT_MODEL = process.env.RESTAGE_TEXT_MODEL ?? 'gemini-3.6-flash';
+
+/**
+ * Both calls below use responseSchema rather than asking for JSON in the prompt.
+ * A model told "reply with JSON" wraps it in prose often enough that the parse
+ * becomes the flakiest part of the pipeline; a schema makes the shape the API's
+ * problem instead of ours.
+ */
+async function structured<T>(prompt: string, schema: object, system?: string): Promise<T> {
+  const res = await fetch(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+      generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(scrub(json?.error?.message ?? `text call failed (${res.status})`));
+
+  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error(`no content: ${json?.candidates?.[0]?.finishReason ?? 'empty'}`);
+  return JSON.parse(text) as T;
+}
+
+const PLANNER_SYSTEM = `You plan UGC video ads that star one real person whose face is already enrolled.
+
+You are given an outcome, not a shot list, and you decompose it into 5-7 ordered
+edits to a single still frame. The frame is generated and re-generated; only the
+last approved one is rendered to video. So every step must be a visible change to
+one image, not an instruction about editing or pacing.
+
+For each step write:
+- instruction: what changes in the frame, imperative, one line
+- rationale: WHY, in terms of what a viewer would notice. This is read by the
+  user and is what shows you reasoned rather than pattern-matched. Never generic.
+
+Order matters: composition and setting before light, light before expression,
+crop last, because each later step depends on the earlier one surviving.`;
+
+export interface PlannedStep {
+  stepNo: number;
+  instruction: string;
+  rationale: string;
+}
+
+export async function planRun(goal: string, aspect: Aspect, seconds: number): Promise<PlannedStep[]> {
+  const { steps } = await structured<{ steps: PlannedStep[] }>(
+    `Goal: ${goal}\nOutput format: ${aspect}, ${seconds} seconds.\n\nPlan the edits.`,
+    {
+      type: 'object',
+      properties: {
+        steps: {
+          type: 'array',
+          minItems: 5,
+          maxItems: 7,
+          items: {
+            type: 'object',
+            properties: {
+              stepNo: { type: 'integer' },
+              instruction: { type: 'string' },
+              rationale: { type: 'string' },
+            },
+            required: ['stepNo', 'instruction', 'rationale'],
+          },
+        },
+      },
+      required: ['steps'],
+    },
+    PLANNER_SYSTEM,
+  );
+  return steps.map((s, i) => ({ ...s, stepNo: i + 1 }));
+}
+
+const CRITIC_SYSTEM = `You judge whether one edit to a frame achieved what it claimed.
+
+You see the frame before, the frame after, and the instruction. Decide:
+  met     — the change happened and the frame is better for it
+  partial — the change happened but overshot or lost something
+  failed  — the change did not happen, or made the frame worse
+
+Write notes in your own voice, first person, quoting what you actually see. Be
+specific about the pixels: "the shadow under the jaw is gone" beats "lighting
+improved". Say what is still wrong even when the verdict is met.
+
+Default to a harsher verdict when uncertain. A critic that passes everything is
+not a critic, and the retry it declines to ask for is the whole product.`;
+
+export interface Critique {
+  verdict: Verdict;
+  notes: string;
+  rubric: string;
+}
+
+export type Verdict = 'met' | 'partial' | 'failed';
+
+export async function critique(args: {
+  instruction: string;
+  rationale: string;
+  before: { data: Buffer | Uint8Array; mimeType: string };
+  after: { data: Buffer | Uint8Array; mimeType: string };
+}): Promise<Critique> {
+  const res = await fetch(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: CRITIC_SYSTEM }] },
+      contents: [
+        {
+          parts: [
+            { text: 'BEFORE:' },
+            { inlineData: { mimeType: args.before.mimeType, data: Buffer.from(args.before.data).toString('base64') } },
+            { text: 'AFTER:' },
+            { inlineData: { mimeType: args.after.mimeType, data: Buffer.from(args.after.data).toString('base64') } },
+            { text: `The instruction was: ${args.instruction}\nThe reason given was: ${args.rationale}\n\nJudge it.` },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            verdict: { type: 'string', enum: ['met', 'partial', 'failed'] },
+            notes: { type: 'string' },
+            rubric: { type: 'string', description: 'the question you judged against, one line' },
+          },
+          required: ['verdict', 'notes', 'rubric'],
+        },
+      },
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(scrub(json?.error?.message ?? `critique failed (${res.status})`));
+  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('critic returned nothing');
+  return JSON.parse(text) as Critique;
+}

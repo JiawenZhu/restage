@@ -9,7 +9,7 @@
 <helmet>
   <style>
     body { margin: 0; }
-    a { color: #3987e5; } a:hover { color: #6fa8ec; }
+    a { color: var(--accent); } a:hover { opacity: 0.75; }
     .ui { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     .tnum { font-variant-numeric: tabular-nums; }
     @keyframes rs-pulse { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.3; } }
@@ -17,78 +17,78 @@
   </style>
 </helmet>
 
-<div class="ui" style="width: 1920px; height: 1080px; background: #0d0d0d; color: #ffffff; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased;">
+<div class="ui" data-theme="{{theme}}" style="width: 1920px; height: 1080px; background: var(--bg-canvas); color: var(--text-primary); display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased;">
 
-  <div style="display: flex; align-items: center; justify-content: space-between; height: 76px; flex-shrink: 0; padding: 0 24px; background: #1a1a19; border-bottom: 1px solid rgba(255,255,255,0.10);">
+  <div style="display: flex; align-items: center; justify-content: space-between; height: 76px; flex-shrink: 0; padding: 0 24px; background: var(--bg-panel); border-bottom: 1px solid var(--border);">
     <div style="display: flex; align-items: center; gap: 9px;">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path><path d="M14 13.5l1.6-1.6a2 2 0 0 1 2.8 0L21 15"></path></svg>
-      <span style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em;">Restage</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path><path d="M14 13.5l1.6-1.6a2 2 0 0 1 2.8 0L21 15"></path></svg>
+      <span style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary);">Restage</span>
     </div>
-    <span class="tnum" style="font-size: 13px; color: #898781;">Step 1 of 2 &middot; build your avatar</span>
+    <span class="tnum" style="font-size: 13px; color: var(--text-muted);">Step 1 of 2 &middot; build your avatar</span>
   </div>
 
-  <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; background: #0d0d0d; background-image: radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px); background-size: 26px 26px;">
+  <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; background: var(--bg-canvas); background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 26px 26px;">
     <div style="width: 1080px;">
 
       <h1 style="margin: 0 0 8px; font-size: 34px; font-weight: 700; letter-spacing: -0.025em; text-align: center;">Three angles. Once.</h1>
-      <p style="margin: 0 0 38px; font-size: 16px; color: #898781; text-align: center; line-height: 1.55;">Everything you generate from now on uses this face. Do it properly once and never upload again.</p>
+      <p style="margin: 0 0 38px; font-size: 16px; color: var(--text-muted); text-align: center; line-height: 1.55;">Everything you generate from now on uses this face. Do it properly once and never upload again.</p>
 
       <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px;">
 
         <div>
-          <div style="position: relative; border-radius: 12px; overflow: hidden; border: 2px solid #0ca30c; background: #232322;">
+          <div style="position: relative; border-radius: 12px; overflow: hidden; border: 2px solid var(--good); background: var(--bg-elevated);">
             <img src="av-left.jpg" alt="" style="display: block; width: 100%; height: 300px; object-fit: cover;">
-            <span style="position: absolute; top: 9px; right: 9px; width: 22px; height: 22px; border-radius: 50%; background: #0ca30c; display: flex; align-items: center; justify-content: center;">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+            <span style="position: absolute; top: 9px; right: 9px; width: 22px; height: 22px; border-radius: 50%; background: var(--good); display: flex; align-items: center; justify-content: center;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary-ink)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
             </span>
           </div>
           <p style="margin: 13px 0 3px; font-size: 14.5px; font-weight: 600;">Left, about 60&deg;</p>
-          <p style="margin: 0; font-size: 12.5px; color: #0ca30c;">Captured &middot; sharp, evenly lit</p>
+          <p style="margin: 0; font-size: 12.5px; color: var(--good);">Captured &middot; sharp, evenly lit</p>
         </div>
 
         <div>
-          <div style="position: relative; border-radius: 12px; overflow: hidden; border: 2px solid #0ca30c; background: #232322;">
+          <div style="position: relative; border-radius: 12px; overflow: hidden; border: 2px solid var(--good); background: var(--bg-elevated);">
             <img src="av-front.jpg" alt="" style="display: block; width: 100%; height: 300px; object-fit: cover;">
-            <span style="position: absolute; top: 9px; right: 9px; width: 22px; height: 22px; border-radius: 50%; background: #0ca30c; display: flex; align-items: center; justify-content: center;">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+            <span style="position: absolute; top: 9px; right: 9px; width: 22px; height: 22px; border-radius: 50%; background: var(--good); display: flex; align-items: center; justify-content: center;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary-ink)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
             </span>
           </div>
           <p style="margin: 13px 0 3px; font-size: 14.5px; font-weight: 600;">Straight on</p>
-          <p style="margin: 0; font-size: 12.5px; color: #0ca30c;">Captured &middot; neutral expression</p>
+          <p style="margin: 0; font-size: 12.5px; color: var(--good);">Captured &middot; neutral expression</p>
         </div>
 
         <div>
-          <div style="position: relative; border-radius: 12px; overflow: hidden; border: 2px solid #3987e5; background: #232322;">
-            <div class="rs-cursor" style="position: absolute; inset: -1px; border: 2px solid #3987e5; border-radius: 12px; z-index: 2;"></div>
+          <div style="position: relative; border-radius: 12px; overflow: hidden; border: 2px solid var(--accent); background: var(--bg-elevated);">
+            <div class="rs-cursor" style="position: absolute; inset: -1px; border: 2px solid var(--accent); border-radius: 12px; z-index: 2;"></div>
             <img src="av-right.jpg" alt="" style="display: block; width: 100%; height: 300px; object-fit: cover; opacity: 0.5;">
             <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              <span style="font-size: 12.5px; font-weight: 600; color: #6fa8ec;">Turn right and hold</span>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              <span style="font-size: 12.5px; font-weight: 600; color: var(--accent);">Turn right and hold</span>
             </div>
           </div>
           <p style="margin: 13px 0 3px; font-size: 14.5px; font-weight: 600;">Right, about 60&deg;</p>
-          <p style="margin: 0; font-size: 12.5px; color: #6fa8ec;">Capturing&hellip;</p>
+          <p style="margin: 0; font-size: 12.5px; color: var(--accent);">Capturing&hellip;</p>
         </div>
       </div>
 
       <!-- why three, stated plainly -->
-      <div style="display: flex; align-items: flex-start; gap: 26px; margin-top: 34px; background: #1a1a19; border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; padding: 20px 24px;">
+      <div style="display: flex; align-items: flex-start; gap: 26px; margin-top: 34px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px;">
         <div style="flex: 1;">
           <p style="margin: 0 0 5px; font-size: 13.5px; font-weight: 600;">Why three and not one</p>
-          <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #898781;">A single front-on photo gives the model nothing about the sides of your face. The moment you turn your head in a clip, it starts inventing. Three angles hold the likeness through movement.</p>
+          <p style="margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-muted);">A single front-on photo gives the model nothing about the sides of your face. The moment you turn your head in a clip, it starts inventing. Three angles hold the likeness through movement.</p>
         </div>
-        <div style="width: 1px; align-self: stretch; background: rgba(255,255,255,0.10);"></div>
+        <div style="width: 1px; align-self: stretch; background: var(--border);"></div>
         <div style="flex: 1;">
           <p style="margin: 0 0 5px; font-size: 13.5px; font-weight: 600;">Where these live</p>
-          <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #898781;">Stored against your account and used only to generate your own clips. Delete the avatar and the captures go with it. <span style="color: #6fa8ec;">[YOUR RETENTION POLICY]</span></p>
+          <p style="margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-muted);">Stored against your account and used only to generate your own clips. Delete the avatar and the captures go with it. <span style="color: var(--accent);">[YOUR RETENTION POLICY]</span></p>
         </div>
       </div>
 
       <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 26px;">
-        <span style="font-size: 13px; color: #6d6b66;">Good light, no sunglasses, no one else in frame.</span>
+        <span style="font-size: 13px; color: var(--text-faint);">Good light, no sunglasses, no one else in frame.</span>
         <div style="display: flex; align-items: center; gap: 10px;">
-          <div style="border: 1px solid rgba(255,255,255,0.16); color: #c3c2b7; font-size: 14px; font-weight: 600; padding: 11px 20px; border-radius: 8px;">Upload instead</div>
-          <div style="background: #232322; border: 1px solid rgba(255,255,255,0.12); color: #6d6b66; font-size: 14px; font-weight: 600; padding: 11px 26px; border-radius: 8px;">Build avatar</div>
+          <div style="border: 1px solid var(--border-strong); color: var(--text-secondary); font-size: 14px; font-weight: 600; padding: 11px 20px; border-radius: 8px;">Upload instead</div>
+          <div style="background: var(--bg-elevated); border: 1px solid var(--border-strong); color: var(--text-faint); font-size: 14px; font-weight: 600; padding: 11px 26px; border-radius: 8px;">Build avatar</div>
         </div>
       </div>
 
@@ -97,9 +97,9 @@
 </div>
 </x-dc>
 
-<script data-dc-script data-props='{"accent":{"editor":"color","default":"#3987e5","options":["#3987e5","#0ca30c","#fab219","#d03b3b"]}}'>
+<script data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"}}'>
 class Component extends DCLogic {
-  renderVals() { return { accent: this.props.accent ?? '#3987e5' }; }
+  renderVals() { return { theme: this.props.theme ?? 'light' }; }
 }
 </script>
 </body>

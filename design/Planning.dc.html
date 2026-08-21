@@ -9,7 +9,7 @@
 <helmet>
   <style>
     body { margin: 0; }
-    a { color: #3987e5; } a:hover { color: #6fa8ec; }
+    a { color: var(--accent); } a:hover { opacity: 0.75; }
     .ui { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     .tnum { font-variant-numeric: tabular-nums; }
     @keyframes rs-pulse { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.25; } }
@@ -17,84 +17,84 @@
   </style>
 </helmet>
 
-<div class="ui" style="width: 1920px; height: 1080px; background: #0d0d0d; color: #ffffff; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased;">
+<div class="ui" data-theme="{{theme}}" style="width: 1920px; height: 1080px; background: var(--bg-canvas); color: var(--text-primary); display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased;">
 
-  <div style="display: flex; align-items: center; gap: 18px; height: 76px; flex-shrink: 0; padding: 0 24px; background: #1a1a19; border-bottom: 1px solid rgba(255,255,255,0.10);">
+  <div style="display: flex; align-items: center; gap: 18px; height: 76px; flex-shrink: 0; padding: 0 24px; background: var(--bg-panel); border-bottom: 1px solid var(--border);">
     <div style="display: flex; align-items: center; gap: 9px; flex-shrink: 0;">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path><path d="M14 13.5l1.6-1.6a2 2 0 0 1 2.8 0L21 15"></path></svg>
-      <span style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em;">Restage</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path><path d="M14 13.5l1.6-1.6a2 2 0 0 1 2.8 0L21 15"></path></svg>
+      <span style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary);">Restage</span>
     </div>
-    <div style="display: flex; align-items: center; gap: 12px; flex-grow: 1; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 11px 16px;">
-      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #898781; flex-shrink: 0;">GOAL</span>
+    <div style="display: flex; align-items: center; gap: 12px; flex-grow: 1; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 11px 16px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: var(--text-muted); flex-shrink: 0;">GOAL</span>
       <span style="font-size: 16px; flex-grow: 1;">A 15-second ad where I actually use the serum, in my kitchen. Should feel filmed, not shot.</span>
     </div>
-    <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; background: rgba(57,135,229,0.13); border: 1px solid rgba(57,135,229,0.4); border-radius: 20px; padding: 7px 14px;">
-      <span class="rs-cursor" style="width: 7px; height: 7px; border-radius: 50%; background: #3987e5; display: block;"></span>
-      <span style="font-size: 13px; font-weight: 600; color: #6fa8ec;">Planning the run&hellip;</span>
+    <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 20px; padding: 7px 14px;">
+      <span class="rs-cursor" style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent); display: block;"></span>
+      <span style="font-size: 13px; font-weight: 600; color: var(--accent);">Planning the run&hellip;</span>
     </div>
   </div>
 
   <div style="display: flex; flex-grow: 1; min-height: 0;">
-    <div style="width: 300px; flex-shrink: 0; background: #1a1a19; border-right: 1px solid rgba(255,255,255,0.10);"></div>
+    <div style="width: 300px; flex-shrink: 0; background: var(--bg-panel); border-right: 1px solid var(--border);"></div>
 
-    <div style="flex-grow: 1; min-width: 0; display: flex; align-items: center; justify-content: center; background: #0d0d0d; background-image: radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px); background-size: 26px 26px;">
+    <div style="flex-grow: 1; min-width: 0; display: flex; align-items: center; justify-content: center; background: var(--bg-canvas); background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 26px 26px;">
       <div style="width: 720px;">
-        <p style="margin: 0 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.14em; color: #6fa8ec;">DECOMPOSING THE GOAL</p>
+        <p style="margin: 0 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.14em; color: var(--accent);">DECOMPOSING THE GOAL</p>
         <h2 style="margin: 0 0 8px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em;">Six steps, in this order.</h2>
-        <p style="margin: 0 0 26px; font-size: 15px; color: #898781;">Read it before anything renders. Cut a step you disagree with.</p>
+        <p style="margin: 0 0 26px; font-size: 15px; color: var(--text-muted);">Read it before anything renders. Cut a step you disagree with.</p>
 
         <div style="display: flex; flex-direction: column; gap: 10px; position: relative;">
-          <div style="position: absolute; left: 15px; top: 18px; bottom: 60px; width: 1px; background: rgba(255,255,255,0.10);"></div>
+          <div style="position: absolute; left: 15px; top: 18px; bottom: 60px; width: 1px; background: var(--border);"></div>
 
-          <div style="display: flex; gap: 14px; background: #1a1a19; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px 16px; position: relative;">
-            <span class="tnum" style="width: 22px; height: 22px; border-radius: 50%; background: #232322; border: 1px solid rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; color: #c3c2b7; flex-shrink: 0; z-index: 1;">1</span>
-            <div><p style="margin: 0; font-size: 14.5px; font-weight: 600;">Put her in a real room</p><p style="margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: #898781;">A blank wall reads as a set. Kitchens are where this product is actually used.</p></div>
+          <div style="display: flex; gap: 14px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; position: relative;">
+            <span class="tnum" style="width: 22px; height: 22px; border-radius: 50%; background: var(--bg-elevated); border: 1px solid var(--border-strong); display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); flex-shrink: 0; z-index: 1;">1</span>
+            <div><p style="margin: 0; font-size: 14.5px; font-weight: 600;">Put her in a real room</p><p style="margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-muted);">A blank wall reads as a set. Kitchens are where this product is actually used.</p></div>
           </div>
 
-          <div style="display: flex; gap: 14px; background: #1a1a19; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px 16px; position: relative;">
-            <span class="tnum" style="width: 22px; height: 22px; border-radius: 50%; background: #232322; border: 1px solid rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; color: #c3c2b7; flex-shrink: 0; z-index: 1;">2</span>
-            <div><p style="margin: 0; font-size: 14.5px; font-weight: 600;">Move to arm&rsquo;s-length framing</p><p style="margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: #898781;">Nobody films themselves on a tripod. The camera has to be a hand.</p></div>
+          <div style="display: flex; gap: 14px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; position: relative;">
+            <span class="tnum" style="width: 22px; height: 22px; border-radius: 50%; background: var(--bg-elevated); border: 1px solid var(--border-strong); display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); flex-shrink: 0; z-index: 1;">2</span>
+            <div><p style="margin: 0; font-size: 14.5px; font-weight: 600;">Move to arm&rsquo;s-length framing</p><p style="margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-muted);">Nobody films themselves on a tripod. The camera has to be a hand.</p></div>
           </div>
 
-          <div style="display: flex; gap: 14px; background: #1a1a19; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px 16px; position: relative;">
-            <span class="tnum" style="width: 22px; height: 22px; border-radius: 50%; background: #232322; border: 1px solid rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; color: #c3c2b7; flex-shrink: 0; z-index: 1;">3</span>
-            <div><p style="margin: 0; font-size: 14.5px; font-weight: 600;">Light it from the window</p><p style="margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: #898781;">Overhead light flattens the face. Side light is what a real kitchen gives at that hour.</p></div>
+          <div style="display: flex; gap: 14px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; position: relative;">
+            <span class="tnum" style="width: 22px; height: 22px; border-radius: 50%; background: var(--bg-elevated); border: 1px solid var(--border-strong); display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); flex-shrink: 0; z-index: 1;">3</span>
+            <div><p style="margin: 0; font-size: 14.5px; font-weight: 600;">Light it from the window</p><p style="margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-muted);">Overhead light flattens the face. Side light is what a real kitchen gives at that hour.</p></div>
           </div>
 
           <!-- currently being written -->
-          <div style="display: flex; gap: 14px; background: rgba(57,135,229,0.09); border: 1px solid rgba(57,135,229,0.4); border-radius: 10px; padding: 14px 16px; position: relative;">
-            <span class="rs-cursor" style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid #3987e5; background: #1a1a19; flex-shrink: 0; z-index: 1; box-sizing: border-box;"></span>
-            <div><p style="margin: 0; font-size: 14.5px; font-weight: 600;">Get the product to the lens</p><p style="margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: #c3c2b7;">The bottle has to be legible in the first two seconds or the scroll wins.</p></div>
+          <div style="display: flex; gap: 14px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 10px; padding: 14px 16px; position: relative;">
+            <span class="rs-cursor" style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--accent); background: var(--bg-panel); flex-shrink: 0; z-index: 1; box-sizing: border-box;"></span>
+            <div><p style="margin: 0; font-size: 14.5px; font-weight: 600;">Get the product to the lens</p><p style="margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary);">The bottle has to be legible in the first two seconds or the scroll wins.</p></div>
           </div>
 
           <div style="display: flex; gap: 14px; padding: 14px 16px; position: relative; opacity: 0.34;">
-            <span style="width: 22px; height: 22px; border-radius: 50%; border: 1px dashed rgba(255,255,255,0.3); flex-shrink: 0; z-index: 1; background: #0d0d0d; box-sizing: border-box;"></span>
-            <div style="flex-grow: 1;"><div style="height: 12px; width: 42%; border-radius: 4px; background: rgba(255,255,255,0.14);"></div><div style="height: 10px; width: 76%; border-radius: 4px; background: rgba(255,255,255,0.08); margin-top: 8px;"></div></div>
+            <span style="width: 22px; height: 22px; border-radius: 50%; border: 1px dashed var(--border-strong); flex-shrink: 0; z-index: 1; background: var(--bg-canvas); box-sizing: border-box;"></span>
+            <div style="flex-grow: 1;"><div style="height: 12px; width: 42%; border-radius: 4px; background: var(--border-strong);"></div><div style="height: 10px; width: 76%; border-radius: 4px; background: var(--border); margin-top: 8px;"></div></div>
           </div>
 
           <div style="display: flex; gap: 14px; padding: 14px 16px; position: relative; opacity: 0.18;">
-            <span style="width: 22px; height: 22px; border-radius: 50%; border: 1px dashed rgba(255,255,255,0.3); flex-shrink: 0; z-index: 1; background: #0d0d0d; box-sizing: border-box;"></span>
-            <div style="flex-grow: 1;"><div style="height: 12px; width: 34%; border-radius: 4px; background: rgba(255,255,255,0.14);"></div><div style="height: 10px; width: 64%; border-radius: 4px; background: rgba(255,255,255,0.08); margin-top: 8px;"></div></div>
+            <span style="width: 22px; height: 22px; border-radius: 50%; border: 1px dashed var(--border-strong); flex-shrink: 0; z-index: 1; background: var(--bg-canvas); box-sizing: border-box;"></span>
+            <div style="flex-grow: 1;"><div style="height: 12px; width: 34%; border-radius: 4px; background: var(--border-strong);"></div><div style="height: 10px; width: 64%; border-radius: 4px; background: var(--border); margin-top: 8px;"></div></div>
           </div>
         </div>
 
         <div style="display: flex; align-items: center; gap: 10px; margin-top: 26px;">
-          <div style="background: #232322; border: 1px solid rgba(255,255,255,0.14); color: #898781; font-size: 14px; font-weight: 600; padding: 12px 22px; border-radius: 8px;">Run this plan</div>
-          <span style="font-size: 13px; color: #6d6b66;">enabled once the plan is complete</span>
+          <div style="background: var(--bg-elevated); border: 1px solid var(--border-strong); color: var(--text-muted); font-size: 14px; font-weight: 600; padding: 12px 22px; border-radius: 8px;">Run this plan</div>
+          <span style="font-size: 13px; color: var(--text-faint);">enabled once the plan is complete</span>
         </div>
       </div>
     </div>
 
-    <div style="width: 372px; flex-shrink: 0; background: #1a1a19; border-left: 1px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center;">
-      <p style="margin: 0; padding: 0 40px; font-size: 13.5px; line-height: 1.6; color: #6d6b66; text-align: center;">The inspector fills in once the first node exists.</p>
+    <div style="width: 372px; flex-shrink: 0; background: var(--bg-panel); border-left: 1px solid var(--border); display: flex; align-items: center; justify-content: center;">
+      <p style="margin: 0; padding: 0 40px; font-size: 13.5px; line-height: 1.6; color: var(--text-faint); text-align: center;">The inspector fills in once the first node exists.</p>
     </div>
   </div>
 </div>
 </x-dc>
 
-<script data-dc-script data-props='{"accent":{"editor":"color","default":"#3987e5","options":["#3987e5","#0ca30c","#fab219","#d03b3b"]}}'>
+<script data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"}}'>
 class Component extends DCLogic {
-  renderVals() { return { accent: this.props.accent ?? '#3987e5' }; }
+  renderVals() { return { theme: this.props.theme ?? 'light' }; }
 }
 </script>
 </body>

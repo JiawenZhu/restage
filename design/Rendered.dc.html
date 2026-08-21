@@ -9,57 +9,57 @@
 <helmet>
   <style>
     body { margin: 0; }
-    a { color: #3987e5; } a:hover { color: #6fa8ec; }
+    a { color: var(--accent); } a:hover { opacity: 0.75; }
     .ui { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     .tnum { font-variant-numeric: tabular-nums; }
   </style>
 </helmet>
 
-<div class="ui" style="width: 1920px; height: 1080px; background: #0d0d0d; color: #ffffff; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased;">
+<div class="ui" data-theme="{{theme}}" style="width: 1920px; height: 1080px; background: var(--bg-canvas); color: var(--text-primary); display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased;">
 
-  <div style="display: flex; align-items: center; gap: 16px; height: 76px; flex-shrink: 0; padding: 0 22px; background: #1a1a19; border-bottom: 1px solid rgba(255,255,255,0.10);">
+  <div style="display: flex; align-items: center; gap: 16px; height: 76px; flex-shrink: 0; padding: 0 22px; background: var(--bg-panel); border-bottom: 1px solid var(--border);">
     <div style="display: flex; align-items: center; gap: 9px; flex-shrink: 0;">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3987e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path><path d="M14 13.5l1.6-1.6a2 2 0 0 1 2.8 0L21 15"></path></svg>
-      <span style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em;">Restage</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M3 15l4.5-4.5a2 2 0 0 1 2.8 0L15 15"></path><path d="M14 13.5l1.6-1.6a2 2 0 0 1 2.8 0L21 15"></path></svg>
+      <span style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary);">Restage</span>
     </div>
-    <div style="display: flex; align-items: center; gap: 8px; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 5px 13px 5px 5px; flex-shrink: 0;">
+    <div style="display: flex; align-items: center; gap: 8px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 20px; padding: 5px 13px 5px 5px; flex-shrink: 0;">
       <img src="av-front.jpg" alt="" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: block;">
       <span style="font-size: 13px; font-weight: 600;">Maya</span>
     </div>
-    <div style="display: flex; align-items: center; gap: 11px; flex-grow: 1; background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 11px 15px; min-width: 0;">
-      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #898781; flex-shrink: 0;">GOAL</span>
+    <div style="display: flex; align-items: center; gap: 11px; flex-grow: 1; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 11px 15px; min-width: 0;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: var(--text-muted); flex-shrink: 0;">GOAL</span>
       <span style="font-size: 15.5px; flex-grow: 1;">A 15-second ad where I actually use the serum, in my kitchen. Should feel filmed, not shot.</span>
     </div>
-    <div style="display: flex; align-items: center; gap: 8px; background: rgba(12,163,12,0.13); border: 1px solid rgba(12,163,12,0.4); border-radius: 20px; padding: 7px 14px; flex-shrink: 0;">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0ca30c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
-      <span class="tnum" style="font-size: 13px; font-weight: 600; color: #0ca30c;">Rendered &middot; 6 of 6</span>
+    <div style="display: flex; align-items: center; gap: 8px; background: color-mix(in srgb, var(--good) 40%, transparent); border: 1px solid color-mix(in srgb, var(--good) 40%, transparent); border-radius: 20px; padding: 7px 14px; flex-shrink: 0;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+      <span class="tnum" style="font-size: 13px; font-weight: 600; color: var(--good);">Rendered &middot; 6 of 6</span>
     </div>
   </div>
 
   <div style="display: flex; flex-grow: 1; min-height: 0;">
 
     <!-- collapsed plan rail -->
-    <div style="width: 56px; flex-shrink: 0; background: #1a1a19; border-right: 1px solid rgba(255,255,255,0.10); display: flex; flex-direction: column; align-items: center; padding-top: 18px; gap: 14px;">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#898781" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
-      <div style="width: 1px; flex-grow: 1; background: rgba(255,255,255,0.10);"></div>
-      <span style="writing-mode: vertical-rl; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em; color: #898781; padding-bottom: 20px;">PLAN &middot; 6 STEPS</span>
+    <div style="width: 56px; flex-shrink: 0; background: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 18px; gap: 14px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
+      <div style="width: 1px; flex-grow: 1; background: var(--border);"></div>
+      <span style="writing-mode: vertical-rl; font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em; color: var(--text-muted); padding-bottom: 20px;">PLAN &middot; 6 STEPS</span>
     </div>
 
     <!-- the payoff -->
-    <div style="flex-grow: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 44px; padding: 40px; background: #0d0d0d; background-image: radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px); background-size: 26px 26px;">
+    <div style="flex-grow: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 44px; padding: 40px; background: var(--bg-canvas); background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 26px 26px;">
 
       <!-- 9:16, the format that was chosen -->
       <div>
-        <div style="position: relative; width: 380px; border-radius: 14px; overflow: hidden; border: 2px solid #3987e5; box-shadow: 0 26px 60px -24px rgba(0,0,0,0.8);">
+        <div style="position: relative; width: 380px; border-radius: 14px; overflow: hidden; border: 2px solid var(--accent); box-shadow: 0 26px 60px -24px rgba(0,0,0,0.8);">
           <img src="f4.jpg" alt="" style="display: block; width: 100%; height: 676px; object-fit: cover;">
           <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
             <span style="width: 62px; height: 62px; border-radius: 50%; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center;">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="#ffffff" style="margin-left: 3px;"><path d="M8 5v14l11-7z"></path></svg>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="var(--primary-ink)" style="margin-left: 3px;"><path d="M8 5v14l11-7z"></path></svg>
             </span>
           </div>
           <!-- scrubber -->
           <div style="position: absolute; left: 14px; right: 14px; bottom: 14px;">
-            <div style="height: 3px; border-radius: 2px; background: rgba(255,255,255,0.28);">
+            <div style="height: 3px; border-radius: 2px; background: var(--border-strong);">
               <div style="width: 34%; height: 3px; border-radius: 2px; background: #ffffff;"></div>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 7px;">
@@ -67,89 +67,89 @@
               <span class="tnum" style="font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.9);">0:15</span>
             </div>
           </div>
-          <span style="position: absolute; top: 12px; left: 12px; background: #3987e5; color: #ffffff; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 4px 9px; border-radius: 5px;">9:16 &middot; DELIVERED</span>
+          <span style="position: absolute; top: 12px; left: 12px; background: var(--accent); color: var(--primary-ink); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 4px 9px; border-radius: 5px;">9:16 &middot; DELIVERED</span>
         </div>
       </div>
 
       <!-- the same run in 16:9, because both were asked for -->
       <div style="max-width: 520px;">
-        <p style="margin: 0 0 5px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: #6fa8ec;">FROM ONE APPROVED FRAME</p>
+        <p style="margin: 0 0 5px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--accent);">FROM ONE APPROVED FRAME</p>
         <h2 style="margin: 0 0 12px; font-size: 30px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15;">15 seconds, in the format you asked for.</h2>
-        <p style="margin: 0 0 24px; font-size: 14.5px; line-height: 1.6; color: #c3c2b7;">Step 5 was the last frame you accepted. The renderer takes it as frame one and animates forward &mdash; so what you approved is what moves.</p>
+        <p style="margin: 0 0 24px; font-size: 14.5px; line-height: 1.6; color: var(--text-secondary);">Step 5 was the last frame you accepted. The renderer takes it as frame one and animates forward &mdash; so what you approved is what moves.</p>
 
-        <div style="border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.14); position: relative;">
+        <div style="border-radius: 12px; overflow: hidden; border: 1px solid var(--border-strong); position: relative;">
           <img src="w4.jpg" alt="" style="display: block; width: 100%; height: 292px; object-fit: cover;">
           <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
             <span style="width: 48px; height: 48px; border-radius: 50%; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center;">
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="#ffffff" style="margin-left: 2px;"><path d="M8 5v14l11-7z"></path></svg>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="var(--primary-ink)" style="margin-left: 2px;"><path d="M8 5v14l11-7z"></path></svg>
             </span>
           </div>
-          <span style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.66); color: #c3c2b7; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 4px 9px; border-radius: 5px;">16:9 &middot; SAME RUN</span>
+          <span style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.66); color: var(--text-secondary); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 4px 9px; border-radius: 5px;">16:9 &middot; SAME RUN</span>
         </div>
-        <p style="margin: 10px 0 0; font-size: 12.5px; color: #6d6b66;">Re-render the approved frame in the other ratio without paying for the plan again.</p>
+        <p style="margin: 10px 0 0; font-size: 12.5px; color: var(--text-faint);">Re-render the approved frame in the other ratio without paying for the plan again.</p>
 
         <div style="display: flex; gap: 9px; margin-top: 24px;">
-          <div style="background: #3987e5; color: #ffffff; font-size: 14px; font-weight: 600; padding: 12px 22px; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
+          <div style="background: var(--accent); color: var(--primary-ink); font-size: 14px; font-weight: 600; padding: 12px 22px; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="M7 10l5 5 5-5"></path><path d="M12 15V3"></path></svg>
             Download
           </div>
-          <div style="border: 1px solid rgba(255,255,255,0.16); color: #c3c2b7; font-size: 14px; font-weight: 600; padding: 12px 20px; border-radius: 8px;">Render 16:9 too</div>
-          <div style="border: 1px solid rgba(255,255,255,0.16); color: #c3c2b7; font-size: 14px; font-weight: 600; padding: 12px 20px; border-radius: 8px;">Branch a variant</div>
+          <div style="border: 1px solid var(--border-strong); color: var(--text-secondary); font-size: 14px; font-weight: 600; padding: 12px 20px; border-radius: 8px;">Render 16:9 too</div>
+          <div style="border: 1px solid var(--border-strong); color: var(--text-secondary); font-size: 14px; font-weight: 600; padding: 12px 20px; border-radius: 8px;">Branch a variant</div>
         </div>
       </div>
     </div>
 
     <!-- run record -->
-    <div style="width: 372px; flex-shrink: 0; background: #1a1a19; border-left: 1px solid rgba(255,255,255,0.10); display: flex; flex-direction: column; padding: 18px;">
-      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: #898781;">THE RUN</span>
+    <div style="width: 372px; flex-shrink: 0; background: var(--bg-panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; padding: 18px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: var(--text-muted);">THE RUN</span>
 
       <div style="display: flex; gap: 6px; margin-top: 14px;">
-        <img src="av-front.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid rgba(255,255,255,0.26);">
-        <img src="f1.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid #0ca30c;">
-        <img src="f2.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid #0ca30c;">
-        <img src="f3.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid #fab219;">
-        <img src="f4.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid #0ca30c;">
-        <img src="fx.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid rgba(208,59,59,0.8); opacity: 0.45; filter: saturate(0.3);">
+        <img src="av-front.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid var(--border-strong);">
+        <img src="f1.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid var(--good);">
+        <img src="f2.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid var(--good);">
+        <img src="f3.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid var(--warn);">
+        <img src="f4.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid var(--good);">
+        <img src="fx.jpg" alt="" style="width: 44px; height: 78px; border-radius: 5px; object-fit: cover; display: block; border: 1.5px solid color-mix(in srgb, var(--crit) 60%, transparent); opacity: 0.45; filter: saturate(0.3);">
       </div>
-      <p style="margin: 9px 0 0; font-size: 11.5px; color: #6d6b66;">Six frames kept, one discarded. The tree stays &mdash; branch from any of them.</p>
+      <p style="margin: 9px 0 0; font-size: 11.5px; color: var(--text-faint);">Six frames kept, one discarded. The tree stays &mdash; branch from any of them.</p>
 
       <div style="margin-top: 22px; display: flex; flex-direction: column; gap: 12px;">
         <div style="display: flex; align-items: baseline; justify-content: space-between;">
-          <span style="font-size: 13px; color: #898781;">Frames generated</span>
+          <span style="font-size: 13px; color: var(--text-muted);">Frames generated</span>
           <span class="tnum" style="font-size: 14px; font-weight: 600;">7</span>
         </div>
         <div style="display: flex; align-items: baseline; justify-content: space-between;">
-          <span style="font-size: 13px; color: #898781;">Critic retries</span>
-          <span class="tnum" style="font-size: 14px; font-weight: 600; color: #fab219;">1</span>
+          <span style="font-size: 13px; color: var(--text-muted);">Critic retries</span>
+          <span class="tnum" style="font-size: 14px; font-weight: 600; color: var(--warn);">1</span>
         </div>
         <div style="display: flex; align-items: baseline; justify-content: space-between;">
-          <span style="font-size: 13px; color: #898781;">Time to first frame</span>
+          <span style="font-size: 13px; color: var(--text-muted);">Time to first frame</span>
           <span class="tnum" style="font-size: 14px; font-weight: 600;">14s</span>
         </div>
         <div style="display: flex; align-items: baseline; justify-content: space-between;">
-          <span style="font-size: 13px; color: #898781;">Video render</span>
+          <span style="font-size: 13px; color: var(--text-muted);">Video render</span>
           <span class="tnum" style="font-size: 14px; font-weight: 600;">41s</span>
         </div>
-        <div style="display: flex; align-items: baseline; justify-content: space-between; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.10);">
-          <span style="font-size: 13px; color: #898781;">Credits</span>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--border);">
+          <span style="font-size: 13px; color: var(--text-muted);">Credits</span>
           <span class="tnum" style="font-size: 14px; font-weight: 600;">[N]</span>
         </div>
       </div>
 
       <div style="flex-grow: 1;"></div>
 
-      <div style="background: #232322; border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px;">
-        <p style="margin: 0 0 7px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #898781;">TASTE MODEL UPDATED</p>
-        <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #c3c2b7;">You rejected the studio-lit attempt, so <span style="color: #ffffff;">never studio lighting</span> got stronger. It will open cooler and flatter next time.</p>
+      <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 14px;">
+        <p style="margin: 0 0 7px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--text-muted);">TASTE MODEL UPDATED</p>
+        <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-secondary);">You rejected the studio-lit attempt, so <span style="color: var(--primary-ink);">never studio lighting</span> got stronger. It will open cooler and flatter next time.</p>
       </div>
     </div>
   </div>
 </div>
 </x-dc>
 
-<script data-dc-script data-props='{"accent":{"editor":"color","default":"#3987e5","options":["#3987e5","#0ca30c","#fab219","#d03b3b"]}}'>
+<script data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"}}'>
 class Component extends DCLogic {
-  renderVals() { return { accent: this.props.accent ?? '#3987e5' }; }
+  renderVals() { return { theme: this.props.theme ?? 'light' }; }
 }
 </script>
 </body>

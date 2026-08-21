@@ -1,0 +1,79 @@
+/*
+ * Shared token block — paste into every artboard's <helmet><style>.
+ *
+ * Light is the default because that is what Arcads does, and their restraint is
+ * researched: near-monochrome chrome, a DARK primary button rather than a
+ * coloured one, 1px borders instead of shadows, ~8px radii.
+ *
+ * What we keep that they do not have: a status palette. Their product has no
+ * critic, so it needs no achieved/retried/discarded colours. Ours does, and
+ * those colours carry meaning rather than decoration — so they stay saturated
+ * enough to read at a glance in both themes.
+ *
+ * Dark is a real second theme, not an inversion: --primary flips from near-black
+ * to near-white so the primary button stays the darkest-or-lightest thing on the
+ * screen either way, and every status colour is re-picked for its own ground
+ * rather than reused.
+ */
+:root {
+  --bg-canvas:     #f7f7f8;
+  --bg-panel:      #ffffff;
+  --bg-elevated:   #ffffff;
+  --bg-subtle:     #f2f2f4;
+
+  --border:        rgba(16,16,20,0.09);
+  --border-strong: rgba(16,16,20,0.17);
+
+  --text-primary:  #17171a;
+  --text-secondary:#5b5b63;
+  --text-muted:    #8b8b93;
+  --text-faint:    #a8a8b0;
+
+  /* the primary action is dark, not coloured — the Arcads move */
+  --primary:       #232326;
+  --primary-ink:   #ffffff;
+
+  --accent:        #3987e5;   /* agent activity only */
+  --accent-soft:   #eef4fc;
+
+  --good:          #0a8f3c;
+  --good-soft:     #eaf6ee;
+  --warn:          #b7791f;
+  --warn-soft:     #fdf3e2;
+  --crit:          #c8372f;
+  --crit-soft:     #fdeeed;
+
+  --shadow-card:   0 1px 2px rgba(16,16,20,0.05);
+  --shadow-raise:  0 8px 24px -10px rgba(16,16,20,0.22);
+}
+
+[data-theme="dark"] {
+  --bg-canvas:     #0d0d0d;
+  --bg-panel:      #1a1a19;
+  --bg-elevated:   #232322;
+  --bg-subtle:     #232322;
+
+  --border:        rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.18);
+
+  --text-primary:  #ffffff;
+  --text-secondary:#c3c2b7;
+  --text-muted:    #898781;
+  --text-faint:    #6d6b66;
+
+  --primary:       #f4f1e9;
+  --primary-ink:   #17171a;
+
+  --accent:        #6fa8ec;
+  --accent-soft:   rgba(57,135,229,0.14);
+
+  --good:          #4ec26e;
+  --good-soft:     rgba(78,194,110,0.13);
+  --warn:          #fab219;
+  --warn-soft:     rgba(250,178,25,0.13);
+  --crit:          #e8615a;
+  --crit-soft:     rgba(232,97,90,0.13);
+
+  --shadow-card:   0 1px 2px rgba(0,0,0,0.4);
+  --shadow-raise:  0 10px 30px -10px rgba(0,0,0,0.6);
+}

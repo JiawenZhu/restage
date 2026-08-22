@@ -203,6 +203,43 @@ export async function createRun(args: StartArgs): Promise<string> {
   const db = adminDb();
   const ref = db.collection('runs').doc();
 
+  /*
+   * Resolve an enrolled avatar server-side, from its id.
+   *
+   * The client used to hold the avatar's SIGNED URL in state and post it back,
+   * and those signatures last an hour — so a tab left open overnight sent an
+   * expired credential and every "Plan the run" failed permanently with a
+   * generic 500, with the goal text lost to the reload needed to recover.
+   *
+   * An id does not expire. The paths live in the user's own avatar document,
+   * and reading them here also means the client never has to carry megabytes
+   * of image just to start a run.
+   */
+  let source = { url: args.avatarDataUrl, views: args.avatarMultiViews };
+  if (args.avatarId) {
+    const snap = await db.collection('users').doc(args.uid).collection('avatars').doc(args.avatarId).get();
+    const paths = snap.data()?.paths as { front?: string; left?: string; right?: string } | undefined;
+    if (paths?.front) {
+      const bucket = adminStorage().bucket(
+        process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'restage-studio.firebasestorage.app',
+      );
+      const read = async (path?: string) => {
+        if (!path) return undefined;
+        const [buf] = await bucket.file(path).download();
+        return `data:image/jpeg;base64,${buf.toString('base64')}`;
+      };
+      source = {
+        url: (await read(paths.front))!,
+        views: {
+          front: await read(paths.front),
+          left: await read(paths.left),
+          right: await read(paths.right),
+        },
+      };
+    }
+  }
+  args = { ...args, avatarDataUrl: source.url, avatarMultiViews: source.views };
+
   // Upload avatar to Storage so the Firestore document is kept feather-light (< 1 KB)
   const avatarStorageUrl = await uploadToStorage(
     args.avatarDataUrl,
@@ -279,11 +316,30 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
     run.update(sanitizeForFirestore({ ...patch, updatedAt: Date.now() }));
 
   try {
-    const avatar = await resolveImageInput(args.avatarDataUrl);
+    /*
+     * Read the avatar from the run document, not from the caller's args.
+     *
+     * createRun resolves an enrolled avatar from its id and persists tokened
+     * Storage URLs — but it only reassigned its own local copy, so executeRun,
+     * called separately by the route with the original arguments, would have
+     * received an empty string for every enrolled-avatar run. Reading the
+     * persisted values means the thing exercised is the thing stored, which is
+     * also what regenerate will read later.
+     */
+    const runSnap = await run.get();
+    const stored = runSnap.data() ?? {};
+    const avatarSource: string = stored.avatarUrl || args.avatarDataUrl;
+    const storedViews = (stored.avatarMultiViews ?? args.avatarMultiViews ?? {}) as {
+      left?: string;
+      right?: string;
+    };
+    if (!avatarSource) throw new Error('this run has no source image');
+
+    const avatar = await resolveImageInput(avatarSource);
     const extraViews = (
       await Promise.all([
-        args.avatarMultiViews?.left ? resolveImageInput(args.avatarMultiViews.left) : null,
-        args.avatarMultiViews?.right ? resolveImageInput(args.avatarMultiViews.right) : null,
+        storedViews.left ? resolveImageInput(storedViews.left) : null,
+        storedViews.right ? resolveImageInput(storedViews.right) : null,
       ])
     ).filter(Boolean) as { mimeType: string; data: Buffer }[];
 

@@ -939,7 +939,7 @@ export function EnrollmentCamera() {
                 <div className="flex h-48 w-full items-center justify-center bg-subtle text-ink-4">No Image</div>
               )}
               {/* Hover Action Overlay */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:opacity-100 p-3">
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 p-3 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
                 <span className="text-[11px] font-bold text-white uppercase tracking-wider">Left Profile (~60°)</span>
                 <button
                   type="button"
@@ -967,7 +967,7 @@ export function EnrollmentCamera() {
                 <div className="flex h-48 w-full items-center justify-center bg-subtle text-ink-4">No Image</div>
               )}
               {/* Hover Action Overlay */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:opacity-100 p-3">
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 p-3 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
                 <span className="text-[11px] font-bold text-white uppercase tracking-wider">Front Face (Base)</span>
                 <button
                   type="button"
@@ -995,7 +995,7 @@ export function EnrollmentCamera() {
                 <div className="flex h-48 w-full items-center justify-center bg-subtle text-ink-4">No Image</div>
               )}
               {/* Hover Action Overlay */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:opacity-100 p-3">
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 p-3 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
                 <span className="text-[11px] font-bold text-white uppercase tracking-wider">Right Profile (~60°)</span>
                 <button
                   type="button"

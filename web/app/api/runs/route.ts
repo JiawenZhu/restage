@@ -53,9 +53,14 @@ const Body = z.object({
    * ~8MB of base64. Unbounded, this was also a memory and cost amplifier: the
    * string is decoded, sent to the model, and echoed into Firestore.
    */
-  avatarDataUrl: z.string().min(1).max(11_000_000).refine(isOwnImageSource, {
-    message: 'must be an image data URL or a Restage storage URL',
-  }),
+  avatarDataUrl: z
+    .string()
+    .min(1)
+    .max(11_000_000)
+    .refine(isOwnImageSource, { message: 'must be an image data URL or a Restage storage URL' })
+    // Optional when avatarId is given: the server reads the enrolled captures
+    // from Storage itself rather than trusting an expiring URL from the client.
+    .optional(),
   // The same bound as avatarDataUrl: three unbounded images was three times the
   // amplifier one was.
   avatarMultiViews: z
@@ -185,7 +190,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'invalid run request' }, { status: 400 });
     }
 
-    const args = { uid, ...parsed.data };
+    if (!parsed.data.avatarId && !parsed.data.avatarDataUrl) {
+      return NextResponse.json({ error: 'choose an enrolled face or upload a photo' }, { status: 400 });
+    }
+    const args = { uid, ...parsed.data, avatarDataUrl: parsed.data.avatarDataUrl ?? '' };
     const runId = await createRun(args);
 
     // Deliberately not awaited. The run takes 1-3 minutes and the client watches

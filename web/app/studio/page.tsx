@@ -195,8 +195,11 @@ function NewRun() {
           seconds,
           avatarId,
           templateId: selectedTemplate?.id,
-          avatarDataUrl: avatar,
-          avatarMultiViews: multiViews || undefined,
+          /* With an enrolled avatar the server reads the captures from Storage
+             by id, so nothing expiring crosses the wire. A one-off upload still
+             sends its pixels, because they exist nowhere else yet. */
+          avatarDataUrl: avatarId ? undefined : avatar,
+          avatarMultiViews: avatarId ? undefined : multiViews || undefined,
         }),
       });
       const json = await res.json();

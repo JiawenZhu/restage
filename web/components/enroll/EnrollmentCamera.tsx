@@ -38,6 +38,8 @@ export function EnrollmentCamera() {
   const [retakeTarget, setRetakeTarget] = useState<RetakeTarget>(null);
   const [isCapturingBurst, setIsCapturingBurst] = useState(false);
   const [burstProgress, setBurstProgress] = useState(0);
+  /** What the burst actually chose, so the interface can say so truthfully. */
+  const [burstStats, setBurstStats] = useState<Record<string, { kept: number; score: number }>>({});
   const [avatarName, setAvatarName] = useState('My Personal Avatar');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -64,7 +66,13 @@ export function EnrollmentCamera() {
   });
 
   // Behind-the-scenes burst frame buffer for dense multi-view temporal data
-  const burstBufferRef = useRef<{ front: string[]; left: string[]; right: string[] }>({
+  /** Every burst frame with its sharpness, so the best one can actually win.
+   *  This used to hold data URLs that were measured by nothing and discarded. */
+  const burstBufferRef = useRef<{
+    front: { dataUrl: string; sharpness: number }[];
+    left: { dataUrl: string; sharpness: number }[];
+    right: { dataUrl: string; sharpness: number }[];
+  }>({
     front: [],
     left: [],
     right: [],
@@ -277,7 +285,57 @@ export function EnrollmentCamera() {
   };
 
   // Grab single frame from video element
-  const grabFrame = (): string | null => {
+  /*
+   * Sharpness, as the variance of a Laplacian over the centre of the frame.
+   *
+   * A blurred image has little high-frequency detail, so the second derivative
+   * stays near zero everywhere and its variance is low; a sharp one has edges,
+   * so the variance is high. Measured on the middle of the frame because that
+   * is where the face is — a sharp bookshelf behind a motion-blurred face would
+   * otherwise win.
+   *
+   * This runs on a small copy: at full resolution it would cost more than the
+   * 130ms between burst frames.
+   */
+  const sharpnessOf = (canvas: HTMLCanvasElement): number => {
+    const W = 160;
+    const H = 120;
+    const small = document.createElement('canvas');
+    small.width = W;
+    small.height = H;
+    const sctx = small.getContext('2d', { willReadFrequently: true });
+    if (!sctx) return 0;
+
+    // The centre half of the frame, where a face sits.
+    const sx = canvas.width * 0.25;
+    const sy = canvas.height * 0.15;
+    sctx.drawImage(canvas, sx, sy, canvas.width * 0.5, canvas.height * 0.7, 0, 0, W, H);
+    const d = sctx.getImageData(0, 0, W, H).data;
+
+    const gray = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      gray[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+    }
+
+    let sum = 0;
+    let sumSq = 0;
+    let n = 0;
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x;
+        // 4-neighbour Laplacian
+        const lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - W] - gray[i + W];
+        sum += lap;
+        sumSq += lap * lap;
+        n++;
+      }
+    }
+    if (!n) return 0;
+    const mean = sum / n;
+    return sumSq / n - mean * mean;
+  };
+
+  const grabFrame = (): { dataUrl: string; sharpness: number } | null => {
     if (!videoRef.current || !canvasRef.current) return null;
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -289,7 +347,7 @@ export function EnrollmentCamera() {
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.95);
+    return { dataUrl: canvas.toDataURL('image/jpeg', 0.95), sharpness: sharpnessOf(canvas) };
   };
 
   // Trigger Retake for a specific target
@@ -324,23 +382,45 @@ export function EnrollmentCamera() {
 
       // Snap burst frame
       const frame = grabFrame();
-      if (frame) {
-        burstBufferRef.current[angle].push(frame);
-      }
+      if (frame) burstBufferRef.current[angle].push(frame);
 
       if (ticks >= totalTicks) {
         clearInterval(timer);
         setIsCapturingBurst(false);
         setBurstProgress(100);
 
-        // Select optimal representative keyframe (sharpest / middle-peak frame)
+        /*
+         * Pick the sharpest frame, within the window where the pose is right.
+         *
+         * The comment here used to say "sharpest / middle-peak frame" while the
+         * code took a frame by POSITION — the middle one for front, 75% for a
+         * profile — so twenty frames were captured, measured by nothing, and
+         * nineteen thrown away. Position still matters, because a profile shot
+         * is only a profile near the end of the turn, so it constrains the
+         * WINDOW; sharpness decides within it. The face is the one input this
+         * whole product depends on, and a motion-blurred one poisons every
+         * frame generated from it.
+         */
         const frames = burstBufferRef.current[angle];
-        const selectedKeyframe =
-          angle === 'front'
-            ? frames[Math.floor(frames.length * 0.5)] || frames[0]
-            : frames[Math.floor(frames.length * 0.75)] || frames[frames.length - 1] || frames[0];
+        const window = angle === 'front'
+          ? frames.slice(Math.floor(frames.length * 0.3), Math.ceil(frames.length * 0.8))
+          : frames.slice(Math.floor(frames.length * 0.6));
+        const pool = window.length ? window : frames;
+        const best = pool.reduce((a, b) => (b.sharpness > a.sharpness ? b : a), pool[0]);
 
-        setCapturedFrames((curr) => ({ ...curr, [angle]: selectedKeyframe }));
+        if (best) {
+          const scores = pool.map((f) => f.sharpness);
+          console.info(
+            `[enrol] ${angle}: kept the sharpest of ${pool.length} (${best.sharpness.toFixed(0)}, ` +
+              `worst ${Math.min(...scores).toFixed(0)})`,
+          );
+          setCapturedFrames((curr) => ({ ...curr, [angle]: best.dataUrl }));
+          setBurstStats((curr) => ({ ...curr, [angle]: { kept: pool.length, score: best.sharpness } }));
+        }
+
+        // The buffer has done its job; twenty full-resolution data URLs per
+        // angle is not something to keep holding.
+        burstBufferRef.current[angle] = [];
 
         setTimeout(() => {
           setBurstProgress(0);
@@ -563,21 +643,31 @@ export function EnrollmentCamera() {
       {step === 'ready' && (
         <div className="mb-6 flex justify-center">
           <div className="inline-flex rounded-xl border border-line bg-panel p-1 shadow-xs">
+            {/* Emoji as iconography reads as a placeholder somebody meant to
+                replace, and "Auto-Detect 3D Sweep" named a mechanism rather
+                than an action. */}
             <button
               onClick={() => setMode('camera')}
-              className={`rounded-lg px-5 py-2 text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-[12.5px] font-semibold transition-all ${
                 mode === 'camera' ? 'bg-primary text-primary-ink shadow-xs' : 'text-ink-3 hover:text-ink'
               }`}
             >
-              📹 Auto-Detect 3D Sweep
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              Use my camera
             </button>
             <button
               onClick={() => setMode('upload')}
-              className={`rounded-lg px-5 py-2 text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-[12.5px] font-semibold transition-all ${
                 mode === 'upload' ? 'bg-primary text-primary-ink shadow-xs' : 'text-ink-3 hover:text-ink'
               }`}
             >
-              📁 Upload 3-Angle Photos
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 9l5-5 5 5" /><path d="M12 4v12" />
+              </svg>
+              Upload photos
             </button>
           </div>
         </div>
@@ -598,17 +688,23 @@ export function EnrollmentCamera() {
               <circle cx="12" cy="13" r="4" />
             </svg>
           </div>
-          <h2 className="mt-5 text-2xl font-bold tracking-tight">Auto-Detecting 10-Second Head Sweep</h2>
-          <p className="mx-auto mt-2 max-w-lg text-sm text-ink-3">
-            Start, face the camera for the front shot, then turn your head left, back to centre, and right.
-            Capture fires on its own when you turn far enough — and the button is always there if you would rather
-            take it yourself.
+          <h2 className="mt-5 text-[26px] font-bold tracking-[-0.02em]">About a minute, and you turn your head</h2>
+          <p className="mx-auto mt-2.5 max-w-lg text-[14px] leading-relaxed text-ink-2">
+            Face the camera, then turn left, back to centre, and right. Each shot fires on its own once you have
+            turned far enough — and the button is always there if you would rather take it yourself.
+          </p>
+          <p className="mx-auto mt-3 max-w-lg text-[12.5px] leading-relaxed text-ink-3">
+            Every shot is picked from about twenty frames: the sharpest one wins, so a moment of motion blur does not
+            become the face every ad is built from.
           </p>
           <button
             onClick={() => startMedia('front')}
-            className="mt-8 inline-flex items-center gap-2 rounded-xl bg-accent-strong px-8 py-3.5 text-sm font-semibold text-white shadow-md transition-transform hover:scale-[1.02] active:scale-[0.98]"
+            className="mt-7 inline-flex items-center gap-2 rounded-xl bg-accent-strong px-8 py-3.5 text-[14px] font-semibold text-white shadow-md transition-transform hover:scale-[1.02] active:scale-[0.98]"
           >
-            Start Auto-Capture Experience
+            Start
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
           </button>
         </div>
       )}
@@ -958,7 +1054,7 @@ export function EnrollmentCamera() {
                   onClick={() => fileInputLeftRef.current?.click()}
                   className="flex items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 active:scale-95"
                 >
-                  📁 Replace File
+                  Replace
                 </button>
               </div>
               <p className="py-2 text-center text-xs font-semibold text-ink-2">Left Profile (~60°)</p>
@@ -986,7 +1082,7 @@ export function EnrollmentCamera() {
                   onClick={() => fileInputFrontRef.current?.click()}
                   className="flex items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 active:scale-95"
                 >
-                  📁 Replace File
+                  Replace
                 </button>
               </div>
               <p className="py-2 text-center text-xs font-semibold text-accent-ink">Front Face (Base)</p>
@@ -1014,7 +1110,7 @@ export function EnrollmentCamera() {
                   onClick={() => fileInputRightRef.current?.click()}
                   className="flex items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 active:scale-95"
                 >
-                  📁 Replace File
+                  Replace
                 </button>
               </div>
               <p className="py-2 text-center text-xs font-semibold text-ink-2">Right Profile (~60°)</p>
@@ -1050,7 +1146,7 @@ export function EnrollmentCamera() {
                   onClick={() => fileInputAudioRef.current?.click()}
                   className="flex items-center gap-1 rounded-lg border border-line bg-panel px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors hover:bg-subtle active:scale-95"
                 >
-                  📁 Replace
+                  Replace
                 </button>
               </div>
             </div>

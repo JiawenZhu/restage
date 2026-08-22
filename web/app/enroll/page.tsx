@@ -1,38 +1,82 @@
+import Link from 'next/link';
 import { AppShell } from '@/components/AppShell';
 import { EnrollmentCamera } from '@/components/enroll/EnrollmentCamera';
+
+export const metadata = {
+  title: 'Enrol your face — Restage',
+};
+
+/*
+ * The page around the capture flow.
+ *
+ * Two things belong here and nothing else: what is about to happen, and what
+ * happens to the result. Somebody is deciding whether to point a camera at
+ * their own face, and the answer to "why should I" has to arrive before the
+ * button does.
+ *
+ * The reassurance used to sit BELOW the camera, where it is read after the
+ * decision it exists to inform — and it claimed a "Privacy & Identity Vault"
+ * and a purge, one of which was a name for nothing and the other of which was
+ * not happening. It says what the code does now, and it says it first.
+ */
+
+const STEPS = [
+  { n: 1, label: 'Straight on', detail: 'Look at the lens and hold still' },
+  { n: 2, label: 'Turn left', detail: 'Capture fires when you get there' },
+  { n: 3, label: 'Turn right', detail: 'Back to centre first, then across' },
+  { n: 4, label: 'Say a line', detail: 'Optional — ten seconds' },
+];
 
 export default function Enroll() {
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-5xl px-6 py-8">
-        <h1 className="text-center text-[32px] font-bold tracking-[-0.025em]">Three Angles. Once.</h1>
-        <p className="mx-auto mt-2 max-w-xl text-center text-base leading-relaxed text-ink-3">
-          {/* "and voice" — the sample is stored and nothing reads it. The
-              component and /likeness both already say so. */}
-          Capture once. Every UGC ad generated from now on uses this face.
-        </p>
+      <div className="mx-auto w-full max-w-5xl px-6 py-10">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-[11px] font-bold tracking-[0.14em] text-ink-3">ENROL ONCE</p>
+          <h1 className="mt-2.5 text-[clamp(1.9rem,4vw,2.5rem)] font-bold leading-[1.1] tracking-[-0.03em]">
+            Three angles is what makes the face hold.
+          </h1>
+          <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-ink-2">
+            One photo gives the model a single view to guess from, and the face drifts the moment the agent turns or
+            relights it. Left, straight on and right give it the geometry — so the person in the last frame is still
+            the person in the first.
+          </p>
+        </div>
 
-        <div className="mt-6">
+        {/* What the next minute looks like, before it starts. */}
+        <ol className="mx-auto mt-8 grid max-w-3xl gap-2.5 sm:grid-cols-4">
+          {STEPS.map((s) => (
+            <li key={s.n} className="rounded-card border border-line bg-panel px-3.5 py-3">
+              <span className="tnum flex h-6 w-6 items-center justify-center rounded-full bg-subtle text-[11.5px] font-bold text-ink-2">
+                {s.n}
+              </span>
+              <p className="mt-2 text-[13.5px] font-semibold leading-snug">{s.label}</p>
+              <p className="mt-0.5 text-[12px] leading-snug text-ink-3">{s.detail}</p>
+            </li>
+          ))}
+        </ol>
+
+        <div className="mt-8">
           <EnrollmentCamera />
         </div>
 
-        {/* Technical rationale */}
-        <div className="mx-auto mt-8 flex max-w-4xl gap-7 rounded-card border border-line bg-panel px-6 py-5">
-          <div className="flex-1">
-            <p className="text-[13.5px] font-semibold">Why three angles and not one?</p>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">
-              A single front-on photo gives the diffusion model nothing about the sides of your face.
-              Sampling front, left 60°, and right 60° anchors your 3D facial geometry and skin texture.
-            </p>
-          </div>
-          <div className="w-px self-stretch bg-line" />
-          <div className="flex-1">
-            <p className="text-[13.5px] font-semibold">Privacy & Identity Vault</p>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">
-              Captures are stored privately in your account. Only you can read them, and no link shares them.
-              Deleting an avatar permanently purges all raw data.
-            </p>
-          </div>
+        <div className="mx-auto mt-10 max-w-3xl rounded-card border border-line bg-panel px-6 py-5">
+          <p className="text-[13px] font-semibold">What happens to these captures</p>
+          <ul className="mt-2.5 flex flex-col gap-2">
+            {[
+              'They are stored in your account only. The bucket denies reads by default and the rules allow a file only to the account that owns its folder.',
+              'Deleting a face deletes the copies too — every run made from it, its frames and its rendered clips.',
+              'The voice sample is optional, and stored for voice matching later. Nothing reads it yet; clips use a synthetic voice reading a line shown to you before rendering.',
+            ].map((t) => (
+              <li key={t} className="flex gap-2.5 text-[13px] leading-relaxed text-ink-2">
+                <span className="mt-[7px] block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                {t}
+              </li>
+            ))}
+          </ul>
+          <Link href="/likeness" className="mt-3 inline-block text-[12.5px] font-semibold text-accent-ink hover:underline">
+            The longer answer →
+          </Link>
         </div>
       </div>
     </AppShell>

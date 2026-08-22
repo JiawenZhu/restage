@@ -15,15 +15,37 @@ import { useUser } from './AuthGate';
  * mic button simply is not rendered; typing and keywords lose nothing.
  */
 
+/**
+ * The slice of SpeechRecognition this uses.
+ *
+ * `onerror` was typed as `() => void`, which is assignable-from a handler that
+ * takes an argument, so the compiler was happy while the type said the error
+ * event carries no information. It carries the only information that matters:
+ * WHICH failure. That omission is why every outcome collapsed into one message,
+ * including the benign 'aborted' that fires when a user stops dictating on
+ * purpose. The union is spelled out so the next person handling a case can see
+ * the ones they have not handled.
+ */
+type SpeechRecognitionErrorCode =
+  | 'no-speech'
+  | 'aborted'
+  | 'audio-capture'
+  | 'network'
+  | 'not-allowed'
+  | 'service-not-allowed'
+  | 'bad-grammar'
+  | 'language-not-supported';
+
 type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
   start(): void;
   stop(): void;
+  abort(): void;
   onresult: ((e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((e: { error: SpeechRecognitionErrorCode }) => void) | null;
 };
 
 function getRecognizer(): SpeechRecognitionLike | null {
@@ -68,6 +90,25 @@ export function PromptComposer({
   const [listening, setListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
+  /** Set while the user's own stop is in flight, so the abort it causes is not
+   *  reported back to them as a failure. */
+  const stoppingRef = useRef(false);
+
+  /* Recognition holds the microphone. Leaving it running after the panel closes
+     keeps the browser's recording indicator lit on a page that is no longer
+     asking for anything — the same class of bug as the enrolment camera that
+     was never released. */
+  useEffect(() => {
+    return () => {
+      stoppingRef.current = true;
+      try {
+        recRef.current?.stop();
+      } catch {
+        /* already stopped */
+      }
+      recRef.current = null;
+    };
+  }, []);
   const rawRef = useRef(raw);
   rawRef.current = raw;
 
@@ -97,12 +138,22 @@ export function PromptComposer({
 
   function toggleMic() {
     if (listening) {
+      /* The user asked it to stop, so whatever comes back next is expected.
+         Without this flag the abort that follows stop() is reported to them as
+         "Dictation stopped unexpectedly" — an error message for doing exactly
+         what they intended. */
+      stoppingRef.current = true;
       recRef.current?.stop();
       return;
     }
     const rec = getRecognizer();
-    if (!rec) return;
+    if (!rec) {
+      setError('This browser cannot dictate — Chrome and Edge can. Type instead.');
+      return;
+    }
     recRef.current = rec;
+    setError(null);
+    stoppingRef.current = false;
     rec.lang = navigator.language || 'en-US';
     rec.continuous = true;
     rec.interimResults = true;
@@ -125,24 +176,59 @@ export function PromptComposer({
     rec.onend = () => {
       setListening(false);
       setInterim('');
+      stoppingRef.current = false;
     };
-    rec.onerror = (e?: { error?: string }) => {
+    rec.onerror = (e) => {
       setListening(false);
       setInterim('');
-      /* The mic button used to just switch itself off with no explanation —
-         indistinguishable from a bug — most often because permission was
-         denied or the page is not on a secure origin. */
-      const why = e?.error;
+      const why = e.error;
+      const deliberate = stoppingRef.current;
+      stoppingRef.current = false;
+
+      /*
+       * Only say something went wrong when something did.
+       *
+       * 'aborted' is not a failure. It fires when recognition is stopped —
+       * by stop(), by the component unmounting, by navigating away — so the
+       * catch-all below was showing "Dictation stopped unexpectedly" to people
+       * who had just clicked the mic to turn it off. That is the report this
+       * fixes, and it made the feature look broken every single time it was
+       * used correctly.
+       *
+       * The rest are separated because they need different actions from the
+       * user, and one sentence covering all of them tells them nothing they can
+       * act on. 'network' in particular is not their fault at all: Chrome's
+       * recognition runs against a Google service, so it fails when that is
+       * unreachable.
+       */
+      if (why === 'aborted' || deliberate) return;
+
       setError(
         why === 'not-allowed' || why === 'service-not-allowed'
           ? 'Microphone access was blocked. Allow it in your browser, or type instead.'
           : why === 'no-speech'
-            ? 'Nothing was heard. Try again, or type instead.'
-            : 'Dictation stopped unexpectedly. You can type instead.',
+            ? 'Nothing was heard. Press the mic and speak, or type instead.'
+            : why === 'audio-capture'
+              ? 'No microphone was found. Check your input device, or type instead.'
+              : why === 'network'
+                ? 'Dictation needs a network connection and could not reach the speech service. Type instead.'
+                : 'Dictation stopped unexpectedly. You can type instead.',
       );
     };
-    setListening(true);
-    rec.start();
+
+    /*
+     * start() throws InvalidStateError if recognition is already running, and
+     * `listening` was being set before the call — so a throw left the button
+     * lit, claiming to listen, with nothing running behind it.
+     */
+    try {
+      rec.start();
+      setListening(true);
+    } catch {
+      setListening(false);
+      recRef.current = null;
+      setError('Dictation could not start. Try once more, or type instead.');
+    }
   }
 
   async function refine() {

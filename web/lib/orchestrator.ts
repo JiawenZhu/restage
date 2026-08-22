@@ -624,11 +624,43 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
            * look like one continuous take.
            */
           const drifted = false; // superseded by the look contract; see isContinuation above
+          /*
+           * A merely IMPERFECT frame is kept. A WRONG one is paid for again.
+           *
+           * Surveyed across three real runs: 17 paid frames, 2 discarded. Both
+           * retries improved on what they replaced, so this gate was not firing
+           * carelessly — but the two cases are not the same kind of thing, and
+           * only one of them is worth somebody's money.
+           *
+           *   FAILED, step 2: "a macro shot of the steamer nozzle resting on a
+           *   table instead of the requested close-up on the creased linen shirt
+           *   collar." The generator produced the WRONG SUBJECT. Paying again is
+           *   obviously right; the alternative is a nozzle where the ad needs a
+           *   collar.
+           *
+           *   PARTIAL, step 5: "the framing is wider than requested and the drop
+           *   is suspended rather than being squeezed onto the back of the hand."
+           *   Real non-compliance — and a perfectly usable photograph. A whole
+           *   paid generation bought tighter framing.
+           *
+           * The second is a judgement about someone else's money, made without
+           * asking, on a project whose video allowance is ten requests a day.
+           * And it is not the only route to a better frame: that frame lands on
+           * the canvas where Reject and Another take are both free to press and
+           * free to ignore. Spending automatically is the one option the user
+           * cannot decline.
+           *
+           * So the automatic retry is reserved for frames that are WRONG — a
+           * wrong face, or a verdict of failed. Set RESTAGE_RETRY_ON_PARTIAL=1
+           * to also chase imperfect ones; on the surveyed data that roughly
+           * doubles the discard rate.
+           */
+          const retryOnPartial = process.env.RESTAGE_RETRY_ON_PARTIAL === '1';
           const unsatisfactory =
             wrongFace ||
             drifted ||
             verdict.verdict === 'failed' ||
-            (verdict.verdict === 'partial' && verdict.worthRetry);
+            (retryOnPartial && verdict.verdict === 'partial' && verdict.worthRetry);
           /*
            * A `failed` verdict earns a retry on its own.
            *
@@ -641,7 +673,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
            */
           const canRetry =
             unsatisfactory &&
-            (wrongFace || drifted || verdict.worthRetry || verdict.verdict === 'failed') &&
+            (wrongFace || drifted || (retryOnPartial && verdict.worthRetry) || verdict.verdict === 'failed') &&
             attempt < MAX_RETRIES_PER_STEP;
 
           await nodeRef.update({

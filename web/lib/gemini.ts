@@ -223,6 +223,53 @@ function veoResolution(seconds: number): '720p' | '1080p' {
   return seconds >= MAX_CLIP_SECONDS ? '1080p' : '720p';
 }
 
+/*
+ * Veo's requests-per-minute allowance, and a gate that respects it.
+ *
+ * MEASURED FROM THE CONSOLE, not guessed: on the tier this project is on, Veo 3
+ * Fast is capped at 2 RPM and 10 RPD, and the usage graph showed a peak of 4
+ * against that limit of 2. That is the whole "the video quota is used up" story
+ * — not an exhausted key, and not something a new key would fix, because the
+ * allowance belongs to the project and its billing tier rather than to the
+ * credential.
+ *
+ * A sequence render submits one job per shot from a loop with nothing between
+ * the submissions, and withRetry turns each refusal into up to four attempts.
+ * Seven shots therefore arrive as a burst against a limit of two, every attempt
+ * counts toward the peak, and the run dies part-way through having paid for the
+ * shots that did land.
+ *
+ * So submissions are serialised behind a minimum interval. This is a per-process
+ * gate, which is exactly the scope that matters: the burst comes from one loop
+ * in one process. Across instances the server-side limit and withRetry's
+ * jittered backoff remain the backstop.
+ *
+ * RESTAGE_VEO_RPM tracks the tier. Raise it after upgrading billing; the default
+ * is the free-tier number so an unconfigured deployment is slow rather than
+ * broken.
+ */
+const VEO_RPM = Math.max(1, Number(process.env.RESTAGE_VEO_RPM) || 2);
+const VEO_MIN_GAP_MS = Math.ceil(60_000 / VEO_RPM);
+
+let veoQueue: Promise<unknown> = Promise.resolve();
+let lastVeoSubmitAt = 0;
+
+/** Serialise `fn` behind the RPM gap. Rejections must not poison the chain. */
+function paceVeoSubmit<T>(fn: () => Promise<T>): Promise<T> {
+  const turn = veoQueue.then(async () => {
+    const wait = lastVeoSubmitAt + VEO_MIN_GAP_MS - Date.now();
+    if (wait > 0) {
+      console.warn(`[veo] holding ${Math.round(wait / 1000)}s to stay under ${VEO_RPM} rpm`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+    lastVeoSubmitAt = Date.now();
+    return fn();
+  });
+  // The NEXT caller waits for this one to finish its gap, not for its render.
+  veoQueue = turn.catch(() => {});
+  return turn;
+}
+
 export async function submitRender(req: RenderRequest): Promise<{ operation: string }> {
   const instance: Record<string, unknown> = { prompt: req.prompt };
   if (req.firstFrame) {
@@ -234,7 +281,8 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
 
   const seconds = normalizeVeoDuration(req.durationSeconds);
 
-    const json = await withRetry(
+  const json = await paceVeoSubmit(() =>
+    withRetry(
     () => fetchJson(`${BASE}/models/${VIDEO_MODEL}:predictLongRunning?key=${key()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -252,7 +300,8 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
       },
     }),
   }, scrub),
-    { label: 'veo:submit' },
+      { label: 'veo:submit' },
+    ),
   );
   const name = (json as GenJson).name;
   if (!name) throw new Error('render submitted but no operation name came back');
@@ -459,15 +508,64 @@ function containsAudioTrack(mp4: Buffer): boolean {
 // statement about access.
 const TEXT_MODEL = process.env.RESTAGE_TEXT_MODEL ?? 'gemini-3.7-flash';
 
+/*
+ * Three model roles, not one.
+ *
+ * This was a single constant serving every text job, which meant the one env
+ * var that looked like a cheap tuning knob also moved the CRITIC and the
+ * IDENTITY VERIFIER — the two calls that decide whether a frame showing
+ * somebody's face is allowed to stand. Benchmarked head to head against
+ * gemini-3.5-flash-lite on the real prompts and schemas:
+ *
+ *   JUDGING — flash-lite scored 6/10 on faceMatches, which is near chance, and
+ *   wrong in BOTH directions: it rejected the user's own face 2/5 on an
+ *   unambiguous same-person pair, and passed a genuinely different woman 2/5.
+ *   3.7-flash was 10/10. Worse for this product specifically, flash-lite
+ *   INVERTS the verdict distribution — 8/10 "failed" where 3.7 returns 9/10
+ *   "partial" — and the retry gate in orchestrator.ts was calibrated on that
+ *   distribution. A critic that fails everything makes the agent throw away and
+ *   regenerate nearly every shot, which is more latency and more spend, not
+ *   less.
+ *
+ *   SHORT TEXT — dead even on quality, and much faster: writeScript 637ms vs
+ *   3476ms, refinePrompt 830ms vs 2120ms. writeScript blocks at the head of
+ *   every run and refinePrompt is the one call a user actively waits on.
+ *
+ * COST IS NOT THE REASON, despite being the obvious one. Text is about 3% of a
+ * run — roughly $0.06 against $1.90 of frames and video — so moving all of it
+ * saves around four cents. The reason is the seconds of dead air before the
+ * first frame appears.
+ */
+const JUDGE_MODEL = process.env.RESTAGE_JUDGE_MODEL ?? 'gemini-3.7-flash';
+/*
+ * Cheap, fast, and only ever on work a human immediately sees and can correct:
+ * the spoken line, the rewrite shown beside the user's own words, and the
+ * derived look bible that is explicitly "offered rather than applied".
+ *
+ * The PLANNER deliberately stays on TEXT_MODEL. Flash-lite matched it on bare
+ * goals (6/6 valid plans, never over the person cap), but every one of those
+ * tests used a bare goal — the TEMPLATE path injects authored shot kinds and
+ * asks the model to preserve an authored person/product ratio, which is exactly
+ * the instruction-following a lite model drops first, and flash-lite spends
+ * zero thinking tokens by default. Grading the 16 templates is the gate on that
+ * switch; until then the planner keeps the model it was tuned against.
+ */
+const FAST_TEXT_MODEL = process.env.RESTAGE_FAST_TEXT_MODEL ?? 'gemini-3.5-flash-lite';
+
 /**
  * Both calls below use responseSchema rather than asking for JSON in the prompt.
  * A model told "reply with JSON" wraps it in prose often enough that the parse
  * becomes the flakiest part of the pipeline; a schema makes the shape the API's
  * problem instead of ours.
  */
-async function structured<T>(prompt: string, schema: object, system?: string): Promise<T> {
+async function structured<T>(
+  prompt: string,
+  schema: object,
+  system?: string,
+  model: string = TEXT_MODEL,
+): Promise<T> {
     const json = await withRetry(
-    () => fetchJson(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
+    () => fetchJson(`${BASE}/models/${model}:generateContent?key=${key()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -759,7 +857,7 @@ export async function critique(args: {
   subject?: ShotKind;
 }): Promise<Critique> {
     const json = await withRetry(
-    () => fetchJson(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
+    () => fetchJson(`${BASE}/models/${JUDGE_MODEL}:generateContent?key=${key()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -859,7 +957,7 @@ export async function verifyIdentity(
   ]);
 
     const json = await withRetry(
-    () => fetchJson(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
+    () => fetchJson(`${BASE}/models/${JUDGE_MODEL}:generateContent?key=${key()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -925,6 +1023,11 @@ export async function refinePrompt(raw: string, purpose: 'goal' | 'edit'): Promi
     `purpose: ${purpose}\nuser's words: ${raw}\n\nRewrite.`,
     { type: 'object', properties: { refined: { type: 'string' } }, required: ['refined'] },
     REFINER_SYSTEM,
+    /* The one call a user actively waits on — they have just stopped dictating
+       and are watching for the rewrite. 830ms against 2120ms, and the composer
+       shows their own words beside it, so a weaker rewrite is visible and
+       correctable rather than silent. */
+    FAST_TEXT_MODEL,
   );
   return refined;
 }
@@ -955,6 +1058,12 @@ export async function writeScript(goal: string, seconds: number): Promise<string
     )} seconds at a natural pace.\n\nWrite the spoken line.`,
     { type: 'object', properties: { script: { type: 'string' } }, required: ['script'] },
     SCRIPT_SYSTEM,
+    /* The biggest single latency win available: 637ms against 3476ms, and this
+       runs strictly before the planner and before any frame, so all of it is
+       dead air at the head of a run. Quality was indistinguishable, the line is
+       shown to the user before anything renders, and the whole block is already
+       wrapped in try/catch. */
+    FAST_TEXT_MODEL,
   );
   return script.trim();
 }
@@ -1032,5 +1141,10 @@ Judge that from what the instruction actually describes, not from where the shot
 falls in the order. An instruction that names a face, an expression, eye contact
 or the creator is a person shot. One that describes only an object, a label or a
 surface is not, even if a person is implied nearby. Copy each id exactly.`,
+    /* Lowest-risk call in this file: text only, no face anywhere near it, and
+       the result is offered rather than applied — the user presses a button,
+       reads what it decided, and edits it. A weaker guess is visible, never
+       silently authoritative. */
+    FAST_TEXT_MODEL,
   );
 }

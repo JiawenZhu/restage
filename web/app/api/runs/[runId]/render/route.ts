@@ -151,11 +151,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     return NextResponse.json({ error: 'sign in to render' }, { status: 401 });
   }
 
-  // Every call below spends money; nothing capped how many a single account
-  // could make.
-  const rate = await consume(uid, 'render');
-  if (!rate.ok) return tooMany(rate);
-
+  /* The quota is taken further down, once the number of CLIPS this request will
+     actually submit is known. Charging one unit here — before the shot count
+     exists — is what let a seven-shot render cost the same as a one-shot one. */
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'nodeId is required' }, { status: 400 });
@@ -242,6 +240,33 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
   if (!firstFrame) return NextResponse.json({ error: 'frame is not readable' }, { status: 400 });
 
   /*
+   * Charge for the clips this will really submit, not for the request.
+   *
+   * Veo bills per job, and both modes submit more than one: a sequence sends a
+   * job per shot, and a single frame longer than the model's eight-second
+   * ceiling is chained into several. Omni is the exception — one call renders
+   * the whole ad, whatever the shot count.
+   *
+   * Taken here rather than at the top of the handler because the count is not
+   * knowable until the lineage has been walked, and taken BEFORE the run is
+   * claimed so a refusal does not leave the run stuck in 'rendering'.
+   */
+  const engineForCost = parsed.data.engine || (run.videoEngine as string) || 'veo';
+  const secondsForCost = Math.max(
+    MIN_CLIP_SECONDS,
+    parsed.data.seconds ?? (run.seconds as number) ?? MAX_CLIP_SECONDS,
+  );
+  const clipCost =
+    engineForCost === 'omni'
+      ? 1
+      : parsed.data.mode === 'sequence'
+        ? shots.length
+        : segmentsFor(secondsForCost, MAX_CLIP_SECONDS);
+
+  const rate = await consume(uid, 'render', clipCost);
+  if (!rate.ok) return tooMany(rate);
+
+  /*
    * Claim the run before spending on it.
    *
    * The status check and the write were separate, so two tabs — or one
@@ -294,6 +319,22 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     shotCount: shots.length,
     createdAt: Date.now(),
   });
+
+  /*
+   * Clips that finished and were billed, kept where the failure handler can
+   * reach them.
+   *
+   * A sequence render submits one Veo job per shot in a loop, and a throw
+   * anywhere in that loop — a quota limit at shot five, a safety refusal, a poll
+   * that never finishes — abandoned every shot that had ALREADY completed. Those
+   * were submitted, waited on, downloaded and paid for, and they went to the
+   * garbage collector while the user was told only "render failed". Hitting the
+   * project quota at shot 5 of 7 therefore cost four clips and returned nothing,
+   * and pressing render again spent four more on the same four shots. That is
+   * the mechanism behind an exhausted quota with no finished ad to show for it.
+   */
+  const paidSegments: Buffer[] = [];
+  let plannedSegments = 0;
 
   void (async () => {
     try {
@@ -433,7 +474,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
           }
         }
 
-        const segments: Buffer[] = [];
+        // The hoisted array, so a failure part-way through this loop still has
+        // the finished shots. Same object, named locally for the code below.
+        const segments = paidSegments;
+        plannedSegments = queue.length;
         let carried = firstFrame;
 
       for (let i = 0; i < queue.length; i++) {
@@ -678,7 +722,51 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
           ? `${raw} Try rendering a different frame — the rest of the run is unaffected.`
           : `Render failed: ${raw}`;
 
-      await videoRef.update({ status: 'failed', criticNotes: friendly });
+      /*
+       * Hand back whatever was already paid for.
+       *
+       * Stopping at shot five of seven does not make the first four worthless —
+       * they are four finished Veo clips the user has been billed for, and a
+       * four-shot ad is a real thing to watch, judge and re-render from. Losing
+       * them is strictly worse for the user than keeping them, and there is no
+       * case where deleting a clip somebody bought is the kinder default.
+       *
+       * Marked achieved so it is playable and downloadable, but the note says
+       * plainly that it is short and why — a truncated ad presented as finished
+       * would be its own bug.
+       */
+      let salvaged = false;
+      if (paidSegments.length > 0) {
+        try {
+          const partial = await stitch(paidSegments, undefined);
+          const key = videoKey(uid, runId, videoRef.id);
+          await putVideo(key, partial);
+          const missing = Math.max(0, plannedSegments - paidSegments.length);
+          await videoRef.update({
+            status: 'achieved',
+            hasAudio: false,
+            captioned: false,
+            partial: true,
+            shotsRendered: paidSegments.length,
+            shotsPlanned: plannedSegments,
+            engineNote:
+              `${paidSegments.length} of ${plannedSegments} shots finished and are kept here — ` +
+              `${missing === 1 ? 'the last shot is' : `the last ${missing} shots are`} missing. ${friendly}`,
+            criticNotes: friendly,
+            videoKey: key,
+            videoUrl: `/api/runs/${runId}/video?nodeId=${videoRef.id}`,
+          });
+          salvaged = true;
+          console.warn(
+            `[render] ${runId} kept ${paidSegments.length}/${plannedSegments} paid segments after failure`,
+          );
+        } catch (salvageErr) {
+          // Falling through to a plain failure is correct here: the clips are
+          // lost either way, and claiming otherwise would be worse.
+          console.error('[render] could not keep the paid segments', salvageErr);
+        }
+      }
+      if (!salvaged) await videoRef.update({ status: 'failed', criticNotes: friendly });
       /*
        * The same conditional shape as the success path, for the same reason.
        *
@@ -693,9 +781,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         .runTransaction(async (tx) => {
           const snap = await tx.get(runRef);
           if (snap.data()?.status !== 'rendering') return;
+          // A salvaged render produced a real, playable clip, so the run is as
+          // complete as the successful path leaves it — sending it back to
+          // 'awaiting-approval' would hide a video the user can already watch.
           tx.update(runRef, {
-            status: priorStatus === 'rendering' ? 'awaiting-approval' : priorStatus,
+            status: salvaged ? 'complete' : priorStatus === 'rendering' ? 'awaiting-approval' : priorStatus,
             updatedAt: Date.now(),
+            ...(salvaged
+              ? {
+                  videoKey: videoKey(uid, runId, videoRef.id),
+                  videoUrl: `/api/runs/${runId}/video?nodeId=${videoRef.id}`,
+                }
+              : {}),
           });
         })
         .catch(() => {});

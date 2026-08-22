@@ -124,6 +124,17 @@ check(P.MODELS.vertex.omni !== P.MODELS.vertex.video, 'Omni 不会偷偷变成�
   '（迁移时正是这么坏的：两个引擎按钮，同一个调用）');
 
 check(P.baseFor('vertex').includes('aiplatform.googleapis.com'), '付费走 aiplatform');
+/* The region IS the quality setting. us-central1 and every other region tested
+   serve only the 2.5 family; `global` serves the 3.x line the BYOK path uses.
+   Pinning a region does not error — it 404s the good models and quietly makes
+   worse ads. */
+check(P.VERTEX_LOCATION === 'global', '付费走 global 端点', `现在是 ${P.VERTEX_LOCATION}`);
+check(!P.baseFor('vertex').includes('us-central1'), 'URL 里没有被钉死的区域');
+check(P.MODELS.vertex.image === P.MODELS['api-key'].image, '两条路用同一个图像模型',
+  P.MODELS.vertex.image);
+check(P.MODELS.vertex.text === P.MODELS['api-key'].text, '两条路用同一个 planner', P.MODELS.vertex.text);
+check(P.MODELS.vertex.judge === P.MODELS['api-key'].judge, '两条路用同一个身份判定模型',
+  '（付费用户不该拿到没测过的那个）');
 check(P.baseFor('api-key').includes('generativelanguage.googleapis.com'), '自带 key 走 generativelanguage');
 check(P.baseFor('vertex').includes(`/projects/${P.VERTEX_PROJECT}/`), 'URL 里带着 project', P.VERTEX_PROJECT);
 check(

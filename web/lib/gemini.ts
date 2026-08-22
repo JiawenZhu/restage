@@ -119,27 +119,25 @@ export async function generateFrame(req: FrameRequest): Promise<{ bytes: Buffer;
     provider,
     model: MODELS[provider].image,
     /*
-     * Each door gets the body it was actually verified with.
+     * One body for both doors now.
      *
-     * AI Studio's gemini-3-pro-image needs telling that an image is wanted, and
-     * takes the aspect ratio as a parameter — prompt text does not change the
-     * output size. Vertex's gemini-2.5-flash-image was confirmed live returning
-     * 200 with `contents` alone, and whether it accepts the same generationConfig
-     * has NOT been checked. Sending an unrecognised field to find out is a 400
-     * on somebody's run, so the shapes stay separate until the Vertex one is
-     * tested; scripts/check-providers.mts is where that gets settled.
+     * These were split, because the Vertex image model had only been verified
+     * with bare `contents` and sending it an unrecognised field to find out
+     * would have been a 400 on somebody's run. Since settled by probing the
+     * global endpoint directly: gemini-3-pro-image there accepts exactly this
+     * generationConfig and returned a 1.6 MB image. Both doors now run the same
+     * model, so there is nothing left to differ about.
+     *
+     * The aspect ratio has to be a parameter. Prompt text does not change the
+     * output size.
      */
-    uid: req.uid,
-    body:
-      provider === 'vertex'
-        ? { contents: [{ role: 'user', parts }] }
-        : {
-            contents: [{ role: 'user', parts }],
-            generationConfig: {
-              responseModalities: ['IMAGE'],
-              imageConfig: { aspectRatio: req.aspect },
-            },
-          },
+    body: {
+      contents: [{ role: 'user', parts }],
+      generationConfig: {
+        responseModalities: ['IMAGE'],
+        imageConfig: { aspectRatio: req.aspect },
+      },
+    },
     label: 'frame',
   });
 

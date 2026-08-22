@@ -11,22 +11,25 @@
  *              measured Veo 3 Fast at 2 RPM and 10 requests A DAY, which is
  *              enough to demo a product and not enough to sell one.
  *
- *   vertex   — {location}-aiplatform.googleapis.com, authenticated with a
- *              service account. Enterprise quota, billed to the project, and
- *              the door a commercial account has to go through.
+ *   vertex   — aiplatform.googleapis.com, authenticated with a service account.
+ *              Enterprise quota, billed to the project, and the door the paid
+ *              plan goes through.
  *
- * THE MODELS ARE NOT THE SAME ON BOTH SIDES, and that is the part worth being
- * careful about. Vertex does not carry the 3.x preview line, so the same
- * function runs on a different model depending on the door. Every measurement
- * this codebase has recorded — the identity scores, the verdict distribution the
- * retry gate is tuned on, the latency figures — was taken on the AI Studio
- * models. None of it automatically transfers. See MODELS below for what that
- * means in practice, per role.
+ * THE MODELS ARE THE SAME ON BOTH SIDES, which took some finding out. The paid
+ * path ran the 2.5 family and made visibly worse ads, and that looked like the
+ * price of enterprise quota. It was not: it was the REGION. us-central1 serves
+ * only 2.5; the `global` endpoint serves the whole 3.x line, verified with real
+ * calls. See the note on VERTEX_LOCATION.
  *
- * NO CROSS-PROVIDER FALLBACK. A commercial run that quietly finishes on the
- * shared free-tier key spends the wrong quota, drains the key everyone else is
- * using, and hides an outage behind a success. When Vertex is down for a
- * commercial user, the run fails and says Vertex is down.
+ * So the difference between the two plans is quota, not quality — which is the
+ * honest thing for a paid plan to be selling. What still differs is small and
+ * enumerated in MODELS: Veo has a different model id on each side, and Omni
+ * exists on AI Studio only.
+ *
+ * NO CROSS-PROVIDER FALLBACK. A paid run that quietly finishes on somebody's
+ * personal key spends the wrong quota and hides an outage behind a success; a
+ * BYOK run that quietly finishes on our infrastructure is us paying for work we
+ * are not billing for. Neither is allowed to happen silently.
  */
 
 if (typeof window !== 'undefined') {
@@ -118,36 +121,38 @@ export const MODELS: Record<Provider, ModelSet> = {
     fastText: process.env.RESTAGE_FAST_TEXT_MODEL ?? 'gemini-3.5-flash-lite',
     omni: process.env.RESTAGE_OMNI_MODEL ?? 'gemini-omni-flash-preview',
   },
+  /*
+   * THE SAME MODELS AS THE KEY PATH.
+   *
+   * These were the 2.5 family, on the belief that Vertex does not carry the 3.x
+   * line — which was true of the region it was pointed at and false of Vertex.
+   * See the note on VERTEX_LOCATION: on the global endpoint every one of these
+   * is served, verified with real calls rather than a docs page.
+   *
+   * That matters most for two of them. The PLANNER writes every prompt the image
+   * and video models are handed, so a weaker planner degrades everything
+   * downstream and no amount of Veo quality rescues a badly-written shot. And
+   * the IMAGE model makes the storyboard frames that Veo animates, so it sets
+   * the ceiling on how the finished ad can possibly look.
+   *
+   * The paid plan now differs from the key plan in quota alone, which is the
+   * honest thing for it to be selling.
+   */
   vertex: {
-    image: process.env.RESTAGE_VERTEX_IMAGE_MODEL ?? 'gemini-2.5-flash-image',
-    /*
-     * The FAST variant, matching the model every timing in this codebase was
-     * measured against — the ~40s per-clip estimate on the canvas, the shot
-     * plan arithmetic, the render-loop pacing.
-     *
-     * NOT YET CONFIRMED LIVE. The only Veo model verified working on this
-     * project's Vertex endpoint is the full `veo-3.1-generate-001`; the fast
-     * variant's exact id needs checking against the project before this is
-     * trusted, and RESTAGE_VERTEX_VIDEO_MODEL exists so that is a config change
-     * rather than a deploy. The full model works and costs more per second,
-     * which on a seven-shot sequence is seven times the difference.
-     */
+    image: process.env.RESTAGE_VERTEX_IMAGE_MODEL ?? 'gemini-3-pro-image',
+    /* The fast variant, matching the model every timing in this codebase was
+       measured against. Confirmed served on the global endpoint alongside
+       veo-3.1-generate-001, which costs more per second — seven times more on a
+       seven-shot sequence. */
     video: process.env.RESTAGE_VERTEX_VIDEO_MODEL ?? 'veo-3.1-fast-generate-001',
-    text: process.env.RESTAGE_VERTEX_TEXT_MODEL ?? 'gemini-2.5-flash',
-    /*
-     * WORTH KNOWING: this is not the model the identity gate was measured on.
-     *
-     * gemini-3.7-flash scored 10/10 on faceMatches across a same-person pair
-     * and a genuinely different woman. gemini-3.5-flash-lite scored 6/10 —
-     * near chance, wrong in both directions — and inverted the verdict
-     * distribution (8/10 "failed" against 3.7's 9/10 "partial"), which alone
-     * would fire the retry gate on nearly every step. gemini-2.5-flash has not
-     * been put through that test at all. Until it is, the commercial path's
-     * identity checking is unmeasured, which is the wrong way round for the
-     * accounts that are paying. scripts/check-providers.mts is the harness.
-     */
-    judge: process.env.RESTAGE_VERTEX_JUDGE_MODEL ?? 'gemini-2.5-flash',
-    fastText: process.env.RESTAGE_VERTEX_FAST_TEXT_MODEL ?? 'gemini-2.5-flash',
+    text: process.env.RESTAGE_VERTEX_TEXT_MODEL ?? 'gemini-3.7-flash',
+    /* The identity gate, on the model it was actually measured on: 10/10 on
+       faceMatches, against 6/10 for 3.5-flash-lite. Running the paying accounts
+       on an unmeasured judge was the wrong way round, and this closes it. */
+    judge: process.env.RESTAGE_VERTEX_JUDGE_MODEL ?? 'gemini-3.7-flash',
+    fastText: process.env.RESTAGE_VERTEX_FAST_TEXT_MODEL ?? 'gemini-3.5-flash-lite',
+    /* Still AI Studio only: Omni is reached through /interactions, which Vertex
+       does not expose. Callers check this rather than falling through to Veo. */
     omni: null,
   },
 };
@@ -178,8 +183,64 @@ function serviceAccountProjectId(): string | undefined {
 }
 
 export const VERTEX_PROJECT = resolveProjectId();
-export const VERTEX_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-export const VERTEX_BASE = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1beta1/projects/${VERTEX_PROJECT}/locations/${VERTEX_LOCATION}/publishers/google`;
+
+/*
+ * `global`, and this is the single most consequential line in the file.
+ *
+ * The paid path was on us-central1 and therefore on the 2.5 model family, which
+ * was understood to be what Vertex offers — the planner, the critic and the
+ * image model all dropped a generation, and the ads came out visibly worse than
+ * the ones made on the AI Studio key. That was never a Vertex limitation. It
+ * was a REGION.
+ *
+ * Probed across five locations, asking each endpoint directly:
+ *
+ *                    3.7-flash  3.5-flash-lite  3-pro-image  2.5-pro
+ *   global               yes         yes            yes         yes
+ *   us-central1           no          no             no         yes
+ *   us-east5              no          no             no         yes
+ *   europe-west4          no          no             no         yes
+ *   us-west1              no          no             no         yes
+ *
+ * Then confirmed with real calls on global: gemini-3.7-flash answered in 1143ms,
+ * gemini-3.5-flash-lite in 616ms, and gemini-3-pro-image returned a 1.6 MB
+ * image. All three Veo variants are served there too.
+ *
+ * So the paid path can run the SAME models as the key path — the quality is the
+ * same, and what the paid plan actually buys is the quota. Which is what it was
+ * always meant to be selling.
+ *
+ * GOOGLE_CLOUD_LOCATION still overrides, because a data-residency requirement is
+ * a real reason to pin a region — but doing so drops to the 2.5 family, and that
+ * is a quality decision rather than a configuration detail.
+ */
+export const VERTEX_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'global';
+
+/* The global endpoint has no region prefix on the host; regional ones do. */
+const VERTEX_HOST =
+  VERTEX_LOCATION === 'global'
+    ? 'https://aiplatform.googleapis.com'
+    : `https://${VERTEX_LOCATION}-aiplatform.googleapis.com`;
+
+export const VERTEX_BASE = `${VERTEX_HOST}/v1beta1/projects/${VERTEX_PROJECT}/locations/${VERTEX_LOCATION}/publishers/google`;
+
+/*
+ * Say so, loudly, if the region has been pinned away from global.
+ *
+ * This is worth a startup warning rather than a comment because of how the
+ * failure presents: pinning a region does not error, it silently 404s the 3.x
+ * models, and whoever notices sees "the paid plan makes worse ads" — which
+ * reads as a model problem, a prompt problem, or a Vertex problem, and sent one
+ * investigation down all three. A line in the log at boot is the cheapest
+ * possible way to keep the next person from repeating it.
+ */
+if (VERTEX_LOCATION !== 'global') {
+  console.warn(
+    `[provider] Vertex is pinned to ${VERTEX_LOCATION}. That region serves only the 2.5 model family — ` +
+      'gemini-3-pro-image, gemini-3.7-flash and gemini-3.5-flash-lite will 404 there, and the paid plan ' +
+      'will produce noticeably worse ads than the BYOK one. Unset GOOGLE_CLOUD_LOCATION to use `global`.',
+  );
+}
 export const STUDIO_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 export function baseFor(provider: Provider): string {

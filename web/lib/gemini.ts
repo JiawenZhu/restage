@@ -104,6 +104,12 @@ export interface RenderRequest {
  * fast-model clip, so nothing should await it inside a request handler — store
  * the operation name and poll from a job.
  */
+function normalizeVeoDuration(sec?: number): number {
+  if (!sec) return 8;
+  const valid = [4, 6, 8];
+  return valid.reduce((prev, curr) => (Math.abs(curr - sec) < Math.abs(prev - sec) ? curr : prev), 8);
+}
+
 export async function submitRender(req: RenderRequest): Promise<{ operation: string }> {
   const instance: Record<string, unknown> = { prompt: req.prompt };
   if (req.firstFrame) {
@@ -120,17 +126,7 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
       instances: [instance],
       parameters: {
         aspectRatio: req.aspect,
-        // Clamped rather than trusted: runs created before the ceiling was known
-        // carry seconds: 15 or 30, and an out-of-bounds value fails the whole
-        // render instead of just being ignored.
-        ...(req.durationSeconds
-          ? {
-              durationSeconds: Math.min(
-                MAX_CLIP_SECONDS,
-                Math.max(MIN_CLIP_SECONDS, Math.round(req.durationSeconds)),
-              ),
-            }
-          : {}),
+        durationSeconds: normalizeVeoDuration(req.durationSeconds),
       },
     }),
   });

@@ -5,6 +5,8 @@ import { adminDb, requireUid } from '@/lib/firebaseAdmin';
 import { downloadRendered, MAX_CLIP_SECONDS, MIN_CLIP_SECONDS, pollRender, submitRender } from '@/lib/gemini';
 import { lastFrameOf, segmentsFor, stitch } from '@/lib/stitch';
 import { motionDirection } from '@/lib/look';
+import { canFinish, finishAd } from '@/lib/finishAd';
+import { timeCaptions, wavDurationSeconds } from '@/lib/captions';
 import { putVideo, signedVideoUrl, videoKey } from '@/lib/r2';
 
 /*
@@ -302,6 +304,57 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         }
       }
 
+      /*
+       * Finish it into an ad.
+       *
+       * Up to this point the output is footage: a person in a scene. An ad has
+       * burned-in captions, because social video is watched on mute, plus a
+       * brand mark and something at the end. Those are typography and motion —
+       * a timeline renders them over the frames.
+       *
+       * The captions need no transcription. The line was written by
+       * writeScript() and shown to the user before they pressed render, so the
+       * text is exact and only the timing has to be measured.
+       *
+       * Finishing is optional by design: it needs Playwright and a Chromium
+       * download, which most serverless runtimes do not have. Without it the
+       * clip still ships, just without captions — a worse ad, not a failure.
+       */
+      let captioned = false;
+      let captionNote: string | null = null;
+      if (run.audioScript && (await canFinish())) {
+        try {
+          const voiceWav = run.audioUrl ? Buffer.from(await (await fetch(run.audioUrl)).arrayBuffer()) : undefined;
+          const spoken = voiceWav ? wavDurationSeconds(voiceWav) : wanted;
+          const captions = await timeCaptions(run.audioScript, Math.min(spoken || wanted, wanted), {
+            voiceName: 'en-US-Chirp3-HD-Aoede',
+            languageCode: 'en-US',
+            speakingRate: 1.05,
+          });
+
+          const finished = await finishAd({
+            clip: finalVideoBytes,
+            voice: voiceWav,
+            captions,
+            endCard: { headline: 'Made with Restage', sub: 'restage.studio' },
+          });
+
+          // The pipeline's own health check. A render(t) that ignored t would
+          // produce a technically valid file of repeated frames.
+          if (finished.uniqueFrameRatio >= 0.5) {
+            finalVideoBytes = finished.video;
+            captioned = true;
+            hasAudio = hasAudio || !!voiceWav;
+          } else {
+            captionNote = 'Captions were skipped: the finishing render produced repeated frames.';
+            console.warn('[render] finishing rejected, unique frames', finished.uniqueFrameRatio);
+          }
+        } catch (finishErr) {
+          captionNote = 'The clip is finished, but captions could not be added.';
+          console.warn('[render] finishing failed', finishErr);
+        }
+      }
+
       const key = videoKey(uid, runId, videoRef.id);
       await putVideo(key, finalVideoBytes);
       /*
@@ -316,7 +369,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
       await videoRef.update({
         status: 'achieved',
         hasAudio,
-        audioNote,
+        captioned,
+        audioNote: audioNote ?? captionNote,
         videoKey: key,
         videoUrl: `/api/runs/${runId}/video?nodeId=${videoRef.id}`,
       });

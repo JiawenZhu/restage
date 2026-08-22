@@ -442,6 +442,15 @@ function Inspector({
           </div>
         )}
 
+        {node.kind === 'video' && node.status === 'achieved' && node.captioned && (
+          <p className="mt-3 flex items-center gap-2 text-[12.5px] text-ink-3">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+              <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M6 12h5M14 12h4M6 15h9" />
+            </svg>
+            Captions burned in — social video is watched on mute.
+          </p>
+        )}
+
         {node.kind === 'video' && node.status === 'generating' && (
           <p className="mt-3 flex items-center gap-2 text-[13px] text-ink-2">
             <span className="rs-cursor block h-[6px] w-[6px] rounded-full bg-accent" />

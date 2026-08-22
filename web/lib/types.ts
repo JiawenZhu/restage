@@ -47,6 +47,10 @@ export interface TreeNode {
   videoKey?: string;
   /** Signed playback URL for a finished clip (7-day expiry). */
   videoUrl?: string;
+  /** Whether the clip was finished into an ad — captions, brand mark, end card. */
+  captioned?: boolean;
+  hasAudio?: boolean;
+  audioNote?: string | null;
 
   verdict?: Verdict;
   /** The critic in its own voice — the most persuasive element in the interface. */

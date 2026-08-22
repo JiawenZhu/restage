@@ -231,6 +231,42 @@ Not built yet.
 Nothing else transfers. Their pipeline assembles stock clips; this one generates
 frames of a specific person.
 
+## Finishing (captions, brand mark, end card)
+
+A rendered clip is footage. An ad has burned-in captions — social video is
+watched on mute — a brand mark, and an end card. `lib/finishAd.ts` adds them by
+extracting the clip to frames, building an HTML timeline over them
+(`lib/adTimeline.ts`), and rendering it back with the
+[saas-commercial-video](file://~/.claude/skills/saas-commercial-video) pipeline.
+
+Two things make this work, and both are worth knowing before changing it:
+
+**The captions need no transcription.** Every other tool in this space runs
+Whisper over its own audio to find out when words are spoken. This product wrote
+the line — `writeScript()` produces it and the workspace shows it before the
+user presses render — so the text is exact and only the timing is unknown.
+Chirp3-HD will not supply it (measured: it accepts SSML `<mark>` and returns
+zero timepoints, while Neural2 returns exact ones), so `lib/captions.ts`
+measures it: each chunk is synthesised alone purely to learn how long it takes
+to say, and those durations are normalised against the real continuous
+synthesis. Character-count weighting was up to 0.34s out on a six-second line,
+which is visibly out of step.
+
+**Footage is legal inside that pipeline even though it says it is not.** Its
+rule is that every animated property must be a pure function of `t`, because
+the renderer seeks and screenshots immediately and never gives the page wall
+time. A `<video>` breaks that; a frame sequence indexed by `floor(t * fps)`
+satisfies it exactly. Measured on the real path: 198 of 240 frames unique
+against its own 60% healthy threshold.
+
+Finishing is **optional by design**. It needs Playwright and a Chromium
+download — roughly 150MB, and it does not run in most serverless runtimes — so
+`canFinish()` checks before a paid render commits to it. Without it the clip
+still ships, just without captions. Set `RESTAGE_RENDERER` if the skill lives
+somewhere other than `~/.claude/skills/`.
+
+For production this belongs in a worker rather than a Next.js route.
+
 ## Known limits
 
 - **Clips are 4–8 seconds per segment.** The model's own words: *"Please provide a value between 4 and 8, inclusive."* Longer clips are whole segments joined by `lib/stitch.ts`, each seeded with the last frame of the one before, so 16s costs two renders and 24s costs three. Requires `ffmpeg` on the server.

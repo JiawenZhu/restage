@@ -226,3 +226,127 @@ body {
 .rs-tint-crit { background: var(--crit-soft); }
 .rs-tint-good { background: var(--good-soft); }
 .rs-tint-accent { background: var(--accent-soft); }
+
+/* ── the public pages ────────────────────────────────────────────────────────
+ *
+ * A scope, not a theme change. The tokens above are the PRODUCT's, and their
+ * values carry real contrast work — every quiet tier in there was measured
+ * against the surface it sits on. Repainting them to restyle a marketing page
+ * would drag the critic verdicts and the tree badges along with it.
+ *
+ * So the landing page opts in to its own palette and nothing else sees it.
+ *
+ * WHY DARK, AND WHY WARM. The product's argument is that its output does not
+ * look generated, and the evidence is the frames themselves. On the old light
+ * ground those frames competed with a white page and a blue button; on a warm
+ * near-black they are the only colour on screen, which is the argument made
+ * visually rather than claimed in a headline. Warm rather than neutral because
+ * the footage is warm — kitchen light, oak, skin — and a cold grey ground makes
+ * all of it look slightly ill.
+ *
+ * The accent is pulled from the footage rather than chosen against it: an
+ * amber that already exists in the generated frames, so nothing on the page is
+ * a colour the product cannot produce.
+ */
+.rs-cinema {
+  --c-ground: #0f0e0d;
+  --c-surface: #171614;
+  --c-raised: #201d1a;
+
+  /* Film leader, not paper. Pure white on near-black glares at this size. */
+  --c-ink: #f6f2ec;
+  --c-ink-2: #a9a29a;
+  /*
+   * The quiet tier, set by measurement rather than by eye.
+   *
+   * Picked at #7b746c first, which looked correct and measured 4.18:1 on the
+   * ground and 3.92 on the surface — under the 4.5 that small text needs, and
+   * this tier carries the 10.5px slate labels and the reassurance line under
+   * the primary button. The product's own tokens above document losing exactly
+   * this argument once already: quiet has to mean quiet, not unreadable.
+   *
+   * Same hue, carried up until it clears both grounds: 5.36 and 5.02. The
+   * hierarchy still separates cleanly — 17.29 / 7.64 / 5.36.
+   */
+  --c-ink-3: #8d867c;
+
+  --c-line: rgba(246, 242, 236, 0.10);
+  --c-line-strong: rgba(246, 242, 236, 0.20);
+
+  --c-accent: #e0873c;
+  --c-accent-quiet: rgba(224, 135, 60, 0.14);
+
+  /*
+   * The product's own tokens, re-pointed inside this scope only.
+   *
+   * The sections below the hero are built from the app's utility classes —
+   * text-ink-2, bg-panel, border-line — because the landing page was originally
+   * a light island that shared the product's palette. Restyling each of them by
+   * hand would be six sections of churn and a seventh thing to forget next time
+   * somebody adds a section.
+   *
+   * Redefining the variables here means every existing class keeps working and
+   * simply resolves to cinematic values. Nothing outside .rs-cinema is touched,
+   * so the studio's measured contrast ratios are exactly as they were.
+   */
+  --bg-canvas: var(--c-ground);
+  --bg-panel: var(--c-surface);
+  --bg-elevated: var(--c-raised);
+  --bg-subtle: var(--c-surface);
+
+  --border-subtle: var(--c-line);
+  --border-strong: var(--c-line-strong);
+
+  --text-primary: var(--c-ink);
+  --text-secondary: var(--c-ink-2);
+  --text-muted: var(--c-ink-2);
+  --text-faint: var(--c-ink-3);
+
+  /* The primary action inverts on a dark ground, exactly as the product's own
+     dark theme does: the extreme value stays the extreme value. */
+  --primary: var(--c-ink);
+  --primary-ink: var(--c-ground);
+
+  --accent: var(--c-accent);
+  --accent-strong: var(--c-accent);
+  --accent-ink: var(--c-accent);
+  --accent-soft: var(--c-accent-quiet);
+
+  background: var(--c-ground);
+  color: var(--c-ink);
+  font-family: var(--font-ui), system-ui, sans-serif;
+  /* Grotesks tighten up at display sizes; this is the resting value. */
+  letter-spacing: -0.011em;
+}
+
+/* The title-card face. Serif at weight 400 — the old page reached for 900 to
+   get presence, which is what you do when the typeface has none of its own. */
+.rs-cinema .rs-display {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+/* Slate markings: the small uppercase labels that sit above a section. Wide
+   tracking is what makes 11px read as deliberate rather than small. */
+.rs-cinema .rs-slate {
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--c-ink-3);
+}
+
+/* Hairlines instead of cards. A border that is almost not there does the same
+   grouping work as a filled box without adding a second surface colour. */
+.rs-cinema .rs-rule {
+  border-color: var(--c-line);
+}
+
+.rs-cinema ::selection {
+  background: var(--c-accent);
+  color: #17140f;
+}

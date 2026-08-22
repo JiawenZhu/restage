@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { ThemeToggle } from '@/components/ThemeToggle';
 
 /*
  * Ported from the design canvas. Two things changed in the move and both are
@@ -59,61 +58,98 @@ const PLANS = [
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-canvas text-ink">
+    /* rs-cinema scopes the whole public page. See globals.css: the product's
+       tokens stay exactly as they are, and nothing in the studio changes. */
+    <div className="rs-cinema min-h-screen">
       {/* nav */}
-      <header className="mx-auto flex max-w-[1440px] items-center justify-between px-6 py-5 sm:px-14">
-        <div className="flex items-center gap-10">
-          <span className="text-[19px] font-extrabold tracking-[-0.03em]">Restage</span>
-          <nav className="hidden items-center gap-6 text-sm font-medium text-ink-2 md:flex">
+      <header className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-6 sm:px-10">
+        <div className="flex items-center gap-11">
+          <span className="rs-display text-[23px]">Restage</span>
+          <nav className="hidden items-center gap-7 text-[13.5px] md:flex" style={{ color: 'var(--c-ink-2)' }}>
             {/* These were spans. A nav that cannot be clicked reads as a
                 mockup, and one of them pointed at a section with no id. */}
-            <a href="#how-it-works" className="hover:text-ink">How it works</a>
-            <a href="#formats" className="hover:text-ink">Formats</a>
-            <a href="#pricing" className="hover:text-ink">Pricing</a>
+            <a href="#how-it-works" className="transition-colors hover:text-[var(--c-ink)]">How it works</a>
+            <a href="#formats" className="transition-colors hover:text-[var(--c-ink)]">Formats</a>
+            <a href="#pricing" className="transition-colors hover:text-[var(--c-ink)]">Pricing</a>
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <ThemeToggle />
-          <Link href="/enroll" className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-ink">
+          {/*
+            The theme toggle is gone from the public page.
+            It switched the marketing site between two grounds while the
+            cinematic treatment only has one, so half its states were broken —
+            and a visitor who has not signed up has nothing to theme yet. It
+            stays in the product, where a person spends hours and the preference
+            is real.
+          */}
+          <Link
+            href="/enroll"
+            className="rounded-full px-5 py-2.5 text-[13.5px] font-semibold transition-opacity hover:opacity-90"
+            style={{ background: 'var(--c-ink)', color: 'var(--c-ground)' }}
+          >
             Start free
           </Link>
         </div>
       </header>
 
       {/* hero */}
-      <section className="mx-auto max-w-[1440px] px-6 pt-10 sm:px-14">
-        <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,600px)_minmax(0,1fr)]">
+      <section className="mx-auto max-w-[1240px] px-6 pb-8 pt-14 sm:px-10 sm:pt-20">
+        <div className="grid items-center gap-14 lg:grid-cols-[minmax(0,540px)_minmax(0,1fr)]">
           <div>
-            <p className="inline-flex items-center gap-2 rounded-chip bg-accent-soft px-3.5 py-1.5 text-[12.5px] font-semibold text-accent-ink">
-              <span className="block h-1.5 w-1.5 rounded-full bg-accent" />
-              Your face — not a stock actor
-            </p>
+            {/* A slate marking, not a pill. The tinted chip with a dot inside it
+                is the most-copied element on the AI-startup landing page; wide
+                tracking on 10.5px does the same "this is a category" job while
+                looking like something off a clapperboard. */}
+            <p className="rs-slate">Your face — not a stock actor</p>
 
-            <h1 className="mt-5 text-[clamp(2.75rem,7vw,4.75rem)] font-black leading-[0.95] tracking-[-0.05em] text-balance">
+            {/*
+              The serif is doing the work the old weight-900 was faking.
+              This was 76px of system-ui at the heaviest weight it has, which is
+              how you get presence out of a typeface that has none of its own. At
+              400 in a display serif the same line carries further and stops
+              shouting — so it can also be a touch larger without dominating.
+            */}
+            <h1 className="rs-display mt-6 text-[clamp(3rem,6.6vw,5.25rem)]">
               Never film another
-              <span className="block text-accent-ink">UGC ad.</span>
+              <span className="block italic" style={{ color: 'var(--c-accent)' }}>UGC ad.</span>
             </h1>
 
-            <p className="mt-6 max-w-lg text-lg leading-relaxed text-ink-2 text-pretty">
+            {/* A deck, then the body. The old page fell straight from 76px to
+                15px with nothing between, and that gap is most of what reads as
+                template. */}
+            <p
+              className="mt-7 max-w-[30rem] text-[17.5px] leading-[1.6] text-pretty"
+              style={{ color: 'var(--c-ink-2)' }}
+            >
               Enrol your face once. Say what the ad needs to do. The agent plans the shots,
               generates the frames, grades its own work, and hands you a finished clip.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link href="/enroll" className="rounded-lg bg-accent-strong px-7 py-3.5 text-[15px] font-semibold text-white">
+            <div className="mt-9 flex flex-wrap items-center gap-3">
+              <Link
+                href="/enroll"
+                className="rounded-full px-7 py-3.5 text-[14.5px] font-semibold transition-opacity hover:opacity-90"
+                style={{ background: 'var(--c-accent)', color: '#17140f' }}
+              >
                 Build your avatar — free
               </Link>
               {/* Pointed at /studio — an empty form behind a sign-in wall, which
                   is the opposite of watching it work. /studio/demo renders the
                   real workspace on a finished run, no account needed. */}
-              <Link href="/studio/demo" className="flex items-center gap-2 rounded-lg border border-line-strong px-6 py-3.5 text-[15px] font-semibold">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
+              <Link
+                href="/studio/demo"
+                className="flex items-center gap-2 rounded-full border px-6 py-3.5 text-[14.5px] font-semibold transition-colors"
+                style={{ borderColor: 'var(--c-line-strong)', color: 'var(--c-ink)' }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
                 Watch it work
               </Link>
             </div>
             {/* "First 20 renders free" was a quota nothing counts, next to a
                 marked placeholder. Both are replaced by what is true. */}
-            <p className="mt-3.5 text-[13px] text-ink-3">Free while in beta · No card needed</p>
+            <p className="mt-4 text-[12.5px]" style={{ color: 'var(--c-ink-3)' }}>
+              Free while in beta · No card needed
+            </p>
           </div>
 
           {/* enrol → clip, the product in one frame */}
@@ -126,17 +162,20 @@ export default function Landing() {
                   alt=""
                   width={92}
                   height={92}
-                  className={`h-[92px] w-[92px] rounded-[10px] object-cover ${f === 'av-front' ? 'border-2 border-accent' : 'border-2 border-line'}`}
+                  className="h-[92px] w-[92px] rounded-[10px] border-2 object-cover"
+                  /* The selected angle was ringed in the product's blue, which
+                     is now the one colour on the page that belongs to nothing. */
+                  style={{ borderColor: f === 'av-front' ? 'var(--c-accent)' : 'var(--c-line)' }}
                 />
               ))}
-              <p className="mt-1 text-center text-[10.5px] font-bold leading-relaxed tracking-[0.1em] text-ink-3">
+              <p className="rs-slate mt-2 text-center leading-relaxed">
                 ENROL
                 <br />
                 ONCE
               </p>
             </div>
 
-            <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="var(--border-strong)" strokeWidth="2" strokeLinecap="round" className="hidden shrink-0 sm:block" aria-hidden>
+            <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="var(--c-line-strong)" strokeWidth="2" strokeLinecap="round" className="hidden shrink-0 sm:block" aria-hidden>
               <path d="M1 7h22M18 3l5 4-5 4" />
             </svg>
 
@@ -153,9 +192,24 @@ export default function Landing() {
                 <span className="rounded-[5px] bg-black/70 px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] text-white">9:16</span>
                 <span className="rounded-[5px] bg-black/70 px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] text-white">0:08</span>
               </div>
-              <div className="absolute bottom-6 right-0 max-w-[250px] translate-x-3 rounded-card bg-panel/95 p-3.5 shadow-[0_14px_34px_-12px_rgba(20,20,26,0.4)] backdrop-blur">
-                <p className="text-[10px] font-extrabold tracking-[0.14em] text-ink-3">THE GOAL</p>
-                <p className="mt-1.5 text-[13.5px] font-medium leading-snug">
+              {/*
+                Dark glass, not a white card.
+                This was bg-panel/95 — the product's white surface — floating on
+                a bright kitchen frame. Against that image it washed out to the
+                point where the quote inside it was unreadable, which is a poor
+                showing for the element whose whole job is to demonstrate that
+                you type one sentence.
+              */}
+              <div
+                className="absolute bottom-6 right-0 max-w-[250px] translate-x-3 rounded-[14px] border p-3.5 backdrop-blur-md"
+                style={{
+                  background: 'rgba(15, 14, 13, 0.82)',
+                  borderColor: 'var(--c-line-strong)',
+                  boxShadow: '0 18px 40px -14px rgba(0,0,0,0.7)',
+                }}
+              >
+                <p className="rs-slate">THE GOAL</p>
+                <p className="mt-2 text-[13.5px] leading-snug" style={{ color: 'var(--c-ink)' }}>
                   &ldquo;An ad where I actually use it, in my kitchen.&rdquo;
                 </p>
               </div>
@@ -169,8 +223,8 @@ export default function Landing() {
         <div className="rounded-[22px] bg-[#14141a] p-8 text-white sm:p-14">
           <div className="grid gap-12 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] lg:items-center">
             <div>
-              <p className="text-xs font-extrabold tracking-[0.16em] text-[#6fa8ec]">WHY IT DOESN&rsquo;T LOOK GENERATED</p>
-              <h2 className="mt-3.5 text-[clamp(1.75rem,3vw,2.5rem)] font-extrabold leading-[1.07] tracking-[-0.035em]">
+              <p className="text-xs font-extrabold tracking-[0.16em] text-[var(--c-accent)]">WHY IT DOESN&rsquo;T LOOK GENERATED</p>
+              <h2 className="rs-display mt-3.5 text-[clamp(1.75rem,3vw,2.5rem)]">
                 It gets it wrong on purpose, cheaply, before it renders anything.
               </h2>
               <p className="mt-4 text-base leading-relaxed text-[#b3b3ba]">
@@ -210,7 +264,7 @@ export default function Landing() {
                 <div className="relative shrink-0">
                   <div className="absolute -inset-1.5 rounded-xl border-2 border-accent" />
                   <Image src="/img/f3.jpg" alt="" width={76} height={132} className="h-[132px] w-[76px] rounded-[7px] border-2 border-accent object-cover opacity-45" />
-                  <span className="absolute inset-0 flex items-center justify-center text-center text-[8.5px] font-extrabold tracking-[0.06em] text-[#6fa8ec]">
+                  <span className="absolute inset-0 flex items-center justify-center text-center text-[8.5px] font-extrabold tracking-[0.06em] text-[var(--c-accent)]">
                     GENERATING
                   </span>
                 </div>
@@ -236,7 +290,7 @@ export default function Landing() {
 
       {/* how it works */}
       <section id="how-it-works" className="mx-auto mt-28 max-w-[1440px] px-6 sm:px-14">
-        <h2 className="text-[clamp(2rem,4vw,2.75rem)] font-extrabold tracking-[-0.035em]">
+        <h2 className="rs-display text-[clamp(2rem,4vw,2.75rem)]">
           Two things you do. The rest is watching.
         </h2>
         <p className="mt-1.5 text-[17.5px] text-ink-2">Enrolment happens once. After that it is one sentence per ad.</p>
@@ -258,7 +312,7 @@ export default function Landing() {
       <section id="formats" className="mx-auto mt-28 max-w-[1440px] px-6 sm:px-14">
         <div className="grid gap-12 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] lg:items-center">
           <div>
-            <h2 className="text-[clamp(1.75rem,3.2vw,2.5rem)] font-extrabold leading-[1.08] tracking-[-0.035em]">
+            <h2 className="rs-display text-[clamp(1.75rem,3.2vw,2.5rem)]">
               Vertical or wide. Framed for it from step one.
             </h2>
             <p className="mt-3 text-[16.5px] leading-relaxed text-ink-2">
@@ -318,7 +372,7 @@ export default function Landing() {
 
       {/* pricing */}
       <section id="pricing" className="mx-auto mt-28 max-w-[1440px] px-6 sm:px-14">
-        <h2 className="text-[clamp(2rem,4vw,2.75rem)] font-extrabold tracking-[-0.035em]">Pricing</h2>
+        <h2 className="rs-display text-[clamp(2rem,4vw,2.75rem)]">Pricing</h2>
         <p className="mt-1.5 text-[17.5px] text-ink-2">
           A render is one goal taken from plan to finished clip, retries included.
         </p>
@@ -380,7 +434,7 @@ export default function Landing() {
           <Image src="/img/w4.jpg" alt="" width={1320} height={380} className="h-[320px] w-full object-cover sm:h-[380px]" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#14141a]/95 via-[#14141a]/75 to-[#14141a]/10" />
           <div className="absolute inset-0 flex max-w-2xl flex-col justify-center px-8 text-white sm:px-14">
-            <h2 className="text-[clamp(1.75rem,4vw,2.875rem)] font-extrabold leading-[1.05] tracking-[-0.035em]">
+            <h2 className="rs-display text-[clamp(1.75rem,4vw,2.875rem)]">
               Three photos. Then never film again.
             </h2>
             <p className="mt-3.5 text-[17.5px] leading-relaxed text-white/85">

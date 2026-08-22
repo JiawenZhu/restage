@@ -4,6 +4,10 @@ dist/
 .env
 .env.*
 *.local
+# The template is the one env file that SHOULD be committed — it documents the
+# shape and carries no values. Listed after `.env.*` and after `*.local`,
+# because a later rule wins and `.env.example` is caught by the first.
+!.env.example
 
 # Generated media — regenerate rather than commit
 /out/

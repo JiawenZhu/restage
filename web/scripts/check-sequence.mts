@@ -82,6 +82,25 @@ console.log(`\n  否掉链条中间的 s2alt 之后: ${afterReject.split(',').jo
 const okReject = afterReject === 's1,s4';
 console.log(`  ${okReject ? '✅' : '❌'} 否掉中间帧：跨过它继续往下走，不会把后面的步骤一起丢掉`);
 
+/*
+ * 评审判定 failed 的帧，也不该进成片。
+ *
+ * 之前只挡了 discarded / removedFromSequence / rejected。discarded 说的是「失败
+ * 了但还会重试一次」；重试次数用完之后那一帧仍然是 failed，而 discarded 是
+ * false —— 于是它直接走进了要渲染的序列。
+ *
+ * 真实的 run 里就是这样：第 7 步的帧是 failed，它是链条的最后一环，成片就以它
+ * 收尾。代理自己看过那张图、说它没达成要求，产品照样把它渲染成了结尾。
+ */
+await nodes.doc('s4').update({ status: 'failed' });
+all = await read();
+const afterFail = lineageOf(all).map((n) => n.id).join(',');
+console.log(`\n  评审判 s4 failed 之后: ${afterFail === '' ? '(空)' : afterFail.split(',').join(' -> ')}`);
+const okFail = !afterFail.split(',').includes('s4');
+console.log(`  ${okFail ? '✅' : '❌'} 评审判 failed 的帧不会被渲染进成片（重试次数用完的那种）`);
+await nodes.doc('s4').update({ status: 'achieved' });
+all = await read();
+
 /* 过时的清单里不该混进已渲染的片子。video 节点用 99 当哨兵步号，之前直接把它
    报给用户，于是界面上出现「第 99 步已过时」，重建报价也把它算成一次生成。 */
 await nodes.doc('vid').set({

@@ -108,7 +108,31 @@ export function lineageOf(nodes: LineageNode[]): LineageNode[] {
  * gain. A plain function reads nearly as well and breaks nothing.
  */
 export function isOutOfSequence(n: LineageNode): boolean {
-  return n.discarded === true || n.removedFromSequence === true || n.status === 'rejected';
+  return (
+    n.discarded === true ||
+    n.removedFromSequence === true ||
+    n.status === 'rejected' ||
+    /*
+     * A frame the CRITIC failed, with its retry spent.
+     *
+     * The comment above always said "an attempt the orchestrator abandoned",
+     * and this is precisely that — but it was not in the list. `discarded`
+     * covers a failure that earned a retry; a failure that had already used its
+     * one retry stays `failed` with `discarded: false`, and so walked straight
+     * into the rendered sequence.
+     *
+     * Seen in a real run: step 7's frame was `failed`, it was the last link in
+     * the chain, and the finished ad ended on it. The agent looked at that
+     * picture, said it did not achieve the shot, and the product rendered it
+     * anyway as the closing beat — which is the "the model is fine but the
+     * video is bad" complaint, arriving through the one door nobody had shut.
+     *
+     * Skipping it costs a shot. Rendering it costs the ad. The frame stays on
+     * the canvas either way, and Reconnect puts it back for anyone who
+     * disagrees with the critic.
+     */
+    n.status === 'failed'
+  );
 }
 
 /** Every descendant of a node, in step order. */

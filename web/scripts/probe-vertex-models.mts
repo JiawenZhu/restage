@@ -43,11 +43,20 @@ const IMAGE = [
   'gemini-2.5-flash-image',
   'imagen-4.0-generate-001',
 ];
+/*
+ * Vertex uses GA naming (-001); AI Studio uses -preview. They are not aliases —
+ * veo-3.1-fast-generate-preview genuinely does not exist on Vertex, in any
+ * region tested. The pairing is by generation and tier, not by id:
+ *
+ *   AI Studio  veo-3.1-fast-generate-preview  ⟷  Vertex  veo-3.1-fast-generate-001
+ *
+ * Confirmed by a real render on global: 57s, 1.72 MB, 720x1280, 24fps, h264+AAC.
+ */
 const VIDEO = [
-  'veo-3.1-generate-001',
   'veo-3.1-fast-generate-001',
+  'veo-3.1-generate-001',
   'veo-3.1-fast-generate-preview',
-  'veo-3.0-generate-001',
+  'veo-3.1-generate-preview',
   'veo-3.0-fast-generate-001',
 ];
 
@@ -65,17 +74,29 @@ console.log(`project ${VERTEX_PROJECT} · location ${VERTEX_LOCATION}\n`);
  * gemini-2.5-flash — the model the paid path runs on right now — came back 404
  * from a probe run seconds after a real call to it had succeeded.)
  *
- * So ask the generation endpoint with a DELIBERATELY EMPTY body and read which
- * refusal comes back. A model that is not served answers 404 NOT_FOUND. A model
- * that is served gets far enough to validate the request and answers 400. Both
- * are free: nothing is generated either way.
+ * So ask the generation endpoint with a body that is STRUCTURALLY VALID but
+ * incomplete, and read which refusal comes back. A model that is not served
+ * answers 404 NOT_FOUND. A model that is served gets past the lookup and fails
+ * validation with a 400. Both are free: nothing is generated either way.
+ *
+ * The body has to be shaped per endpoint, and getting that wrong is how this
+ * script lied once already. An entirely empty `{}` to predictLongRunning is
+ * rejected with 400 "Empty instances." BEFORE the model is looked up, so every
+ * Veo id came back "served" — including veo-3.1-fast-generate-preview, which a
+ * real submission then 404'd. `instances: [{}]` clears that first check and
+ * reaches the lookup, which is the question actually being asked.
  */
+const PROBE_BODY: Record<string, unknown> = {
+  generateContent: {},
+  predictLongRunning: { instances: [{}], parameters: {} },
+};
+
 async function exists(model: string, method: string): Promise<{ ok: boolean; note: string }> {
   try {
     const res = await fetch(`${VERTEX_BASE}/models/${model}:${method}`, {
       method: 'POST',
       headers: auth,
-      body: JSON.stringify({}),
+      body: JSON.stringify(PROBE_BODY[method] ?? {}),
     });
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string; status?: string } };
     const msg = scrub(body.error?.message ?? '').slice(0, 68);

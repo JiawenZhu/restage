@@ -140,10 +140,25 @@ export const MODELS: Record<Provider, ModelSet> = {
    */
   vertex: {
     image: process.env.RESTAGE_VERTEX_IMAGE_MODEL ?? 'gemini-3-pro-image',
-    /* The fast variant, matching the model every timing in this codebase was
-       measured against. Confirmed served on the global endpoint alongside
-       veo-3.1-generate-001, which costs more per second — seven times more on a
-       seven-shot sequence. */
+    /*
+     * The SAME MODEL as the key path, under Vertex's name for it.
+     *
+     * This is the one role where the two doors cannot share an id. AI Studio
+     * names Veo with a -preview suffix and Vertex with GA -001, and they are not
+     * aliases: veo-3.1-fast-generate-preview genuinely 404s on Vertex, in every
+     * region tested. So the pairing is by generation and tier —
+     *
+     *   AI Studio  veo-3.1-fast-generate-preview
+     *   Vertex     veo-3.1-fast-generate-001
+     *
+     * — which is Veo 3.1 Fast on both sides. Vertex serves exactly two Veo ids,
+     * this and the full veo-3.1-generate-001; the full one costs more per second,
+     * which on a seven-shot sequence is seven times the difference.
+     *
+     * Verified with a real render on global rather than inferred: 57 seconds,
+     * 1.72 MB, 720x1280, 24fps, h264 with an AAC track — the same shape the key
+     * path produces.
+     */
     video: process.env.RESTAGE_VERTEX_VIDEO_MODEL ?? 'veo-3.1-fast-generate-001',
     text: process.env.RESTAGE_VERTEX_TEXT_MODEL ?? 'gemini-3.7-flash',
     /* The identity gate, on the model it was actually measured on: 10/10 on

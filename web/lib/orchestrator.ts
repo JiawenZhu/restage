@@ -19,8 +19,8 @@ import { randomUUID } from 'node:crypto';
 import { adminDb, adminStorage } from './firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { critique, generateFrame, planRun, verifyIdentity, writeScript } from './gemini';
-import type { Aspect, PlanStep } from './types';
-import { continuationDirection, establishingDirection } from './look';
+import type { Aspect, LookBible, PlanStep, ShotKind } from './types';
+import { objectShotDirection, personShotDirection } from './look';
 
 /** One retry. A second failure keeps both attempts visible and moves on, because
  *  a loop that retries forever is a bill, not a feature. */
@@ -394,17 +394,40 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
       .map((d) => d.data().instruction as string | undefined)
       .filter((x): x is string => !!x);
 
-    const steps = await planRun(args.goal, args.aspect, args.seconds, args.templateId, avoid);
+    const { steps, look } = await planRun(args.goal, args.aspect, args.seconds, args.templateId, avoid);
     await touch({
       status: 'running',
+      /* The look is stored on the RUN, not on a step. Shots are photographed
+         independently now, so there is no previous frame to inherit a location
+         or a wardrobe from — the contract has to live somewhere every shot can
+         read it, and be re-readable when a stale step is rebuilt weeks later. */
+      look,
       plan: steps.map((s) => ({ ...s, status: 'pending' })),
     });
 
+    /*
+     * parentId is now the NARRATIVE order, not the generation source.
+     *
+     * Decoupling those two is the whole change. The canvas still reads left to
+     * right as a storyboard and the renderer still walks it in order — but a
+     * shot is no longer MADE by editing the frame to its left. A person shot is
+     * built from the enrolment captures whether it falls at step one or step
+     * six, so it is always one generation deep instead of six; a shot with no
+     * face in it is built from a clean prompt and the look, and inherits
+     * nothing at all.
+     *
+     * What that buys: the fifth shot of a person is now exactly as close to the
+     * enrolment photo as the first was.
+     */
     let parentId = 'root';
     // Typed loosely on purpose: Buffer's generic differs between what
     // Buffer.from produces here and what the image call returns, and the only
     // thing either end cares about is the bytes.
     let parentImage: { data: Uint8Array; mimeType: string } = avatar;
+    /* The first product shot, kept as the anchor for later product and detail
+       shots so the item itself stays consistent. A reference, not a base to
+       edit — which is what keeps these shallow. */
+    let productAnchor: { data: Uint8Array; mimeType: string } | null = null;
 
     for (const step of steps) {
       // Typed rather than `string`: an unhandled status would otherwise render
@@ -447,25 +470,42 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
               ? `\n\nA previous attempt at this step was judged ${lastCritique.verdict}. Fix specifically this: ${lastCritique.retryHint || lastCritique.notes}\nChange nothing else.`
               : '';
 
-          // The first step builds the opening frame from the avatar. Every step
-          // after that EDITS the previous frame — passing it as the first
-          // reference is what a real run proved necessary: with only the avatar
-          // as input, each step repainted the whole scene, the critic objected
-          // that nothing was refined in place, and the retry repeated the same
-          // mistake because it had the same inputs.
-          const isFirst = parentId === 'root';
-          const refs = isFirst
+          /*
+           * WHAT THIS SHOT IS MADE FROM, decided by what it is OF.
+           *
+           * Every step used to edit the frame before it, so the person at step
+           * six was six reinterpretations deep and the face had stopped being
+           * theirs. Now:
+           *
+           *   person  → built from the ENROLMENT CAPTURES, always. A person shot
+           *             is one generation from the real photograph whether it
+           *             falls at step one or step six.
+           *   others  → built from a clean prompt and the look. No face in the
+           *             frame means no identity to lose, so these cost nothing
+           *             and can be made at full quality.
+           *
+           * The product shots share an anchor so the item itself stays
+           * consistent — but as a REFERENCE, not a base to edit, which is what
+           * keeps them shallow. Continuity across the whole ad comes from the
+           * look contract now, written once by the planner and handed to every
+           * shot, the way a look book works on a real production.
+           */
+          const kind: ShotKind = step.shot ?? 'person';
+          const isPerson = kind === 'person';
+
+          const refs = isPerson
             ? [avatar, ...extraViews]
-            : [parentImage, avatar, ...extraViews];
-          const prompt = isFirst
-            ? `Build the opening frame of a high-converting cinematic UGC ad, ${args.aspect}. ` +
-              `${establishingDirection()}\n` +
-              `${step.instruction}\n\n` +
-              `${retryNote}`
-            : `The FIRST image is the current frame. Apply exactly one change to it:\n` +
-              `${step.instruction}\n\n` +
-              `Keep everything else in the frame — the scene, clothing, camera position and props — unchanged. ` +
-              `The OTHER images are the identity references, including the profile captures.\n${continuationDirection()}${retryNote}`;
+            : productAnchor
+              ? [productAnchor]
+              : [];
+
+          const prompt = isPerson
+            ? `${personShotDirection(look)}\n\nTHE SHOT: ${step.instruction}${retryNote}`
+            : `${objectShotDirection(kind, look)}\n\n` +
+              (refs.length
+                ? 'The image provided shows this product as it has already appeared in this ad. Match it exactly.\n'
+                : '') +
+              `THE SHOT: ${step.instruction}${retryNote}`;
 
           const frame = await generateFrame({ prompt, aspect: args.aspect, refs });
           const url = await uploadToStorage(
@@ -510,11 +550,21 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
               avatar,
               before: parentImage,
               after: { data: frame.bytes, mimeType: frame.mimeType },
-              // On the opening frame `before` IS the enrolment photo, so there
-              // is no previous shot to be continuous with.
-              isContinuation: !isFirst,
+              /* Nothing is an edit of anything any more, so there is no
+                 "did you change only the one thing" question to ask. What used
+                 to be enforced after the fact by the continuity check is
+                 enforced before the fact by the look contract, which every shot
+                 is generated against. */
+              isContinuation: false,
+              /* A shot with no face in it has no identity to judge. Asking
+                 anyway returns faceMatches:false on a photograph of a coffee
+                 cup, which reads as a wrong face, which triggers a retry that
+                 produces another coffee cup — a paid loop that can never pass. */
+              subject: kind,
             }),
-            verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType }, extraViews),
+            isPerson
+              ? verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType }, extraViews)
+              : Promise.resolve({ samePerson: true, differences: '' }),
           ]);
 
           // Two real runs settled how this gate works. Keyed on `failed` alone,
@@ -538,7 +588,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
           // person outright — verified), not subtle drift. Subtle drift needs
           // face-embedding comparison (ArcFace-class), which is the Python
           // worker's first job. Until then the human Reject is the last line.
-          const wrongFace = !identity.samePerson || !verdict.faceMatches;
+          const wrongFace = isPerson && (!identity.samePerson || !verdict.faceMatches);
           /*
            * A frame that drifted counts as unsatisfactory even when the edit
            * itself landed perfectly.
@@ -552,7 +602,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
            * ground truth. That is the mechanism behind six frames that do not
            * look like one continuous take.
            */
-          const drifted = !isFirst && verdict.continuityHeld === false;
+          const drifted = false; // superseded by the look contract; see isContinuation above
           const unsatisfactory =
             wrongFace ||
             drifted ||
@@ -575,6 +625,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
 
           await nodeRef.update({
             frameUrl: url,
+            shot: kind,
             verdict: verdict.verdict,
             criticNotes: verdict.notes,
             criticRubric: verdict.rubric,
@@ -755,15 +806,22 @@ export async function regenerateNode(args: {
 
   void (async () => {
     try {
-      const isFromAvatar = parentId === 'root';
-      const prompt = isFromAvatar
-        ? `Build the opening frame of a UGC ad, ${run.aspect}.\n${args.instruction}\n\n${establishingDirection()}`
-        : `The FIRST image is the current frame. Apply exactly one change to it:\n${args.instruction}\n\nKeep everything else in the frame unchanged. The OTHER images are the identity references.\n${continuationDirection()}`;
+      /* Regenerating obeys the same rule as generating: what the shot is OF
+         decides what it is made from. A redo of a product shot has no business
+         being handed a face, and a redo of a person shot goes back to the
+         enrolment captures rather than re-editing whatever is on the canvas. */
+      const kind: ShotKind = ((source.shot as ShotKind | undefined) ?? 'person');
+      const isPerson = kind === 'person';
+      const look = (run.look ?? null) as LookBible | null;
+
+      const prompt = isPerson
+        ? `${personShotDirection(look)}\n\nTHE SHOT: ${args.instruction}`
+        : `${objectShotDirection(kind, look)}\n\nTHE SHOT: ${args.instruction}`;
 
       const frame = await generateFrame({
         prompt,
         aspect: run.aspect,
-        refs: isFromAvatar ? [avatarImage, ...extraViews] : [parentImage, avatarImage, ...extraViews],
+        refs: isPerson ? [avatarImage, ...extraViews] : [],
       });
 
       const [verdict, identity] = await Promise.all([
@@ -848,19 +906,24 @@ export async function rebuildStaleSteps(runId: string, uid: string): Promise<num
 
         await nodesRef.doc(node.id).update({ status: 'generating', stale: true });
 
-        const parentImage = await resolveImageInput(parentUrl);
         const instruction = (node.instruction as string) ?? 'Continue the sequence.';
-        const isFirst = parentId === 'root';
+        const kind: ShotKind = ((node.shot as ShotKind | undefined) ?? 'person');
+        const isPerson = kind === 'person';
+        const look = (run.look ?? null) as LookBible | null;
 
-        const prompt = isFirst
-          ? `Build the opening frame of a UGC ad, ${run.aspect}.\n${instruction}\n\n${establishingDirection()}`
-          : `The FIRST image is the current frame. Apply exactly one change to it:\n${instruction}\n\n` +
-            `Keep everything else in the frame unchanged. The OTHER images are the identity references.\n${continuationDirection()}`;
+        /* A rebuild is just a re-shoot, and it reads the same look the original
+           was held to — which is why the look lives on the run rather than on
+           whichever frame happened to precede this one. Rebuilding used to mean
+           re-editing the parent, so a rebuilt step inherited whatever the parent
+           had drifted to. */
+        const prompt = isPerson
+          ? `${personShotDirection(look)}\n\nTHE SHOT: ${instruction}`
+          : `${objectShotDirection(kind, look)}\n\nTHE SHOT: ${instruction}`;
 
         const frame = await generateFrame({
           prompt,
           aspect: run.aspect,
-          refs: isFirst ? [avatar] : [parentImage, avatar],
+          refs: isPerson ? [avatar] : [],
         });
 
         const url = await uploadToStorage(
@@ -875,13 +938,20 @@ export async function rebuildStaleSteps(runId: string, uid: string): Promise<num
             instruction,
             rationale: (node.rationale as string) ?? 'Rebuilt after the sequence changed.',
             avatar,
-            before: parentImage,
+            /* The enrolment photo, not the parent frame. A rebuild is a fresh
+               shot against the look, so there is no "before" for it to be an
+               edit of — and passing the parent invited the critic to judge it
+               as one. */
+            before: avatar,
             after: { data: frame.bytes, mimeType: frame.mimeType },
+            subject: kind,
           }),
-          verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType }),
+          isPerson
+            ? verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType })
+            : Promise.resolve({ samePerson: true, differences: '' }),
         ]);
 
-        const wrongFace = !identity.samePerson || !verdict.faceMatches;
+        const wrongFace = isPerson && (!identity.samePerson || !verdict.faceMatches);
         await nodesRef.doc(node.id).update({
           verdict: wrongFace ? 'failed' : verdict.verdict,
           criticNotes: wrongFace

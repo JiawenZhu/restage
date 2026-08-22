@@ -40,13 +40,16 @@ export async function POST(req: Request) {
   }
 
   try {
-    const steps = await planRun(
+    const { steps, look } = await planRun(
       parsed.data.goal,
       parsed.data.aspect,
       parsed.data.seconds,
       parsed.data.templateId
     );
-    return NextResponse.json({ steps });
+    /* The look travels with the plan. It is the contract that makes shots taken
+       independently read as one shoot, so a preview that shows the steps without
+       it is showing half the plan. */
+    return NextResponse.json({ steps, look });
   } catch (err) {
     // The adapter already scrubs `key=`; this keeps the response body from
     // carrying anything else the caller has no business seeing.

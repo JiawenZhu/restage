@@ -293,6 +293,15 @@ function PlanPanel({ run }: { run: Run }) {
                 {glyph?.icon}
               </span>
               <div className="min-w-0">
+                {/* What this shot is OF, when it is not the person.
+                    The plan is the first place the mix is visible, and the mix
+                    is the thing that decides whether this comes out as an ad or
+                    as six photographs of one face. */}
+                {s.shot && s.shot !== 'person' && (
+                  <span className="mb-1 inline-block rounded bg-subtle px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.09em] text-ink-3">
+                    {s.shot}
+                  </span>
+                )}
                 <p className={`text-[13.5px] font-semibold ${s.status === 'pending' ? 'text-ink-3' : ''}`}>{s.instruction}</p>
                 {/* Never truncated to nothing: the rationale is what proves the
                     agent reasoned rather than pattern-matched. */}

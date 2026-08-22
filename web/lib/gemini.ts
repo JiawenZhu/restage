@@ -18,6 +18,7 @@ if (typeof window !== 'undefined') {
 
 import { getTemplateById } from './templates';
 import { VIDEO_NEGATIVE_PROMPT } from './look';
+import type { LookBible, ShotKind } from './types';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -396,29 +397,62 @@ async function structured<T>(prompt: string, schema: object, system?: string): P
   return JSON.parse(text) as T;
 }
 
-const PLANNER_SYSTEM = `You plan UGC video ads that star one real person whose face is already enrolled.
+const PLANNER_SYSTEM = `You cut UGC video ads that feature one real person whose
+face is already enrolled.
 
-You are given an outcome, not a shot list, and you decompose it into 5-7 ordered
-edits to a single still frame. The frame is generated and re-generated; only the
-last approved one is rendered to video. So every step must be a visible change to
-one image, not an instruction about editing or pacing.
+You are given an outcome, not a shot list, and you turn it into 5-7 ordered SHOTS.
+These are separate photographs that will be cut together — not edits to one frame.
 
-For each step write:
-- label: 2-4 words naming the change, for a thumbnail caption ("Kitchen scene",
-  "Pick up bottle", "Window light"). A user glancing at the canvas reads only
-  this, so it must say what the step is FOR.
-- instruction: what changes in the frame, imperative, one line
-- rationale: WHY, in terms of what a viewer would notice. This is read by the
-  user and is what shows you reasoned rather than pattern-matched. Never generic.
+WHAT EACH SHOT IS OF. Every shot declares a kind, and this is the most important
+decision you make:
 
-Order matters: composition and setting before light, light before expression,
-crop last, because each later step depends on the earlier one surviving.`;
+  person  — the creator is in frame.
+  product — the item is the subject. Hands may hold or steady it. No face, no head.
+  detail  — macro. Texture, lettering, a mechanism, the thing turning. Nobody.
+  scene   — the place. Establishing, atmosphere, b-roll. Nobody in frame.
 
-export interface PlannedStep {
+AT MOST HALF THE SHOTS MAY BE 'person', and about a third is better. This is not a
+stylistic preference. A real advertisement is mostly things that are not faces:
+the product in a hand, the label, the steam, the room. A cut of six medium shots
+of one person is a photo set, not an ad — and every extra shot of a face is
+another chance for that face to stop being the user's.
+
+A shot that is not 'person' must be writable WITHOUT the person. If the
+instruction says "their hands" or "her face" or "the creator", it is a person shot
+wearing a disguise. Plain "hands" or "a hand" on a product shot is good.
+
+Order it like an edit, not a checklist: open on something that earns attention,
+put a human beat where the ad needs warmth or credibility, put the detail where a
+viewer would want a closer look, and land the payoff last.
+
+For each shot write:
+- shot: one of the four kinds above
+- label: 2-4 words for a thumbnail caption ("Steam rising", "Label close", "First
+  sip"). Somebody glancing at the canvas reads only this.
+- instruction: what is IN the frame, imperative, one line. Describe the
+  photograph, not an editing operation.
+- rationale: why a viewer would care. Read by the user, and it is what shows you
+  reasoned rather than pattern-matched. Never generic, never a restatement.
+
+YOU ALSO WRITE THE LOOK, once, for the whole ad.
+
+These shots are photographed independently, so nothing is inherited between them.
+The look is the contract that makes them read as one afternoon in one place:
+location, wardrobe, light, palette, and the product itself described concretely
+enough that every shot of it agrees. Be specific — "a pale oak kitchen counter
+with a window to the left" is usable; "a modern kitchen" is not.`;
+
+export interface PlannedShot {
   stepNo: number;
+  shot: ShotKind;
   label: string;
   instruction: string;
   rationale: string;
+}
+
+export interface PlannedRun {
+  steps: PlannedShot[];
+  look: LookBible;
 }
 
 export async function planRun(
@@ -428,7 +462,7 @@ export async function planRun(
   templateId?: string,
   /** What this user has rejected before. See the taste block below. */
   avoid?: string[],
-): Promise<PlannedStep[]> {
+): Promise<PlannedRun> {
   const tpl = templateId ? getTemplateById(templateId) : undefined;
 
   /*
@@ -449,8 +483,17 @@ export async function planRun(
       `Look: ${tpl.lightingAndColor}\n` +
       `Camera: ${tpl.cameraMotion}\n` +
       `Detail to preserve: ${tpl.secondaryPhysics}\n\n` +
-      `This template's authored choreography, in order:\n` +
-      tpl.presetSteps.map((s, i) => `  ${i + 1}. ${s.label} — ${s.instruction} (why: ${s.rationale})`).join('\n') +
+      `This template's authored choreography, in order. The tag in brackets is what each ` +
+      `shot is OF, and that balance is deliberate — keep roughly the same mix:\n` +
+      /* WITH THE SHOT KIND. Leaving it out made the whole shot-list rewrite
+         decorative: the templates were re-cut so that only a third of their
+         beats have a face in them, and then this handed the planner nothing but
+         prose and let it re-infer the kinds — which, for a model that has spent
+         its life writing person shots, means inferring 'person'. The authored
+         ratio is the point, so the ratio has to be legible. */
+      tpl.presetSteps
+        .map((s, i) => `  ${i + 1}. [${s.shot}] ${s.label} — ${s.instruction} (why: ${s.rationale})`)
+        .join('\n') +
       `\n\nStart from that sequence. Keep its order and its intent, and rewrite each ` +
       `step so it serves the user's stated goal and the specific product they are ` +
       `showing. Drop a step that cannot apply and add one the goal clearly needs, ` +
@@ -476,11 +519,23 @@ export async function planRun(
         `and do not repeat an instruction from that list verbatim.`
       : '';
 
-  const { steps } = await structured<{ steps: PlannedStep[] }>(
-    `Goal: ${goal}\nOutput format: ${aspect}, ${seconds} seconds.${templateContext}${tasteContext}\n\nPlan the edits.`,
+  const { steps, look } = await structured<PlannedRun>(
+    `Goal: ${goal}\nOutput format: ${aspect}, ${seconds} seconds.${templateContext}${tasteContext}\n\nCut the ad.`,
     {
       type: 'object',
       properties: {
+        look: {
+          type: 'object',
+          description: 'the one shoot every shot belongs to',
+          properties: {
+            location: { type: 'string', description: 'concrete and specific — a room, a surface, a window' },
+            wardrobe: { type: 'string', description: 'what the person wears in every shot they appear in' },
+            light: { type: 'string', description: 'source, direction and time of day' },
+            palette: { type: 'string', description: 'the few colours this ad lives in' },
+            product: { type: 'string', description: 'the item itself, described so every shot of it agrees' },
+          },
+          required: ['location', 'wardrobe', 'light', 'palette', 'product'],
+        },
         steps: {
           type: 'array',
           minItems: 5,
@@ -489,19 +544,46 @@ export async function planRun(
             type: 'object',
             properties: {
               stepNo: { type: 'integer' },
-              label: { type: 'string', description: '2-4 words naming the change, thumbnail caption' },
+              shot: {
+                type: 'string',
+                enum: ['person', 'product', 'detail', 'scene'],
+                description: 'at most half may be person; about a third is better',
+              },
+              label: { type: 'string', description: '2-4 words, thumbnail caption' },
               instruction: { type: 'string' },
               rationale: { type: 'string' },
             },
-            required: ['stepNo', 'label', 'instruction', 'rationale'],
+            required: ['stepNo', 'shot', 'label', 'instruction', 'rationale'],
           },
         },
       },
-      required: ['steps'],
+      required: ['look', 'steps'],
     },
     PLANNER_SYSTEM,
   );
-  return steps.map((s, i) => ({ ...s, stepNo: i + 1 }));
+
+  /*
+   * Enforce the ratio here as well as asking for it.
+   *
+   * A schema can describe an enum but not "at most half of these". Asked without
+   * a backstop, a planner that has spent its whole life writing person shots
+   * will quietly return six of them, and the run is back to being a photo set.
+   * Re-typing the surplus is crude but it is bounded and visible; the ones
+   * converted are the LATER person shots, because the opening beat is the one
+   * that most needs a face.
+   */
+  const ordered = steps.map((s, i) => ({ ...s, stepNo: i + 1 }));
+  const cap = Math.max(1, Math.floor(ordered.length / 2));
+  let seen = 0;
+  for (const s of ordered) {
+    if (s.shot !== 'person') continue;
+    seen++;
+    if (seen > cap) {
+      s.shot = 'product';
+      console.info(`[plan] step ${s.stepNo} retyped person → product (cap ${cap} of ${ordered.length})`);
+    }
+  }
+  return { steps: ordered, look };
 }
 
 const CRITIC_SYSTEM = `You judge whether one edit to a frame achieved what it claimed.
@@ -584,6 +666,10 @@ export async function critique(args: {
   /** False for the opening frame, where BEFORE is the enrolment photo and there
    *  is no previous shot to be continuous with. */
   isContinuation?: boolean;
+  /** What the shot is OF. A photograph of a coffee cup has no face to judge, and
+   *  asking anyway returns faceMatches:false — which reads as a wrong face and
+   *  triggers a retry that produces another coffee cup. */
+  subject?: ShotKind;
 }): Promise<Critique> {
   const res = await fetch(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
     method: 'POST',
@@ -602,10 +688,14 @@ export async function critique(args: {
             {
               text:
                 `The instruction was: ${args.instruction}\nThe reason given was: ${args.rationale}\n\n` +
-                (args.isContinuation
-                  ? 'AFTER is an edit of BEFORE and must be continuous with it. Judge the edit, the identity, and the continuity.'
-                  : 'This is the OPENING frame, so BEFORE is the enrolment photo and there is nothing to be continuous with. ' +
-                    'Set continuityHeld true and leave continuityBreaks empty. Judge the edit and the identity.'),
+                (args.subject && args.subject !== 'person'
+                  ? `This shot is a ${args.subject} shot: there is deliberately NO PERSON in the frame. ` +
+                    'Do not treat the absence of a face as a defect — it is the brief. Set faceMatches true ' +
+                    'and continuityHeld true, and judge only whether the described photograph was made well.'
+                  : args.isContinuation
+                    ? 'AFTER is an edit of BEFORE and must be continuous with it. Judge the edit, the identity, and the continuity.'
+                    : 'AFTER is its own photograph, not an edit of BEFORE. Set continuityHeld true and leave ' +
+                      'continuityBreaks empty. Judge whether the described shot was made, and whether it is the enrolled person.'),
             },
           ],
         },

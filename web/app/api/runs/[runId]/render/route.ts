@@ -14,7 +14,8 @@ import {
 } from '@/lib/gemini';
 import { lastFrameOf, segmentsFor, stitch } from '@/lib/stitch';
 import { lineageOf, shotPlan, type LineageNode } from '@/lib/lineage';
-import { motionDirection } from '@/lib/look';
+import { motionDirection, objectMotionDirection } from '@/lib/look';
+import type { LookBible, ShotKind } from '@/lib/types';
 import { canFinish, finishAd } from '@/lib/finishAd';
 import { timeCaptions, wavDurationSeconds } from '@/lib/captions';
 import { putVideo, signedVideoUrl, videoKey } from '@/lib/r2';
@@ -89,6 +90,10 @@ function buildCinematicUgcVideoPrompt(
   /** Appended for segments after the first, so the shot continues rather than
    *  restarting. */
   continuation?: string,
+  /* What the shot is OF, and the look it belongs to. Without these every shot
+     got the portrait recipe — including the ones with no person in them. */
+  kind: ShotKind = 'person',
+  look?: LookBible | null,
 ): string {
   /*
    * DISTANCE, not just movement.
@@ -117,8 +122,8 @@ function buildCinematicUgcVideoPrompt(
        attention on a resolution it cannot produce. */
     'Photorealistic UGC video clip, 24fps.',
     `${goal}. ${label ? `Scene focus: ${label}.` : ''}`,
-    motionDirection(),
-    `Camera: ${cameraMovement}.`,
+    kind === 'person' ? motionDirection() : objectMotionDirection(kind, look),
+    ...(kind === 'person' ? [`Camera: ${cameraMovement}.`] : []),
     /* The artefact rules that used to live here — "Absolutely NO exaggerated
        facial grimacing, NO jaw stretching, NO facial shape deformation" — are
        in VIDEO_NEGATIVE_PROMPT now. Naming a defect in the positive prompt is
@@ -180,7 +185,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     ...(d.data() as Record<string, unknown>),
   })) as LineageNode[];
 
-  let shots: { id: string; frameUrl: string; label?: string; instruction?: string }[];
+  let shots: { id: string; frameUrl: string; label?: string; instruction?: string; shot: ShotKind }[];
 
   if (parsed.data.mode === 'sequence') {
     const chain = lineageOf(allNodes).filter((n) => n.frameUrl);
@@ -213,6 +218,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
       frameUrl: n.frameUrl!,
       label: (n as { label?: string }).label,
       instruction: n.instruction,
+      shot: ((n as { shot?: ShotKind }).shot ?? 'person') as ShotKind,
     }));
   } else {
     if (!parsed.data.nodeId) return NextResponse.json({ error: 'nodeId is required' }, { status: 400 });
@@ -221,7 +227,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     if (!frameSnap.exists || frame?.kind !== 'frame' || !frame.frameUrl) {
       return NextResponse.json({ error: 'that node is not a renderable frame' }, { status: 400 });
     }
-    shots = [{ id: frameSnap.id, frameUrl: frame.frameUrl, label: frame.label, instruction: frame.instruction }];
+    shots = [{
+      id: frameSnap.id,
+      frameUrl: frame.frameUrl,
+      label: frame.label,
+      instruction: frame.instruction,
+      shot: (frame.shot ?? 'person') as ShotKind,
+    }];
   }
 
   const frame = { label: shots[0].label, stepNo: 0 };
@@ -336,6 +348,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
             ? `Shot list — play these beats in order as one continuous ${OMNI_FIXED_SECONDS}-second take, ` +
               `giving each roughly equal screen time and moving between them on action rather than restarting the shot: ${beats.join(' ')}`
             : undefined,
+          /* Omni renders the whole ad in one call, so it is a person shot
+             whenever any beat has a person in it — that is the only case where
+             the identity direction earns its place. */
+          isSequence ? (shots.some((sh) => sh.shot === 'person') ? 'person' : shots[0].shot) : shots[0].shot,
+          (run.look ?? null) as LookBible | null,
         );
 
         /*
@@ -387,13 +404,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
           engineNote = `Gemini Omni renders at ${OMNI_FIXED_SHORT_EDGE}p. Veo 3.1 goes higher.`;
         }
       } else {
-        type Segment = { seconds: number; seed: { data: Buffer; mimeType: string } | undefined; label?: string; continues: boolean };
+        type Segment = {
+          seconds: number;
+          seed: { data: Buffer; mimeType: string } | undefined;
+          label?: string;
+          continues: boolean;
+          /* Carried per segment: a sequence can mix a person shot and a macro of
+             a label, and they must not be given the same direction. */
+          shot: ShotKind;
+        };
         const queue: Segment[] = [];
 
         if (isSequence) {
           for (const shot of shots) {
             const seed = await resolveImage(shot.frameUrl);
-            queue.push({ seconds: plan.perShot, seed: seed ?? undefined, label: shot.label, continues: false });
+            queue.push({ seconds: plan.perShot, seed: seed ?? undefined, label: shot.label, continues: false, shot: shot.shot });
           }
         } else {
           const count = segmentsFor(wanted, MAX_CLIP_SECONDS);
@@ -403,6 +428,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
               seconds: Math.min(MAX_CLIP_SECONDS, Math.max(MIN_CLIP_SECONDS, remaining)),
               seed: i === 0 ? firstFrame : undefined, // later ones are seeded by the previous tail
               continues: i > 0,
+              shot: shots[0].shot,
             });
           }
         }
@@ -429,6 +455,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
           seg.continues
             ? 'This continues the same unbroken shot from the frame given. Do not cut, restart, or reframe.'
             : undefined,
+          seg.shot,
+          (run.look ?? null) as LookBible | null,
         );
 
         const { operation } = await submitRender({

@@ -174,3 +174,121 @@ export const VIDEO_NEGATIVE_PROMPT =
   'face drift between frames, rubbery skin, waxy plastic skin, extra fingers, ' +
   'deformed hands, exaggerated grimace, stretched jaw, wide-angle lens ' +
   'distortion, harsh overhead lighting, text, captions, subtitles, watermark, logo';
+
+/* ── shot-list direction ──────────────────────────────────────────────────── */
+
+import type { LookBible, ShotKind } from './types';
+
+/*
+ * The continuity contract, as text.
+ *
+ * Six frames used to look like one shoot because each was an EDIT of the last —
+ * continuity inherited for free, and paid for in generation loss: by step six
+ * the picture was six reinterpretations away from the enrolment photo and the
+ * jaw belonged to somebody else.
+ *
+ * Shots generated independently do not inherit anything, so the contract has to
+ * be written down and handed to every one of them. This is that contract. It is
+ * how a real production works — a look book, not a photocopy of yesterday.
+ */
+export function lookContract(look: LookBible | null | undefined): string {
+  if (!look) return '';
+  return (
+    'THE SHOOT (every shot in this ad is the same afternoon, same place):\n' +
+    `  Location: ${look.location}\n` +
+    `  Wardrobe: ${look.wardrobe}\n` +
+    `  Light: ${look.light}\n` +
+    `  Palette: ${look.palette}\n` +
+    `  Product: ${look.product}\n` +
+    'Match all of the above exactly. It is the same shoot, a few minutes later.'
+  );
+}
+
+/**
+ * A shot with the creator in it.
+ *
+ * Always built from the ENROLMENT CAPTURES, never from the previous frame —
+ * that is the entire point of the change. A person shot at step five used to be
+ * five generations of reinterpretation deep; now it is one, exactly like the
+ * first shot, no matter where it falls in the story.
+ */
+export function personShotDirection(look: LookBible | null | undefined): string {
+  return [
+    'The images provided are reference photographs of a specific real person, ' +
+      'taken from several angles. They are not the shot. Build a NEW photograph ' +
+      'of that same person as described below.',
+    IDENTITY_LOCK,
+    FLATTERING_CAMERA,
+    'FRAMING: A medium shot. Head and shoulders with clear headroom and air on ' +
+      'both sides, at a comfortable conversational distance — the face occupies ' +
+      'a modest part of the frame.',
+    lookContract(look),
+    OUTPUT_RULES,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/**
+ * A shot with no face in it: the product, a detail, the room.
+ *
+ * Deliberately carries no identity lock and no portrait recipe. There is no
+ * face to hold, so every constraint that exists to protect one is dead weight
+ * here — and the flattering-portrait direction would actively fight a macro
+ * shot of a label or a wide of an empty kitchen.
+ *
+ * These are the shots that cost nothing in identity risk, which is why an ad
+ * should be mostly made of them.
+ */
+export function objectShotDirection(kind: ShotKind, look: LookBible | null | undefined): string {
+  const craft =
+    kind === 'detail'
+      ? 'A close macro shot. Shallow depth of field, one clean plane of focus on the ' +
+        'texture or lettering that matters, everything else falling off softly. No person in frame.'
+      : kind === 'scene'
+        ? 'An establishing shot of the place itself. Nobody in frame. Depth and ' +
+          'atmosphere — the room doing the talking.'
+        : 'A product shot. The item is the subject and reads clearly. Hands may hold or ' +
+          'steady it, but no face and no head appear in the frame.';
+
+  return [
+    'Photorealistic still. ' + craft,
+    lookContract(look),
+    'Shot on the same camera and lens as the rest of this ad, so it cuts together ' +
+      'with shots of the person without a jump in look.',
+    OUTPUT_RULES,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/**
+ * Motion for a shot with no person in it.
+ *
+ * A gap that opened the moment shots stopped all being of the person: the video
+ * prompt applied motionDirection() to everything, so a macro of a label was
+ * being told "IDENTITY: this is a specific real person… 85mm portrait lens,
+ * soft key at 45 degrees, a catchlight in the eyes." Every one of those
+ * constraints exists to protect a face, and there is no face here — they can
+ * only fight the shot.
+ *
+ * What these shots actually need is the opposite of a portrait: motion small
+ * enough to read as a real camera on a real table, and nothing invented.
+ */
+export function objectMotionDirection(kind: ShotKind, look: LookBible | null | undefined): string {
+  const move =
+    kind === 'detail'
+      ? 'A very slow drift or a gentle rack of focus across the surface. The subject barely moves; the camera barely moves.'
+      : kind === 'scene'
+        ? 'A slow, almost still push or drift through the space. Light shifts, dust hangs, nothing lurches.'
+        : 'The item turns slowly, or a hand steadies and repositions it. Small, deliberate, unhurried.';
+
+  return [
+    `MOTION: ${move} Natural 24fps motion blur. Nobody's face enters the frame at any point.`,
+    lookContract(look),
+    'Shot on the same camera and lens as the rest of this ad, so it cuts together without a jump.',
+    OUTPUT_RULES,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}

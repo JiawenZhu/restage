@@ -422,7 +422,18 @@ export function VersionTree({
                   </span>
                 )}
 
-                {n.kind === 'avatar' && (
+                {/* What the shot is OF.
+                  The whole point of the change is that an ad should be mostly
+                  things that are not faces, and "mostly" is only checkable if
+                  you can see it. Quiet by design — it sits under the status
+                  ring and must not compete with it. */}
+              {n.kind === 'frame' && n.shot && n.shot !== 'person' && !n.discarded && (
+                <span className="absolute right-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-[0.08em] text-white">
+                  {n.shot}
+                </span>
+              )}
+
+              {n.kind === 'avatar' && (
                   <span className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[8.5px] font-bold tracking-[0.08em] text-white">
                     AVATAR
                   </span>

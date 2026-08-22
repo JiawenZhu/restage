@@ -16,8 +16,46 @@ export type NodeStatus =
 
 export type Verdict = 'met' | 'partial' | 'failed';
 
+/*
+ * What a shot is OF.
+ *
+ * The thing that makes an ad look like an ad rather than six selfies, and the
+ * thing that decides how the frame gets generated. A shot with no face in it
+ * needs no identity lock, carries no drift risk, and does not have to descend
+ * from anything — so it can be made at full quality from a clean prompt.
+ */
+export type ShotKind =
+  /** The creator is in frame. Generated from the enrolment captures. */
+  | 'person'
+  /** The product, in hands or on a surface. Hands are fine; a face is not. */
+  | 'product'
+  /** Macro: texture, a label, a mechanism, the thing turning. */
+  | 'detail'
+  /** The place. B-roll, establishing, atmosphere. Nobody in it. */
+  | 'scene';
+
+/*
+ * The look every shot shares.
+ *
+ * When each step edited the frame before it, continuity was inherited for free
+ * — and paid for in generation loss. Shots that are generated independently
+ * need the contract written down instead: same room, same clothes, same light,
+ * same palette. This is what makes six separately-made images read as one
+ * afternoon's shoot.
+ */
+export interface LookBible {
+  location: string;
+  wardrobe: string;
+  light: string;
+  palette: string;
+  /** The product itself, described once so every shot of it agrees. */
+  product: string;
+}
+
 export interface PlanStep {
   stepNo: number;
+  /** What this shot is of. Absent on runs planned before shot lists existed. */
+  shot?: ShotKind;
   /** 2-4 words naming the change — the canvas caption. */
   label?: string;
   instruction: string;
@@ -41,6 +79,8 @@ export interface TreeNode {
   label?: string;
   instruction?: string;
   rationale?: string;
+  /** What this node's frame is of. Drives how it was generated. */
+  shot?: ShotKind;
 
   /** Firebase Storage path for a frame; R2 key for a rendered clip. */
   frameUrl?: string;
@@ -87,6 +127,8 @@ export interface Run {
   avatarId?: string;
   /** Which creative template shaped the plan, if any. */
   templateId?: string | null;
+  /** The shared look every shot in this run is held to. */
+  look?: LookBible | null;
   /** Video rendering engine used for the run. */
   videoEngine?: 'veo' | 'omni';
   goal: string;

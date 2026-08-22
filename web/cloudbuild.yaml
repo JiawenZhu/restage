@@ -1,0 +1,41 @@
+# Build the image, then deploy it.
+#
+# `gcloud run deploy --source` cannot pass --build-arg, and the NEXT_PUBLIC_*
+# values have to exist at BUILD time: Next.js compiles them into the client
+# bundle, so supplying them at runtime leaves them simply absent from the
+# JavaScript the browser receives. The page renders, Firebase never initialises,
+# and sign-in fails on a site that looks perfectly healthy.
+#
+# So the values arrive as substitutions and are passed through as build args.
+# They are public by design — Firebase web config is meant to live in client
+# code, and access is controlled by security rules — but they are still passed
+# in rather than committed, so this file carries no values of its own.
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag=$_IMAGE
+      - --build-arg=NEXT_PUBLIC_FIREBASE_API_KEY=$_FB_API_KEY
+      - --build-arg=NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$_FB_AUTH_DOMAIN
+      - --build-arg=NEXT_PUBLIC_FIREBASE_PROJECT_ID=$_FB_PROJECT_ID
+      - --build-arg=NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$_FB_STORAGE_BUCKET
+      - --build-arg=NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$_FB_SENDER_ID
+      - --build-arg=NEXT_PUBLIC_FIREBASE_APP_ID=$_FB_APP_ID
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, $_IMAGE]
+
+images:
+  - $_IMAGE
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  # A Next.js build is memory-hungry and the default machine is modest; an OOM
+  # here surfaces as an opaque non-zero exit rather than as "out of memory".
+  machineType: E2_HIGHCPU_8
+
+timeout: 1200s

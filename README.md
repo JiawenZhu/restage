@@ -10,14 +10,15 @@ for. When it did not, the agent tries again on its own.
 
 You watch it happen. You do not drive it.
 
-### ▶ Live app — `[URL PENDING FIRST DEPLOY]`
+### ▶ Live app — https://restage-944688033911.us-central1.run.app
 
-Not a placeholder left by accident: the deploy is one interactive step away
-(`firebase login --reauth`, see **Deploy** below) and App Hosting assigns the
-domain when the backend is created, so guessing it here would ship a link that
-404s. Once it exists, `/studio/demo` is the thing to open — a finished ad with
-its plan, its critic verdicts and its discarded attempts all still on the
-canvas. Nothing is hidden, including the frames the agent threw away.
+**Currently returns 403 to the public**, and the cause is an organisation policy
+rather than the deployment. See **Deploy** below — it is one setting, and it
+needs someone with org-admin on the Google Cloud organisation.
+
+Once it is open, `/studio/demo` is the thing to look at: a finished ad with its
+plan, its critic verdicts and its discarded attempts all still on the canvas.
+Nothing is hidden, including the frames the agent threw away.
 
 > **`Restage` is a placeholder name.** It appears throughout the repo and this
 > README; renaming is a find-and-replace when the real name is settled.
@@ -241,30 +242,61 @@ Firestore rules and indexes are in `firestore.rules` and `firestore.indexes.json
 
 ## Deploy
 
-Firebase **App Hosting** — this is 15 dynamic API routes, a long render path and
-a background orchestrator, which is a Cloud Run workload rather than a static
-site. `apphosting.yaml` carries the runtime config and the secret bindings.
+Running on **Cloud Run** at `https://restage-944688033911.us-central1.run.app`
+(project `restage-studio`, region `us-central1`). Built from `web/Dockerfile`
+via `web/cloudbuild.yaml`.
 
 ```bash
-firebase login --reauth                                    # one-time, opens a browser
-firebase apphosting:secrets:set GEMINI_API_KEY --project restage-studio
-firebase apphosting:backends:create --project restage-studio
+cd web
+gcloud builds submit --config cloudbuild.yaml --region us-central1 \
+  --substitutions=_IMAGE=us-central1-docker.pkg.dev/restage-studio/cloud-run-source-deploy/restage:v1,_FB_API_KEY=...,_FB_AUTH_DOMAIN=...,_FB_PROJECT_ID=...,_FB_STORAGE_BUCKET=...,_FB_SENDER_ID=...,_FB_APP_ID=...
+gcloud run deploy restage --image us-central1-docker.pkg.dev/restage-studio/cloud-run-source-deploy/restage:v1 \
+  --region us-central1 --env-vars-file <your-env>.yaml --timeout 600 --memory 1Gi
 ```
 
-The last step connects the GitHub repo; after that every push to the connected
-branch builds and deploys on its own. Repeat `secrets:set` for each secret
-listed in `apphosting.yaml`.
+### One thing blocks public access
 
-Two things that are easy to get wrong and are already handled:
+The service is healthy — an authenticated request returns 200 and serves the
+real page. `allUsers` cannot be added to its IAM policy:
 
-- **`timeoutSeconds: 600`.** A sequence render submits one Veo job per shot and
-  polls each — 57s for a 4s clip, 121s for 8s. The 60s default would kill a
-  seven-shot render partway and bill for the shots that had landed.
-- **No service-account key is deployed.** Cloud Run attaches an identity, and
-  `lib/firebaseAdmin` initialises from Application Default Credentials when
-  `FIREBASE_SERVICE_ACCOUNT_JSON` is absent. It used to throw instead, which
-  would have produced a green deploy where every API route failed on its first
-  line.
+```
+FAILED_PRECONDITION: One or more users named in the policy do not belong
+to a permitted customer, perhaps due to an organization policy.
+```
+
+That is **Domain Restricted Sharing** on organisation `257017649989`:
+
+```
+constraints/iam.allowedPolicyMemberDomains
+  allowedValues: [C012ql7nk]
+```
+
+Only that Workspace customer may appear in any IAM policy, so a public Cloud Run
+service is refused. Fixing it needs `roles/orgpolicy.policyAdmin` at the
+organisation — add an exception for this project, then:
+
+```bash
+gcloud run services add-iam-policy-binding restage \
+  --region=us-central1 --member=allUsers --role=roles/run.invoker
+```
+
+### Things already handled that are easy to get wrong
+
+- **`$PORT`.** `next start` hardcoded 3100; Cloud Run injects and health-checks
+  `$PORT`, and a container listening elsewhere is killed with a message that
+  points at the container rather than the line responsible.
+- **ffmpeg is installed in the image.** `lib/finishAd` and `lib/stitch` shell out
+  to it to join clips, mux the voiceover and burn captions — without it a render
+  dies at the last step, after every Veo clip has been paid for.
+- **`NEXT_PUBLIC_*` are build args, not runtime env.** Next.js compiles them into
+  the client bundle; supplied at runtime they are absent from the JavaScript the
+  browser receives, and Firebase auth silently never initialises on a page that
+  looks fine.
+- **`timeoutSeconds: 600`.** A sequence render polls one Veo job per shot — 57s
+  for a 4s clip, 121s for 8s. The 60s default would kill a seven-shot render
+  partway and bill for the shots that landed.
+- **No service-account key is deployed.** Cloud Run attaches an identity and
+  `lib/firebaseAdmin` initialises from Application Default Credentials.
 
 ## Repository guide
 

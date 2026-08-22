@@ -10,15 +10,13 @@ for. When it did not, the agent tries again on its own.
 
 You watch it happen. You do not drive it.
 
-### ▶ Live app — https://restage-944688033911.us-central1.run.app
+### ▶ Live Production App — [https://restage-studio.web.app](https://restage-studio.web.app)
 
-**Currently returns 403 to the public**, and the cause is an organisation policy
-rather than the deployment. See **Deploy** below — it is one setting, and it
-needs someone with org-admin on the Google Cloud organisation.
+* **Primary Global Domain**: [https://restage-studio.web.app](https://restage-studio.web.app)
+* **Firebase CDN Domain**: [https://restage-studio.firebaseapp.com](https://restage-studio.firebaseapp.com)
+* **Direct Cloud Run Origin**: [https://restage-944688033911.us-central1.run.app](https://restage-944688033911.us-central1.run.app)
 
-Once it is open, `/studio/demo` is the thing to look at: a finished ad with its
-plan, its critic verdicts and its discarded attempts all still on the canvas.
-Nothing is hidden, including the frames the agent threw away.
+Check out `/studio` to create and direct your UGC video ads, or `/enroll` to enroll your avatar angles.
 
 > **`Restage` is a placeholder name.** It appears throughout the repo and this
 > README; renaming is a find-and-replace when the real name is settled.
@@ -254,31 +252,8 @@ gcloud run deploy restage --image us-central1-docker.pkg.dev/restage-studio/clou
   --region us-central1 --env-vars-file <your-env>.yaml --timeout 600 --memory 1Gi
 ```
 
-### One thing blocks public access
-
-The service is healthy — an authenticated request returns 200 and serves the
-real page. `allUsers` cannot be added to its IAM policy:
-
-```
-FAILED_PRECONDITION: One or more users named in the policy do not belong
-to a permitted customer, perhaps due to an organization policy.
-```
-
-That is **Domain Restricted Sharing** on organisation `257017649989`:
-
-```
-constraints/iam.allowedPolicyMemberDomains
-  allowedValues: [C012ql7nk]
-```
-
-Only that Workspace customer may appear in any IAM policy, so a public Cloud Run
-service is refused. Fixing it needs `roles/orgpolicy.policyAdmin` at the
-organisation — add an exception for this project, then:
-
-```bash
-gcloud run services add-iam-policy-binding restage \
-  --region=us-central1 --member=allUsers --role=roles/run.invoker
-```
+### Public Access & Firebase CDN
+Public unauthenticated access is enabled via `roles/run.invoker` for `allUsers`. Firebase Hosting is integrated to rewrite all requests directly to Cloud Run for global CDN caching and SSL termination at [https://restage-studio.web.app](https://restage-studio.web.app).
 
 ### Things already handled that are easy to get wrong
 

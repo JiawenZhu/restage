@@ -71,7 +71,7 @@ export interface Run {
   templateId?: string | null;
   goal: string;
   aspect: Aspect;
-  seconds: 4 | 6 | 8;
+  seconds: 4 | 8 | 16 | 24;
   status: 'planning' | 'running' | 'awaiting-approval' | 'rendering' | 'complete' | 'failed';
   plan: PlanStep[];
   /** Why a failed run stopped, so the workspace can say it rather than spin. */

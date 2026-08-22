@@ -206,8 +206,33 @@ Strips inline payloads that push a run document over the 1MB limit, un-corrupts
 `frameCount`/`previewFrames` values that were written as serialized sentinels,
 and backfills the summary the library reads.
 
+## Borrowed
+
+`lib/stitch.ts` takes two lessons from [MoneyPrinterTurbo](https://github.com/harry0703/MoneyPrinterTurbo)
+(MIT), which solves a different problem — assembling stock footage to a
+voiceover — but had already learned these the hard way:
+
+- **Join once with the ffmpeg concat demuxer**, rather than merging segment by
+  segment. Their own comment says why: repeated re-encoding degrades the picture
+  and shifts colour.
+- **An encoder in `ffmpeg -encoders` is not a working encoder.** It proves the
+  binary was compiled with it, not that this machine can run it — so a runtime
+  failure has to fall back *and be remembered*, or every segment pays for the
+  same discovery. (The same shape as this project's own "listed ≠ usable"
+  lesson with the Gemini model list.)
+
+Their subtitle approach — transcribe the generated audio with whisper for
+*timing only*, then correct the text back against the script you already have —
+is the right answer here too, and for a measured reason: Chirp3-HD, the voice
+this product uses, silently ignores SSML `<mark>` and returns zero timepoints,
+while Neural2 returns exact ones. Better voice or free exact timing, not both.
+Not built yet.
+
+Nothing else transfers. Their pipeline assembles stock clips; this one generates
+frames of a specific person.
+
 ## Known limits
 
-- **Clips are 4–8 seconds.** The model's own words: *"Please provide a value between 4 and 8, inclusive."* Longer output needs several renders stitched together — the Python worker's first job, not built.
+- **Clips are 4–8 seconds per segment.** The model's own words: *"Please provide a value between 4 and 8, inclusive."* Longer clips are whole segments joined by `lib/stitch.ts`, each seeded with the last frame of the one before, so 16s costs two renders and 24s costs three. Requires `ffmpeg` on the server.
 - **Identity drift is only partly caught.** The critic reliably rejects a different person; subtle drift needs face-embedding comparison (ArcFace-class). Until then the human Reject is the last line, which is why it is a first-class control.
 - **The enrolled voice sample is stored and unused.** Clips use a synthetic voice reading a written line, which is shown to the user before rendering. `/likeness` says so.

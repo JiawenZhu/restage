@@ -33,9 +33,15 @@ function isOwnImageSource(v: string): boolean {
 const Body = z.object({
   goal: z.string().min(8).max(600),
   aspect: z.enum(['9:16', '16:9']),
-  // 4-8s is the model's actual range. 15 and 30 were accepted here, stored, and
-  // shown on library cards, while the renderer produced 8s regardless.
-  seconds: z.union([z.literal(4), z.literal(6), z.literal(8)]),
+  /*
+   * The model makes 4-8s. Longer clips are whole segments joined, each starting
+   * on the last frame of the one before it — so the offered lengths are exact
+   * multiples rather than numbers that need trimming mid-shot.
+   *
+   * 15 and 30 used to be accepted here, stored, and shown on library cards
+   * while the renderer produced 8s regardless.
+   */
+  seconds: z.union([z.literal(4), z.literal(8), z.literal(16), z.literal(24)]),
   templateId: z.string().optional(),
   /** Which enrolled avatar this run used, when it came from one. The Run type
    *  declared this as required and nothing ever sent it. */

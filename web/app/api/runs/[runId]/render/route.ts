@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { consume, tooMany } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { adminDb, requireUid } from '@/lib/firebaseAdmin';
-import { downloadRendered, MAX_CLIP_SECONDS, pollRender, submitRender } from '@/lib/gemini';
+import { downloadRendered, MAX_CLIP_SECONDS, MIN_CLIP_SECONDS, pollRender, submitRender } from '@/lib/gemini';
+import { lastFrameOf, segmentsFor, stitch } from '@/lib/stitch';
 import { putVideo, signedVideoUrl, videoKey } from '@/lib/r2';
 
 /*
@@ -46,7 +47,14 @@ import os from 'node:os';
 
 const execFileAsync = promisify(execFile);
 
-function buildCinematicUgcVideoPrompt(goal: string, label?: string, aspect?: string): string {
+function buildCinematicUgcVideoPrompt(
+  goal: string,
+  label?: string,
+  aspect?: string,
+  /** Appended for segments after the first, so the shot continues rather than
+   *  restarting. */
+  continuation?: string,
+): string {
   const cameraMovement =
     aspect === '9:16'
       ? 'Handheld smartphone vlog tracking camera with subtle organic breathing motion, eye-level perspective, 35mm lens, f/1.8 shallow depth of field with gentle background bokeh'
@@ -60,6 +68,9 @@ function buildCinematicUgcVideoPrompt(goal: string, label?: string, aspect?: str
     `Camera Dynamics: ${cameraMovement}.`,
     `Lighting & Physics: Direct authentic cinematic lighting with realistic specular reflections shifting naturally across glasses and eyes, dynamic ambient lighting interaction, realistic skin subsurface scattering, subtle environmental dust/particles and secondary motion in the background.`,
     `Fidelity & Constraints: Photorealistic natural skin pores and micro-texture, coherent anatomy, smooth 24fps motion blur, zero facial drift, zero morphing, zero rubbery skin, zero jitter, zero warped geometry, no text, no watermarks, no logos.`,
+    // Only on segments after the first: the given frame is the previous
+    // segment's last, so this has to read as the same take continuing.
+    ...(continuation ? [continuation] : []),
   ].join(' ');
 }
 
@@ -140,45 +151,86 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
 
   void (async () => {
     try {
-      const prompt = buildCinematicUgcVideoPrompt(run.goal, frame.label, run.aspect);
-      const { operation } = await submitRender({
-        // The 8/15/30s control was collected, stored, and never sent anywhere.
-        durationSeconds: run.seconds,
-        prompt,
-        firstFrame,
-        aspect: run.aspect,
-      });
-
       /*
-       * A transient poll failure is not a failed render.
+       * One segment per 8 seconds, each starting where the last one stopped.
        *
-       * One network blip threw straight out of the loop and abandoned a Veo
-       * job that had already been submitted and paid for — the clip finished on
-       * Google's side and the user was told it failed. Only a real terminal
-       * error, or several consecutive failures, ends it now.
+       * Veo tops out at 8s, so a 15 or 30 second ad is several renders joined.
+       * The chain is the product's own trick used on itself: Veo takes a FIRST
+       * FRAME, and the last frame of segment N is a perfectly good first frame
+       * for segment N+1 — the person, the room and the light carry across
+       * because the next segment literally begins where the previous one
+       * stopped, rather than being generated independently and cut together.
+       *
+       * Every segment is a paid render, so the node says how many there are and
+       * which one is running.
        */
-      let uri: string | null = null;
-      let consecutiveErrors = 0;
-      for (let i = 0; i < 60; i++) {
-        await new Promise((r) => setTimeout(r, 5000));
-        try {
-          const st = await pollRender(operation);
-          consecutiveErrors = 0;
-          if (st.done) {
-            if ('error' in st) throw new Error(st.error);
-            uri = st.videoUri;
-            break;
-          }
-        } catch (pollErr) {
-          // A terminal error from the operation itself must still end the loop.
-          if (pollErr instanceof Error && /safety|invalid|quota|blocked/i.test(pollErr.message)) throw pollErr;
-          if (++consecutiveErrors >= 4) throw pollErr;
-          console.warn('[render] transient poll failure', consecutiveErrors, pollErr);
-        }
-      }
-      if (!uri) throw new Error('render did not finish in five minutes');
+      const wanted = Math.max(MIN_CLIP_SECONDS, run.seconds || MAX_CLIP_SECONDS);
+      const totalSegments = segmentsFor(wanted, MAX_CLIP_SECONDS);
+      const segments: Buffer[] = [];
+      let seedFrame = firstFrame;
 
-      let finalVideoBytes = await downloadRendered(uri);
+      for (let seg = 0; seg < totalSegments; seg++) {
+        const remaining = wanted - seg * MAX_CLIP_SECONDS;
+        const thisLength = Math.min(MAX_CLIP_SECONDS, Math.max(MIN_CLIP_SECONDS, remaining));
+
+        if (totalSegments > 1) {
+          await videoRef.update({
+            segmentIndex: seg + 1,
+            segmentCount: totalSegments,
+            rationale: `Segment ${seg + 1} of ${totalSegments}. Each one begins on the last frame of the one before it.`,
+          });
+        }
+
+        const prompt = buildCinematicUgcVideoPrompt(
+          run.goal,
+          frame.label,
+          run.aspect,
+          seg === 0 ? undefined : `This continues the same unbroken shot from the frame given. Do not cut, restart, or reframe.`,
+        );
+
+        const { operation } = await submitRender({
+          durationSeconds: thisLength,
+          prompt,
+          firstFrame: seedFrame,
+          aspect: run.aspect,
+        });
+
+        /*
+         * A transient poll failure is not a failed render.
+         *
+         * One network blip threw straight out of the loop and abandoned a Veo
+         * job that had already been submitted and paid for — the clip finished
+         * on Google's side and the user was told it failed. Only a real
+         * terminal error, or several consecutive failures, ends it now.
+         */
+        let uri: string | null = null;
+        let consecutiveErrors = 0;
+        for (let i = 0; i < 60; i++) {
+          await new Promise((r) => setTimeout(r, 5000));
+          try {
+            const st = await pollRender(operation);
+            consecutiveErrors = 0;
+            if (st.done) {
+              if ('error' in st) throw new Error(st.error);
+              uri = st.videoUri;
+              break;
+            }
+          } catch (pollErr) {
+            if (pollErr instanceof Error && /safety|invalid|quota|blocked/i.test(pollErr.message)) throw pollErr;
+            if (++consecutiveErrors >= 4) throw pollErr;
+            console.warn('[render] transient poll failure', consecutiveErrors, pollErr);
+          }
+        }
+        if (!uri) throw new Error(`segment ${seg + 1} did not finish in five minutes`);
+
+        const segmentBytes = await downloadRendered(uri);
+        segments.push(segmentBytes);
+
+        // Seed the next segment from where this one ended.
+        if (seg + 1 < totalSegments) seedFrame = await lastFrameOf(segmentBytes);
+      }
+
+      let finalVideoBytes = await stitch(segments, totalSegments > 1 ? wanted : undefined);
 
       // ── Audio Muxing Pipeline ──
       // If voiceover audio exists on the run, mux it into the video with ffmpeg

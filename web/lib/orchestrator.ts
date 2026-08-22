@@ -31,7 +31,7 @@ export interface StartArgs {
   uid: string;
   goal: string;
   aspect: Aspect;
-  seconds: 4 | 6 | 8;
+  seconds: 4 | 8 | 16 | 24;
   templateId?: string;
   avatarId?: string | null;
   /** Enrolment capture as a data URL or HTTP URL. */

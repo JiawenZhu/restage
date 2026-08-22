@@ -57,7 +57,7 @@ function NewRun() {
      user's own words with the model's rewrite. */
   const [seedText, setSeedText] = useState<string | undefined>(undefined);
   const [aspect, setAspect] = useState<Aspect>('9:16');
-  const [seconds, setSeconds] = useState<4 | 6 | 8>(8);
+  const [seconds, setSeconds] = useState<4 | 8 | 16 | 24>(8);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [multiViews, setMultiViews] = useState<{ front?: string; left?: string; right?: string } | null>(null);
   const [avatarName, setAvatarName] = useState<string | null>(null);
@@ -392,18 +392,19 @@ function NewRun() {
           <div>
             <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">LENGTH</p>
             <div className="mt-2.5 flex gap-2">
-              {([4, 6, 8] as const).map((s) => (
+              {([4, 8, 16, 24] as const).map((s) => (
                 <button key={s} type="button" onClick={() => setSeconds(s)} className={`flex-1 rounded-card bg-panel py-5 text-sm font-semibold ${seconds === s ? 'border-2 border-accent' : 'border border-line text-ink-2'}`}>
                   {s}s
                 </button>
               ))}
             </div>
-            {/* This said "longer runs cost more credits and take longer to
-                render", which was false in both halves: every choice produced
-                the same 8s clip. The model's range is 4-8s; anything longer is
-                several renders stitched together, which is not built yet. */}
+            {/* Now true in both halves: the model makes 8s at a time, so 16 and
+                24 are two and three renders joined — and each one is a separate
+                paid generation that takes about a minute. */}
             <p className="mt-2 text-xs text-ink-4">
-              The clip model renders up to 8 seconds. Longer edits are stitched from several clips — not available yet.
+              {seconds > 8
+                ? `Rendered as ${Math.ceil(seconds / 8)} clips joined end to end — each one continues from the last frame of the one before, and each takes about a minute.`
+                : 'One render, about a minute.'}
             </p>
           </div>
         </div>

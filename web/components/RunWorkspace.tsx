@@ -5,6 +5,8 @@ import { VersionTree } from './VersionTree';
 import { useUser } from './AuthGate';
 import { PromptComposer } from './PromptComposer';
 import { lineageOf, shotPlan, type LineageNode } from '@/lib/sequence';
+import { ImpactModal, ShootPanel } from './ShootPanel';
+import type { Impact } from '@/lib/impact';
 import type { Run, TreeNode } from '@/lib/types';
 
 /*
@@ -33,6 +35,10 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
   const [pendingRebuild, setPendingRebuild] = useState<{ steps: number[]; label: string } | null>(null);
   const [busySeq, setBusySeq] = useState(false);
   const [seqMsg, setSeqMsg] = useState<{ text: string; bad: boolean } | null>(null);
+  /* Raised when a change to the shoot invalidates work. Held at this level, not
+     inside the panel, because the modal covers the canvas rather than the
+     sidebar it was triggered from. */
+  const [impact, setImpact] = useState<(Impact & { seconds: number; label: string }) | null>(null);
 
   /*
    * Re-evaluate "has this stalled?" while the page sits open.
@@ -114,7 +120,7 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
     /* 700px of fixed side panels meant the canvas had negative width on a
        tablet and the page scrolled sideways. Below lg the three panes stack. */
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      <PlanPanel run={run} />
+      <PlanPanel run={run} onImpact={setImpact} onNote={(t) => setSeqMsg({ text: t, bad: false })} />
 
       <section className="relative min-h-[380px] min-w-0 flex-1">
         <VersionTree
@@ -165,6 +171,14 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
         )}
         {regenTarget && (
           <RegeneratePanel run={run} node={regenTarget} onClose={() => setRegenTarget(null)} />
+        )}
+        {impact && (
+          <ImpactModal
+            impact={impact}
+            runId={run.id}
+            onClose={() => setImpact(null)}
+            onNote={(t) => setSeqMsg({ text: t, bad: false })}
+          />
         )}
       </section>
 
@@ -223,7 +237,15 @@ function isStalled(run: Run): boolean {
   return isLive(run) && Date.now() - (run.updatedAt || run.createdAt || 0) > STALL_AFTER_MS;
 }
 
-function PlanPanel({ run }: { run: Run }) {
+function PlanPanel({
+  run,
+  onImpact,
+  onNote,
+}: {
+  run: Run;
+  onImpact: (i: Impact & { seconds: number; label: string }) => void;
+  onNote: (msg: string) => void;
+}) {
   const stalled = isStalled(run);
   const live = isLive(run);
   return (
@@ -260,6 +282,11 @@ function PlanPanel({ run }: { run: Run }) {
           </p>
         </div>
       )}
+
+      {/* The shoot every shot belongs to, and the one place it can be changed.
+          Above the line and below the plan because it is the thing the plan was
+          executed against. */}
+      <ShootPanel run={run} onImpact={onImpact} onNote={onNote} />
 
       {/* What the person is going to say. It was generated on every run and
           shown on none of them — the user's own face delivering a line they

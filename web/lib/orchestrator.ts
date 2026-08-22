@@ -871,7 +871,17 @@ export async function regenerateNode(args: {
  * Runs detached like executeRun, because it is minutes of work and the client
  * is watching Firestore.
  */
-export async function rebuildStaleSteps(runId: string, uid: string): Promise<number> {
+/**
+ * Regenerate shots that no longer match the shoot.
+ *
+ * `only` narrows it to an explicit set. Changing the product marks the product
+ * and detail shots stale automatically, because those definitely no longer
+ * match — but whether a PERSON shot was holding the thing is not knowable from
+ * its kind, so the user picks those, and their picks arrive here as ids. Without
+ * `only` this rebuilds everything currently marked stale, which is what the
+ * sequence editor asks for.
+ */
+export async function rebuildStaleSteps(runId: string, uid: string, only?: string[]): Promise<number> {
   const db = adminDb();
   const runRef = db.collection('runs').doc(runId);
   const runSnap = await runRef.get();
@@ -885,8 +895,12 @@ export async function rebuildStaleSteps(runId: string, uid: string): Promise<num
     ...(d.data() as Record<string, unknown>),
   }));
 
+  /* An explicit selection is authoritative for what gets REBUILT, but it still
+     has to be a frame that exists — a stale id from a card the user deleted in
+     another tab would otherwise be regenerated into a node that is gone. */
+  const chosen = only && only.length ? new Set(only) : null;
   const stale = all
-    .filter((n) => n.stale === true && n.kind === 'frame')
+    .filter((n) => n.kind === 'frame' && (chosen ? chosen.has(n.id) : n.stale === true))
     .sort((a, b) => (a.stepNo as number) - (b.stepNo as number));
   if (!stale.length) return 0;
 

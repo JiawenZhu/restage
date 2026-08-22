@@ -869,3 +869,79 @@ export async function writeScript(goal: string, seconds: number): Promise<string
   );
   return script.trim();
 }
+
+/*
+ * Read an existing run and work out what it was actually a shoot OF.
+ *
+ * Runs made before shot lists existed have no look and no shot kinds, so every
+ * frame reads as 'person' by default — and the impact model, asked what a
+ * product swap breaks, would answer "nothing", because no shot claims to be
+ * about the product. Every run in the library predates this. Leaving them out
+ * would make the whole feature apply only to work that does not exist yet.
+ *
+ * This is inference, so it is offered rather than applied: the user presses a
+ * button, sees what it decided, and edits it. Silently guessing the wardrobe of
+ * somebody's finished ad and then marking their frames out of date on the
+ * strength of that guess would be a much worse trade.
+ */
+export async function deriveLook(
+  goal: string,
+  steps: { id: string; stepNo: number; label?: string; instruction?: string }[],
+): Promise<{ look: LookBible; kinds: { id: string; shot: ShotKind }[] }> {
+  const listing = steps
+    .map((s) => `  id=${s.id} step=${s.stepNo} ${s.label ?? ''} — ${s.instruction ?? ''}`)
+    .join('\n');
+
+  return structured<{ look: LookBible; kinds: { id: string; shot: ShotKind }[] }>(
+    `This ad already exists. Its brief was:\n${goal}\n\nIts shots are:\n${listing}\n\n` +
+      `Describe the shoot these were made in, and say what each shot is OF.`,
+    {
+      type: 'object',
+      properties: {
+        look: {
+          type: 'object',
+          properties: {
+            location: { type: 'string' },
+            wardrobe: { type: 'string' },
+            light: { type: 'string' },
+            palette: { type: 'string' },
+            product: { type: 'string' },
+          },
+          required: ['location', 'wardrobe', 'light', 'palette', 'product'],
+        },
+        kinds: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'the id given in the listing, copied exactly' },
+              shot: { type: 'string', enum: ['person', 'product', 'detail', 'scene'] },
+            },
+            required: ['id', 'shot'],
+          },
+        },
+      },
+      required: ['look', 'kinds'],
+    },
+    `You are reading an advertisement that has already been shot and working out
+what it was made from — a look book written after the fact.
+
+Describe the ONE shoot every shot belongs to: the location, the wardrobe, the
+light, the palette, and the product itself. Be concrete and specific, in the
+words a photographer would use. "A pale oak kitchen counter with a window to the
+left" is usable; "a modern kitchen" is not. Infer from the instructions; where
+they are silent, choose something consistent with the rest rather than vague.
+
+Then say what each shot is OF:
+
+  person   the creator is in frame — a face is visible
+  product  the item is the subject; hands may hold it, no face
+  detail   macro — texture, lettering, a mechanism
+  scene    the place, nobody in it
+
+Judge that from what the instruction actually describes, not from where the shot
+falls in the order. An instruction that names a face, an expression, eye contact
+or the creator is a person shot. One that describes only an object, a label or a
+surface is not, even if a person is implied nearby. Copy each id exactly.`,
+  );
+}

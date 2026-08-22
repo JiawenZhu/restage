@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { VersionTree } from './VersionTree';
 import { useUser } from './AuthGate';
 import { PromptComposer } from './PromptComposer';
-import { lineageOf, shotPlan, type LineageNode } from '@/lib/sequence';
+import { lineageOf, rebuildEstimate, shotPlan, type LineageNode } from '@/lib/sequence';
 import { ImpactModal, ShootPanel } from './ShootPanel';
 import type { Impact } from '@/lib/impact';
 import type { Run, TreeNode } from '@/lib/types';
@@ -29,10 +29,20 @@ const EDIT_KEYWORDS = [
 export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
   const [pinned, setPinned] = useState<string | null>(null);
   const [regenTarget, setRegenTarget] = useState<TreeNode | null>(null);
-  /* What a swap or a removal invalidated, and what rebuilding it would cost.
-     Held here rather than acted on, because every rebuilt step is a paid
-     generation and the decision to spend belongs to the person. */
-  const [pendingRebuild, setPendingRebuild] = useState<{ steps: number[]; label: string } | null>(null);
+  /*
+   * Out-of-date shots are read from the TREE, not remembered from the last
+   * action.
+   *
+   * This used to be state set by whatever call reported staleness, which made
+   * the offer to rebuild survive exactly as long as the page did. Change the
+   * product, choose "not now", reload — and the frames still said "needs
+   * rebuilding" while nothing anywhere offered to rebuild them, with the
+   * sequence render refusing until they were fixed. A dead end reachable by
+   * pressing refresh.
+   *
+   * Deriving it means the bar is simply true whenever the tree says it is.
+   */
+  const [dismissedStale, setDismissedStale] = useState('');
   const [busySeq, setBusySeq] = useState(false);
   const [seqMsg, setSeqMsg] = useState<{ text: string; bad: boolean } | null>(null);
   /* Raised when a change to the shoot invalidates work. Held at this level, not
@@ -72,8 +82,6 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'that did not work');
-      if (json.staleCount > 0) setPendingRebuild({ steps: json.staleSteps, label: json.label });
-      else setPendingRebuild(null);
       /* Deleting a frame takes the clips rendered from it too — they are
          artefacts of that one frame and mean nothing without it. Silently
          removing three things when the user asked to remove one is the kind of
@@ -109,6 +117,11 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
    * finished. The generating node still carries its pulsing ring, so "the agent
    * is here now" is not lost by not selecting it.
    */
+  const staleFrames = nodes.filter(
+    (n) => n.kind === 'frame' && n.stale && !n.discarded && !n.removedFromSequence,
+  );
+  const staleKey = staleFrames.map((n) => n.id).sort().join(',');
+
   const readable = [...nodes]
     .reverse()
     .find((n) => n.status !== 'generating' && (n.frameUrl || n.criticNotes));
@@ -160,13 +173,15 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
           </div>
         )}
 
-        {pendingRebuild && (
+        {staleFrames.length > 0 && dismissedStale !== staleKey && (
           <RebuildBar
-            steps={pendingRebuild.steps}
-            label={pendingRebuild.label}
+            steps={[...new Set(staleFrames.map((n) => n.stepNo))].sort((a, b) => a - b)}
+            label={rebuildEstimate(staleFrames.length).label}
             busy={busySeq}
-            onRebuild={() => void sequenceAction({ action: 'rebuild' }).then(() => setPendingRebuild(null))}
-            onDismiss={() => setPendingRebuild(null)}
+            onRebuild={() => void sequenceAction({ action: 'rebuild' })}
+            /* Dismissal is keyed to WHICH shots are stale, so hiding the bar
+               once does not hide it again when something new goes out of date. */
+            onDismiss={() => setDismissedStale(staleKey)}
           />
         )}
         {regenTarget && (
@@ -969,15 +984,22 @@ function RebuildBar({
   onRebuild: () => void;
   onDismiss: () => void;
 }) {
+  const one = steps.length === 1;
   return (
     <div className="rs-enter rs-tint-warn absolute inset-x-3 bottom-4 z-40 flex flex-wrap items-center gap-3 rounded-card border border-warn/45 p-3.5 shadow-[0_18px_40px_-18px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:w-[560px] sm:-translate-x-1/2">
       <div className="min-w-0 flex-1">
         <p className="text-[11px] font-bold tracking-[0.1em] text-warn-ink">
-          {steps.length} STEP{steps.length === 1 ? '' : 'S'} NOW OUT OF DATE
+          {steps.length} SHOT{one ? '' : 'S'} OUT OF DATE
         </p>
+        {/* One cause is no longer the only cause. This said "built on the frame
+            you changed", which was true when every step edited the one before —
+            but a shot can now be out of date because the PRODUCT or the
+            LOCATION changed under it, and it never descended from anything.
+            The wording says what is true either way. Singular was broken too:
+            "it no longer follow from it", and a "Rebuild them" for one shot. */}
         <p className="mt-1 text-[12.5px] leading-snug text-ink-2">
-          Step{steps.length === 1 ? '' : 's'} {steps.join(', ')} {steps.length === 1 ? 'was' : 'were'} built on the
-          frame you changed, so {steps.length === 1 ? 'it' : 'they'} no longer follow from it. Rebuilding takes {label}.
+          {one ? 'Step' : 'Steps'} {steps.join(', ')} no longer {one ? 'matches' : 'match'} this shoot.
+          Remaking {one ? 'it' : 'them'} takes {label}.
         </p>
       </div>
       <button
@@ -986,14 +1008,14 @@ function RebuildBar({
         onClick={onRebuild}
         className="rounded-lg bg-primary px-3.5 py-2 text-[12.5px] font-semibold text-primary-ink disabled:opacity-50"
       >
-        {busy ? 'Starting…' : 'Rebuild them'}
+        {busy ? 'Starting…' : one ? 'Remake it' : 'Remake them'}
       </button>
       <button
         type="button"
         onClick={onDismiss}
         className="rounded-lg border border-line-strong px-3.5 py-2 text-[12.5px] font-semibold text-ink-2"
       >
-        Leave it
+        {one ? 'Leave it' : 'Leave them'}
       </button>
     </div>
   );

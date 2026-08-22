@@ -376,11 +376,29 @@ export async function apiKeyFor(uid?: string): Promise<string> {
     }
   }
 
-  const fallback = process.env.GEMINI_API_KEY;
-  if (fallback && process.env.NODE_ENV !== 'production') return fallback;
+  /*
+   * OURS is the default. A saved key overrides it.
+   *
+   * This was gated to non-production, on the reasoning that running a stranger's
+   * work on our own key is an invisible, unattributed cost. True as far as it
+   * goes, and wrong about this product: Restage supplies a Gemini key and always
+   * has, and BYOK is an option laid on top of that — not a precondition. With
+   * the gate in place, a deployed build defaults every account to BYOK, finds no
+   * saved key (there is no settings screen yet to save one), skips the fallback
+   * because NODE_ENV is production, and throws on the first model call of every
+   * run. That is the entire product failing closed on a guard against a cost
+   * problem.
+   *
+   * The spend concern is real and is answered elsewhere: lib/rateLimit caps what
+   * one account can bill per hour, counted in clips rather than requests. This
+   * is not the place to enforce it, because the only thing it can enforce here
+   * is "nobody may use the product".
+   */
+  const ours = process.env.GEMINI_API_KEY;
+  if (ours) return ours;
 
   throw new Error(
-    'No API key is saved for this account. Add your Google AI Studio key in settings, or switch to the paid plan.',
+    'No Gemini API key is configured. Set GEMINI_API_KEY on the server, or save your own key in settings.',
   );
 }
 

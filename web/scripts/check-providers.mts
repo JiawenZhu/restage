@@ -153,6 +153,33 @@ check(!/keyPreview: key|geminiKeyEnc:.*json|return.*\bkey\b\s*\}/.test(KEYROUTE.
 check(/THE KEY IS NEVER RETURNED/.test(KEYROUTE), '这一点写在文件头上');
 check(/scrub\(String\(e\)\)/.test(KEYROUTE), '异常信息也过一遍 scrub', '（异常里可能带着正在存的值）');
 
+/*
+ * OUR key is the default; a saved key overrides it.
+ *
+ * This was briefly gated to non-production, and the effect in a deployed build
+ * was total: every account defaults to BYOK, none has a saved key (there is no
+ * settings screen yet), the fallback was skipped because NODE_ENV was
+ * production, and the first model call of every run threw. The whole product
+ * failed closed on a guard meant to stop an accounting problem.
+ */
+/* Bounded to apiKeyFor's own body. Slicing to end-of-file also swept up
+   vertexToken's gcloud branch, which is legitimately dev-only, and reported a
+   correct guard as the broken one. */
+const apiKeyForBody = (() => {
+  const from = SRC.indexOf('export async function apiKeyFor');
+  const next = SRC.indexOf('\nexport ', from + 1);
+  return SRC.slice(from, next === -1 ? undefined : next);
+})();
+check(
+  !/NODE_ENV !== 'production'/.test(apiKeyForBody),
+  '生产环境下不会把我们自己的 key 关掉',
+  '（否则没存过 key 的账号一跑就报错，而现在还没有存 key 的界面）',
+);
+check(
+  /const ours = process\.env\.GEMINI_API_KEY;\s*if \(ours\) return ours;/.test(SRC),
+  '没存自己 key 的用户用我们提供的那把',
+);
+
 /* ── the doors really are different ───────────────────────────────────────── */
 console.log('\n════ 两扇门的地址、凭证、动词都不一样 ════\n');
 

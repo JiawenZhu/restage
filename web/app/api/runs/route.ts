@@ -69,20 +69,35 @@ export async function GET(req: Request) {
       snapshot.docs.map(async (doc: QueryDocumentSnapshot<DocumentData>) => {
         const data = doc.data();
 
-        // One thumbnail per run: enough to recognise it in a grid, small enough
-        // that sixty of them still load. The newest achieved frame is the one
-        // that best represents where the run got to.
-        let thumbUrl: string | undefined = data.previewFrames?.[0]?.frameUrl;
+        /*
+         * One thumbnail per run — and it must be a frame the run PRODUCED.
+         *
+         * This preferred `previewFrames[0]`, which is the enrolment photo, so
+         * every card in the library showed the same face on the same background
+         * and none of them showed what the run made. It also meant the thumbnail
+         * was a Storage URL, and Storage is private now, so those links 403.
+         *
+         * Generated frames are data URLs held in Firestore, so they need no
+         * signing and cannot expire. Newest achieved first; a run that never got
+         * a clean frame falls back to its last attempt, and only a run with no
+         * frames at all shows nothing.
+         */
+        let thumbUrl: string | undefined;
         let frameCount = 0;
         try {
           const nodesSnap = await doc.ref.collection('nodes').orderBy('createdAt', 'desc').get();
-          frameCount = nodesSnap.docs.filter((n) => n.data().kind === 'frame').length;
-          if (!thumbUrl) {
-            const best =
-              nodesSnap.docs.find((n) => n.data().kind === 'frame' && n.data().status === 'achieved') ??
-              nodesSnap.docs.find((n) => n.data().kind === 'frame' && n.data().frameUrl);
-            thumbUrl = best?.data().frameUrl;
-          }
+          const frames = nodesSnap.docs.filter((n) => {
+            const d = n.data();
+            if (d.kind !== 'frame' || typeof d.frameUrl !== 'string') return false;
+            // A Storage URL without a download token predates the bucket being
+            // locked down and would render as a broken image. Better to show a
+            // run with no thumbnail than one with a broken one.
+            if (d.frameUrl.startsWith('data:')) return true;
+            return d.frameUrl.includes('token=');
+          });
+          frameCount = frames.length;
+          const best = frames.find((n) => n.data().status === 'achieved') ?? frames[0];
+          thumbUrl = best?.data().frameUrl;
         } catch {
           // A run whose nodes cannot be read is still worth listing.
         }

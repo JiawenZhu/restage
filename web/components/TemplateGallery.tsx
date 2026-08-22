@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CREATIVE_TEMPLATES, type CreativeTemplate } from '@/lib/templates';
+import { TEMPLATES_WITH_CLIP } from '@/lib/templatePreviews';
 
 /*
  * Templates are shown as motion, not prose.
@@ -84,7 +85,12 @@ function TemplateCard({
   onSelect: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [hasClip, setHasClip] = useState(true);
+  /* Known up front from the generated manifest rather than discovered when a
+     <video> errors. preload="none" means that error would not fire until the
+     user hovered — so the affordance promised motion, and hovering did nothing.
+     Rendering a clip only where one exists also skips a guaranteed-404 request
+     per still-only card. */
+  const [hasClip, setHasClip] = useState(() => TEMPLATES_WITH_CLIP.has(tpl.id));
   const [playing, setPlaying] = useState(false);
 
   const play = useCallback(() => {
@@ -128,17 +134,27 @@ function TemplateCard({
         aria-label={`Use the ${tpl.name} template`}
         className="relative block aspect-[9/13] w-full overflow-hidden bg-subtle text-left"
       >
-        <video
-          ref={videoRef}
-          src={`/templates/${tpl.id}.mp4`}
-          poster={`/templates/${tpl.id}.jpg`}
-          muted
-          loop
-          playsInline
-          preload="none"
-          onError={() => setHasClip(false)}
-          className="h-full w-full object-cover"
-        />
+        {hasClip ? (
+          <video
+            ref={videoRef}
+            src={`/templates/${tpl.id}.mp4`}
+            poster={`/templates/${tpl.id}.jpg`}
+            muted
+            loop
+            playsInline
+            preload="none"
+            onError={() => setHasClip(false)}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/templates/${tpl.id}.jpg`}
+            alt=""
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+          />
+        )}
 
         {/* A gradient, so white type stays legible over any frame. */}
         <span className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />

@@ -15,6 +15,7 @@ if (typeof window !== 'undefined') {
   throw new Error('lib/orchestrator is server-only.');
 }
 
+import { randomUUID } from 'node:crypto';
 import { adminDb, adminStorage } from './firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { critique, generateFrame, planRun, verifyIdentity } from './gemini';
@@ -59,12 +60,35 @@ export async function uploadToStorage(
     dataBuffer = Buffer.from(input);
   }
 
+  /*
+   * A download token, not a public bucket.
+   *
+   * This returned a bare `?alt=media` URL, which only resolved because the
+   * storage rules allowed the world to read every object — the same rule that
+   * exposed enrolled face photos. With the bucket locked down those URLs 403,
+   * so the frames need their own credential.
+   *
+   * `firebaseStorageDownloadTokens` is the mechanism Firebase's own
+   * getDownloadURL() uses: the object carries an unguessable token and the URL
+   * that includes it reads regardless of rules. The capability lives in the
+   * run's node document, which only its owner can read, so possession of the
+   * URL is the permission — and no other user can obtain one.
+   *
+   * A token can be revoked later by clearing the metadata, which a public
+   * bucket never offered.
+   */
+  const downloadToken = randomUUID();
   const file = bucket.file(path);
   await file.save(dataBuffer, {
     contentType,
-    metadata: { cacheControl: 'public, max-age=31536000' },
+    metadata: {
+      cacheControl: 'private, max-age=31536000',
+      metadata: { firebaseStorageDownloadTokens: downloadToken },
+    },
   });
-  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(
+    path,
+  )}?alt=media&token=${downloadToken}`;
 }
 
 async function resolveImageInput(u: string): Promise<{ mimeType: string; data: Buffer }> {

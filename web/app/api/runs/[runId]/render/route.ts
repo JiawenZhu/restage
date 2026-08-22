@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { adminDb, requireUid } from '@/lib/firebaseAdmin';
 import { downloadRendered, MAX_CLIP_SECONDS, MIN_CLIP_SECONDS, pollRender, submitRender } from '@/lib/gemini';
 import { lastFrameOf, segmentsFor, stitch } from '@/lib/stitch';
+import { motionDirection } from '@/lib/look';
 import { putVideo, signedVideoUrl, videoKey } from '@/lib/r2';
 
 /*
@@ -57,17 +58,21 @@ function buildCinematicUgcVideoPrompt(
 ): string {
   const cameraMovement =
     aspect === '9:16'
-      ? 'Handheld smartphone vlog tracking camera with subtle organic breathing motion, eye-level perspective, 35mm lens, f/1.8 shallow depth of field with gentle background bokeh'
-      : 'Smooth cinematic forward push-in dolly tracking shot, eye-level angle, 35mm lens, deep 3D spatial parallax between subject and background environment';
+      /* Vertical UGC is shot at arm's length, and the camera move should still
+         read as handheld — but the LENS matters more than the movement. 35mm at
+         face distance is what makes a phone selfie unflattering; the framing
+         here keeps the handheld feel and loses the distortion. */
+      ? 'Handheld at arm\'s length with subtle organic breathing motion, camera a touch above eye level, 85mm-equivalent compression, f/2 shallow depth of field with gentle background bokeh'
+      : 'Smooth cinematic forward push-in, camera a touch above eye level, 85mm-equivalent compression, natural spatial parallax between subject and background';
 
   return [
     `Cinematic 4K UGC video clip, 24fps.`,
     `${goal}. ${label ? `Scene focus: ${label}.` : ''}`,
-    `STRICT FACIAL IDENTITY ANCHOR: The subject's exact facial structure, bone geometry, eye shape and spacing, nose structure, jawline, lip contour, hairline, and eyeglasses MUST remain 100% stable and identical to the initial reference frame across every single millisecond. Do not alter, slim, or beautify the face.`,
+    motionDirection(),
     `Expression & Motion Dynamics: Controlled natural micro-expressions only. The creator speaks with authentic charisma, fluid subtle jaw articulation, organic soft blinks, and gentle expressive head tilts. Absolutely NO exaggerated facial grimacing, NO jaw stretching, and NO facial shape deformation.`,
     `Camera Dynamics: ${cameraMovement}.`,
     `Lighting & Physics: Direct authentic cinematic lighting with realistic specular reflections shifting naturally across glasses and eyes, dynamic ambient lighting interaction, realistic skin subsurface scattering, subtle environmental dust/particles and secondary motion in the background.`,
-    `Fidelity & Constraints: Photorealistic natural skin pores and micro-texture, coherent anatomy, smooth 24fps motion blur, zero facial drift, zero morphing, zero rubbery skin, zero jitter, zero warped geometry, no text, no watermarks, no logos.`,
+
     // Only on segments after the first: the given frame is the previous
     // segment's last, so this has to read as the same take continuing.
     ...(continuation ? [continuation] : []),
@@ -335,10 +340,22 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
       });
     } catch (err) {
       console.error('[render]', runId, err);
-      await videoRef.update({
-        status: 'failed',
-        criticNotes: `Render failed: ${err instanceof Error ? err.message : 'unknown'}`,
-      });
+      /*
+       * Say what a person can do about it.
+       *
+       * The raw message was passed through verbatim, so a quota limit read as a
+       * wall of API prose with a documentation link, and a content refusal read
+       * as "render finished with no video attached". Both are recoverable
+       * situations and neither said so.
+       */
+      const raw = err instanceof Error ? err.message : 'unknown';
+      const friendly = /quota|rate limit|exceeded/i.test(raw)
+        ? 'The video quota for this project is used up. Renders work again once it resets, and the frames on this canvas are all still here.'
+        : /declined|safety|blocked|filtered/i.test(raw)
+          ? `${raw} Try rendering a different frame — the rest of the run is unaffected.`
+          : `Render failed: ${raw}`;
+
+      await videoRef.update({ status: 'failed', criticNotes: friendly });
       await runRef.update({ status: 'awaiting-approval', updatedAt: Date.now() }).catch(() => {});
     }
   })();

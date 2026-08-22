@@ -155,9 +155,38 @@ export async function pollRender(operation: string): Promise<RenderStatus> {
   if (!op.done) return { done: false };
   if (op.error) return { done: true, error: scrub(op.error.message ?? 'render failed') };
 
-  const samples = op.response?.generateVideoResponse?.generatedSamples ?? op.response?.generatedSamples ?? [];
+  /*
+   * Veo can finish successfully and return nothing.
+   *
+   * That is what a content filter looks like from here: `done: true`, no error
+   * object, and an empty sample list — with the actual reason tucked into
+   * raiMediaFilteredReasons. Reporting that as "render finished with no video
+   * attached" told the user their render had failed for no stated reason, when
+   * the truthful answer is that something in the frame or the prompt was
+   * refused, which is a thing they can act on.
+   */
+  const videoResponse = op.response?.generateVideoResponse ?? op.response ?? {};
+  const samples = videoResponse.generatedSamples ?? [];
   const uri = samples[0]?.video?.uri;
-  if (!uri) return { done: true, error: 'render finished with no video attached' };
+
+  if (!uri) {
+    const filtered: string[] =
+      videoResponse.raiMediaFilteredReasons ?? videoResponse.raiFilteredReasons ?? [];
+    if (filtered.length) {
+      return {
+        done: true,
+        error: `The video model declined this frame: ${scrub(filtered.join('; '))}`,
+      };
+    }
+    if (videoResponse.raiMediaFilteredCount) {
+      return {
+        done: true,
+        error:
+          'The video model declined this frame without giving a reason. Rendering a different frame usually works.',
+      };
+    }
+    return { done: true, error: 'The video model returned no clip and no reason.' };
+  }
 
   return { done: true, videoUri: uri };
 }

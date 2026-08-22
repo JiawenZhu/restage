@@ -20,6 +20,7 @@ import { adminDb, adminStorage } from './firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { critique, generateFrame, planRun, verifyIdentity, writeScript } from './gemini';
 import type { Aspect, PlanStep } from './types';
+import { stillDirection } from './look';
 
 /** One retry. A second failure keeps both attempts visible and moves on, because
  *  a loop that retries forever is a bill, not a feature. */
@@ -456,14 +457,13 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             : [parentImage, avatar, ...extraViews];
           const prompt = isFirst
             ? `Build the opening frame of a high-converting cinematic UGC ad, ${args.aspect}. ` +
-              `IDENTITY ANCHOR: The person is 100% IDENTICAL to the reference photos (which include front and multi-angle profile captures) — exact face geometry, jawline, eye shape, nose bridge, glasses, hairstyle, and skin tone. Do NOT alter, slim, or beautify the face.\n` +
+              `${stillDirection()}\n` +
               `${step.instruction}\n\n` +
-              `Cinematic 4K photograph, natural 35mm shallow depth of field, authentic eye-level smartphone creator composition, realistic skin pores, subsurface scattering, ambient lighting interaction. No text, no logos, no watermarks.${retryNote}`
+              `${retryNote}`
             : `The FIRST image is the current frame. Apply exactly one change to it:\n` +
               `${step.instruction}\n\n` +
               `Keep everything else in the frame — the scene, clothing, camera position and props — unchanged. ` +
-              `IDENTITY ANCHOR: The OTHER images are the identity references (including front and multi-angle profile captures). The person's facial structure, bone geometry, glasses, and authentic expression MUST remain 100% stable and identical to the identity reference. Do not idealize, slim, or beautify the face. ` +
-              `Cinematic 4K photograph, natural 35mm shallow depth of field, authentic eye-level smartphone creator composition, realistic skin pores, specular lighting reflections. No text, no logos, no watermarks.${retryNote}`;
+              `The OTHER images are the identity references, including the profile captures.\n${stillDirection()}${retryNote}`;
 
           const frame = await generateFrame({ prompt, aspect: args.aspect, refs });
           const url = await uploadToStorage(
@@ -724,8 +724,8 @@ export async function regenerateNode(args: {
     try {
       const isFromAvatar = parentId === 'root';
       const prompt = isFromAvatar
-        ? `Build the opening frame of a high-converting cinematic UGC ad, ${run.aspect}. The person is EXACTLY the one in the reference photos (including front and multi-angle captures) — identical face geometry, same glasses if worn, same hairstyle. Do not idealize or beautify.\n${args.instruction}\n\nCinematic 4K photograph, natural 35mm shallow depth of field, authentic eye-level smartphone creator composition, realistic skin pores, subsurface scattering. No text, no logos.`
-        : `The FIRST image is the current frame. Apply exactly one change to it:\n${args.instruction}\n\nKeep everything else unchanged. The OTHER images are the identity references (including front and multi-angle profile captures): the person must remain EXACTLY that person. Do not idealize or beautify the face. Cinematic 4K photograph, natural 35mm shallow depth of field, authentic eye-level smartphone creator composition, realistic skin pores, specular lighting reflections. No text, no logos.`;
+        ? `Build the opening frame of a UGC ad, ${run.aspect}.\n${args.instruction}\n\n${stillDirection()}`
+        : `The FIRST image is the current frame. Apply exactly one change to it:\n${args.instruction}\n\nKeep everything else in the frame unchanged. The OTHER images are the identity references.\n${stillDirection()}`;
 
       const frame = await generateFrame({
         prompt,

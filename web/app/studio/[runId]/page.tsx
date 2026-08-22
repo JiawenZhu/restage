@@ -1,5 +1,4 @@
 import { AppShell } from '@/components/AppShell';
-import { AuthButton } from '@/components/AuthGate';
 import { LiveRun } from '@/components/LiveRun';
 
 /*
@@ -10,7 +9,7 @@ import { LiveRun } from '@/components/LiveRun';
 export default async function Run({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params;
   return (
-    <AppShell right={<AuthButton />}>
+    <AppShell>
       <LiveRun runId={runId} />
     </AppShell>
   );

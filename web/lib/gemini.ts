@@ -27,6 +27,16 @@ const VIDEO_MODEL = process.env.RESTAGE_VIDEO_MODEL ?? 'veo-3.1-fast-generate-pr
 
 export type Aspect = '9:16' | '16:9';
 
+/*
+ * The fast Veo model's own words when asked for more: "The number value for
+ * `durationSeconds` is out of bound. Please provide a value between 4 and 8,
+ * inclusive." The UI used to offer 8 / 15 / 30 and the value reached nothing —
+ * every choice produced the same clip. Longer output needs several renders
+ * stitched together, which is the editing worker's job, not this call's.
+ */
+export const MIN_CLIP_SECONDS = 4;
+export const MAX_CLIP_SECONDS = 8;
+
 function key(): string {
   const k = process.env.GEMINI_API_KEY;
   if (!k) throw new Error('GEMINI_API_KEY is not set');
@@ -85,6 +95,8 @@ export interface RenderRequest {
   /** The approved frame becomes frame one, which is why the tree runs on stills. */
   firstFrame?: { data: Buffer | Uint8Array; mimeType: string };
   aspect: Aspect;
+  /** Clip length. The fast Veo model's ceiling is 8s; see MAX_CLIP_SECONDS. */
+  durationSeconds?: number;
 }
 
 /**
@@ -104,7 +116,23 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
   const res = await fetch(`${BASE}/models/${VIDEO_MODEL}:predictLongRunning?key=${key()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ instances: [instance], parameters: { aspectRatio: req.aspect } }),
+    body: JSON.stringify({
+      instances: [instance],
+      parameters: {
+        aspectRatio: req.aspect,
+        // Clamped rather than trusted: runs created before the ceiling was known
+        // carry seconds: 15 or 30, and an out-of-bounds value fails the whole
+        // render instead of just being ignored.
+        ...(req.durationSeconds
+          ? {
+              durationSeconds: Math.min(
+                MAX_CLIP_SECONDS,
+                Math.max(MIN_CLIP_SECONDS, Math.round(req.durationSeconds)),
+              ),
+            }
+          : {}),
+      },
+    }),
   });
 
   const json = await res.json();

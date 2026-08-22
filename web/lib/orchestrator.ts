@@ -31,7 +31,7 @@ export interface StartArgs {
   uid: string;
   goal: string;
   aspect: Aspect;
-  seconds: 8 | 15 | 30;
+  seconds: 4 | 6 | 8;
   templateId?: string;
   /** Enrolment capture as a data URL or HTTP URL. */
   avatarDataUrl: string;
@@ -402,7 +402,13 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
     console.error('[orchestrator]', runId, err);
     // The run is marked failed rather than left "running" forever, so the UI can
     // say what happened instead of spinning.
-    await touch({ status: 'failed' }).catch(() => {});
+    // The comment above says the UI can say what happened — it could not,
+    // because nothing recorded what happened. An empty plan panel that never
+    // fills is indistinguishable from a slow one.
+    await touch({
+      status: 'failed',
+      failureReason: err instanceof Error ? err.message : 'the run stopped unexpectedly',
+    }).catch(() => {});
   }
 }
 

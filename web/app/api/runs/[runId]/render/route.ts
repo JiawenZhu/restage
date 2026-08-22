@@ -69,7 +69,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
   try {
     uid = await requireUid(req);
   } catch {
-    uid = 'guest_creator';
+    // Rendering costs a Veo call and writes to somebody's run. The shared
+    // 'guest_creator' fallback meant an anonymous caller could spend on, and
+    // write into, a run they had merely guessed the id of.
+    return NextResponse.json({ error: 'sign in to render' }, { status: 401 });
   }
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
@@ -82,6 +85,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     return NextResponse.json({ error: 'no such run' }, { status: 404 });
   }
   const run = runSnap.data()!;
+  // Same answer for "absent" and "not yours": a 403 would confirm the id exists.
+  if (run.uid !== uid) return NextResponse.json({ error: 'no such run' }, { status: 404 });
   if (run.status === 'planning') {
     return NextResponse.json({ error: 'the plan is still being written' }, { status: 409 });
   }
@@ -112,6 +117,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     try {
       const prompt = buildCinematicUgcVideoPrompt(run.goal, frame.label, run.aspect);
       const { operation } = await submitRender({
+        // The 8/15/30s control was collected, stored, and never sent anywhere.
+        durationSeconds: run.seconds,
         prompt,
         firstFrame,
         aspect: run.aspect,
@@ -180,10 +187,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
 
       const key = videoKey(uid, runId, videoRef.id);
       await putVideo(key, finalVideoBytes);
-      const url = await signedVideoUrl(key, 604800);
-
-      await videoRef.update({ status: 'achieved', videoKey: key, videoUrl: url });
-      await runRef.update({ status: 'complete', videoUrl: url, updatedAt: Date.now() });
+      /*
+       * The key is the durable record; the URL is not.
+       *
+       * A signed R2 URL expires — seven days is the maximum R2 allows — and
+       * nothing re-signed it, so every clip in the library would have quietly
+       * become a broken video after a week. Clients now link to
+       * /api/runs/[runId]/video?nodeId=..., which re-signs on each request, so
+       * the address a user bookmarks keeps working for as long as they own it.
+       */
+      await videoRef.update({
+        status: 'achieved',
+        videoKey: key,
+        videoUrl: `/api/runs/${runId}/video?nodeId=${videoRef.id}`,
+      });
+      await runRef.update({
+        status: 'complete',
+        videoKey: key,
+        videoUrl: `/api/runs/${runId}/video?nodeId=${videoRef.id}`,
+        updatedAt: Date.now(),
+      });
     } catch (err) {
       console.error('[render]', runId, err);
       await videoRef.update({

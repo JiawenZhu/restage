@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 
 interface AuthModalProps {
@@ -12,6 +12,13 @@ interface AuthModalProps {
 export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) {
   const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
+
+  /* useState only reads initialMode on first mount, so the dialog kept whatever
+     mode it was opened in the first time — pressing "Sign up" after having once
+     opened "Sign in" showed the sign-in form. */
+  useEffect(() => {
+    if (isOpen) setMode(initialMode);
+  }, [isOpen, initialMode]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

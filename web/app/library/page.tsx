@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AppShell } from '@/components/AppShell';
 import { AuthButton } from '@/components/AuthGate';
 import { useAuth } from '@/lib/auth-context';
+import { CREATIVE_TEMPLATES } from '@/lib/templates';
 
 /*
  * Everything the user has made, newest first. Each card links to its own
@@ -18,6 +19,7 @@ import { useAuth } from '@/lib/auth-context';
 interface RunCard {
   id: string;
   goal: string;
+  templateId?: string | null;
   aspect: '9:16' | '16:9';
   seconds: number;
   status: string;
@@ -30,6 +32,12 @@ interface RunCard {
 }
 
 type Filter = 'all' | 'video' | 'running';
+
+/* Every state where the agent still has work to do. The filter used to test
+   only 'running' and 'planning', so a run that was rendering — the longest,
+   most worth-watching phase — was missing from "Still running". This set is
+   also what decides whether the page keeps polling. */
+const IN_FLIGHT = new Set(['planning', 'running', 'rendering']);
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   planning: { text: 'Planning', cls: 'border-accent/40 text-accent' },
@@ -60,6 +68,28 @@ export default function Library() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
 
+  const load = useCallback(
+    async (quiet = false) => {
+      if (!user) return;
+      if (!quiet) setLoading(true);
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch('/api/runs', { headers: { authorization: `Bearer ${token}` } });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? 'could not load your library');
+        setRuns(json.runs ?? []);
+        setError(null);
+      } catch (e) {
+        // A failed background refresh must not replace a list that is on screen
+        // and still readable.
+        if (!quiet) setError(e instanceof Error ? e.message : 'could not load your library');
+      } finally {
+        if (!quiet) setLoading(false);
+      }
+    },
+    [user],
+  );
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -67,39 +97,34 @@ export default function Library() {
       setRuns([]);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const token = await user.getIdToken();
-        const res = await fetch('/api/runs', { headers: { authorization: `Bearer ${token}` } });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? 'could not load your library');
-        if (!cancelled) setRuns(json.runs ?? []);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'could not load your library');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user, authLoading]);
+    void load();
+  }, [user, authLoading, load]);
+
+  /*
+   * A run takes minutes, and the library fetched once — so a card that said
+   * "Running" when the page loaded still said it after the clip was finished.
+   * Poll only while something is actually in flight, and stop as soon as
+   * nothing is: an idle library should cost nothing.
+   */
+  const anyInFlight = runs.some((r) => IN_FLIGHT.has(r.status));
+  useEffect(() => {
+    if (!anyInFlight || !user) return;
+    const t = setInterval(() => void load(true), 8000);
+    return () => clearInterval(t);
+  }, [anyInFlight, user, load]);
 
   const shown = runs.filter((r) =>
-    filter === 'video' ? !!r.videoUrl : filter === 'running' ? r.status === 'running' || r.status === 'planning' : true,
+    filter === 'video' ? !!r.videoUrl : filter === 'running' ? IN_FLIGHT.has(r.status) : true,
   );
 
   const counts = {
     all: runs.length,
     video: runs.filter((r) => r.videoUrl).length,
-    running: runs.filter((r) => r.status === 'running' || r.status === 'planning').length,
+    running: runs.filter((r) => IN_FLIGHT.has(r.status)).length,
   };
 
   return (
-    <AppShell right={<AuthButton />}>
+    <AppShell>
       <div className="mx-auto w-full max-w-[1180px] flex-1 overflow-y-auto px-8 py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -201,18 +226,29 @@ export default function Library() {
                       </span>
                     )}
 
-                    <span className="absolute left-2.5 top-2.5 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                      {r.aspect}
+                    <span className="absolute left-2.5 top-2.5 flex gap-1.5">
+                      <span className="rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        {r.aspect}
+                      </span>
+                      {/* Which template made this. The id was stored on every run
+                          from the start and shown nowhere. */}
+                      {r.templateId && (
+                        <span className="rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                          {CREATIVE_TEMPLATES.find((t) => t.id === r.templateId)?.name ?? r.templateId}
+                        </span>
+                      )}
                     </span>
                   </div>
 
                   <div className="flex flex-1 flex-col p-3.5">
                     <p className="line-clamp-2 text-[14px] font-semibold leading-snug">{r.goal}</p>
                     <div className="mt-auto flex items-center justify-between gap-2 pt-3">
-                      <span className={`rounded-chip border px-2 py-0.5 text-[10.5px] font-bold tracking-[0.04em] ${badge.cls}`}>
+                      <span className={`flex items-center gap-1.5 rounded-chip border px-2 py-0.5 text-[10.5px] font-bold tracking-[0.04em] ${badge.cls}`}>
+                        {IN_FLIGHT.has(r.status) && <span className="rs-cursor block h-[5px] w-[5px] rounded-full bg-current" />}
                         {badge.text}
                       </span>
                       <span className="tnum text-[11.5px] text-ink-4">
+                        {r.stepCount > 0 && `${r.stepCount} steps · `}
                         {r.frameCount > 0 && `${r.frameCount} frames · `}
                         {whenever(r.updatedAt || r.createdAt)}
                       </span>

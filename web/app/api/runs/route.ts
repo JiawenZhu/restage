@@ -10,16 +10,20 @@ export const maxDuration = 300;
 const Body = z.object({
   goal: z.string().min(8).max(600),
   aspect: z.enum(['9:16', '16:9']),
-  seconds: z.union([z.literal(8), z.literal(15), z.literal(30)]),
+  // 4-8s is the model's actual range. 15 and 30 were accepted here, stored, and
+  // shown on library cards, while the renderer produced 8s regardless.
+  seconds: z.union([z.literal(4), z.literal(6), z.literal(8)]),
   templateId: z.string().optional(),
   // ~8MB of base64. Unbounded, this was a memory and cost amplifier: the string
   // is decoded, sent to the model, and echoed into Firestore.
   avatarDataUrl: z.string().min(1).max(11_000_000),
+  // The same bound as avatarDataUrl: three unbounded images was three times the
+  // amplifier one was.
   avatarMultiViews: z
     .object({
-      front: z.string().optional(),
-      left: z.string().optional(),
-      right: z.string().optional(),
+      front: z.string().max(11_000_000).optional(),
+      left: z.string().max(11_000_000).optional(),
+      right: z.string().max(11_000_000).optional(),
     })
     .optional(),
 });
@@ -105,6 +109,9 @@ export async function GET(req: Request) {
         return {
           id: doc.id,
           goal: data.goal,
+          // Recorded on every run since the beginning and read by nothing, so a
+          // run made from a template was indistinguishable from one that was not.
+          templateId: data.templateId ?? null,
           aspect: data.aspect,
           seconds: data.seconds,
           status: data.status,

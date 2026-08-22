@@ -12,7 +12,7 @@ export const demoRun: Run = {
   avatarId: 'maya',
   goal: 'A 15-second ad where I actually use the serum, in my kitchen. Should feel filmed, not shot.',
   aspect: '9:16',
-  seconds: 15,
+  seconds: 8,
   status: 'running',
   plan: [
     { stepNo: 1, instruction: 'Put her in a real room', rationale: 'A blank wall reads as a set. Kitchens are where this product is actually used.', status: 'done' },

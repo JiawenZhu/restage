@@ -59,12 +59,23 @@ export interface TreeNode {
 export interface Run {
   id: string;
   uid: string;
-  avatarId: string;
+  /** Optional because a run can still be started from a one-off upload; only a
+   *  run made from an enrolled avatar carries one. It was declared required and
+   *  never written, so every Run object in the app was lying about its shape. */
+  avatarId?: string;
+  /** Which creative template shaped the plan, if any. */
+  templateId?: string | null;
   goal: string;
   aspect: Aspect;
-  seconds: 8 | 15 | 30;
+  seconds: 4 | 6 | 8;
   status: 'planning' | 'running' | 'awaiting-approval' | 'rendering' | 'complete' | 'failed';
   plan: PlanStep[];
+  /** Why a failed run stopped, so the workspace can say it rather than spin. */
+  failureReason?: string;
+  /** R2 object key for the rendered clip. The key is the durable record; the
+   *  playable URL is re-signed on demand by /api/runs/[runId]/video. */
+  videoKey?: string;
+  videoUrl?: string;
   createdAt: number;
   updatedAt: number;
 }

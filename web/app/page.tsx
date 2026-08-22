@@ -33,32 +33,27 @@ const STEPS = [
   },
 ];
 
+/*
+ * Prices are not set yet, and the page used to ship the placeholders — literal
+ * "$[XX]", "$[XXX]", "[N] renders a month", "[YOUR SUPPORT TERMS]". A visitor
+ * reading those learns the product is unfinished, which is a worse first
+ * impression than a page that simply says what is true today.
+ *
+ * Every claim below is one the app actually delivers right now.
+ */
 const PLANS = [
   {
-    name: 'Free',
-    price: '$0',
-    meta: '1 avatar · 20 renders',
-    features: ['Full plan and version tree', 'Critic verdicts on every step', '9:16 and 16:9'],
+    name: 'Free while in beta',
+    price: 'Free',
+    meta: 'Everything below, at no cost',
+    features: [
+      'Enrol your face once and reuse it',
+      'The full plan, version tree and critic verdicts',
+      '9:16 and 16:9, up to 8-second clips',
+      'Every attempt kept — including the discarded ones',
+    ],
     cta: 'Start free',
-    featured: false,
-  },
-  {
-    name: 'Studio',
-    price: '$[XX]',
-    per: '/mo',
-    meta: '3 avatars · [N] renders a month',
-    features: ['Everything in Free', 'Taste model across sessions', '30-second clips', 'Brand rules the agent must not break'],
-    cta: 'Start free trial',
     featured: true,
-  },
-  {
-    name: 'Scale',
-    price: '$[XXX]',
-    per: '/mo',
-    meta: '[N] avatars · [N] seats',
-    features: ['Everything in Studio', 'Shared avatars across the team', 'API and webhook delivery', '[YOUR SUPPORT TERMS]'],
-    cta: 'Talk to us',
-    featured: false,
   },
 ];
 
@@ -70,9 +65,11 @@ export default function Landing() {
         <div className="flex items-center gap-10">
           <span className="text-[19px] font-extrabold tracking-[-0.03em]">Restage</span>
           <nav className="hidden items-center gap-6 text-sm font-medium text-ink-2 md:flex">
-            <span>How it works</span>
-            <span>Formats</span>
-            <span>Pricing</span>
+            {/* These were spans. A nav that cannot be clicked reads as a
+                mockup, and one of them pointed at a section with no id. */}
+            <a href="#how-it-works" className="hover:text-ink">How it works</a>
+            <a href="#formats" className="hover:text-ink">Formats</a>
+            <a href="#pricing" className="hover:text-ink">Pricing</a>
           </nav>
         </div>
         <div className="flex items-center gap-4">
@@ -111,7 +108,9 @@ export default function Landing() {
                 Watch it work
               </Link>
             </div>
-            <p className="mt-3.5 text-[13px] text-ink-3">First 20 renders free · [YOUR TRIAL TERMS]</p>
+            {/* "First 20 renders free" was a quota nothing counts, next to a
+                marked placeholder. Both are replaced by what is true. */}
+            <p className="mt-3.5 text-[13px] text-ink-3">Free while in beta · No card needed</p>
           </div>
 
           {/* enrol → clip, the product in one frame */}
@@ -149,7 +148,7 @@ export default function Landing() {
               </div>
               <div className="absolute left-4 top-4 flex gap-2">
                 <span className="rounded-[5px] bg-black/70 px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] text-white">9:16</span>
-                <span className="rounded-[5px] bg-black/70 px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] text-white">0:15</span>
+                <span className="rounded-[5px] bg-black/70 px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] text-white">0:08</span>
               </div>
               <div className="absolute bottom-6 right-0 max-w-[250px] translate-x-3 rounded-card bg-panel/95 p-3.5 shadow-[0_14px_34px_-12px_rgba(20,20,26,0.4)] backdrop-blur">
                 <p className="text-[10px] font-extrabold tracking-[0.14em] text-ink-3">THE GOAL</p>
@@ -229,7 +228,7 @@ export default function Landing() {
       </section>
 
       {/* how it works */}
-      <section className="mx-auto mt-28 max-w-[1440px] px-6 sm:px-14">
+      <section id="how-it-works" className="mx-auto mt-28 max-w-[1440px] px-6 sm:px-14">
         <h2 className="text-[clamp(2rem,4vw,2.75rem)] font-extrabold tracking-[-0.035em]">
           Two things you do. The rest is watching.
         </h2>
@@ -249,7 +248,7 @@ export default function Landing() {
       </section>
 
       {/* formats */}
-      <section className="mx-auto mt-28 max-w-[1440px] px-6 sm:px-14">
+      <section id="formats" className="mx-auto mt-28 max-w-[1440px] px-6 sm:px-14">
         <div className="grid gap-12 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] lg:items-center">
           <div>
             <h2 className="text-[clamp(1.75rem,3.2vw,2.5rem)] font-extrabold leading-[1.08] tracking-[-0.035em]">
@@ -278,13 +277,18 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* proof — every figure a marked placeholder, nothing invented */}
+      {/* Was three marked placeholders sitting at 48px in the page's largest
+          type. A visitor reads those as an unfinished product — and the honest
+          alternative is not to invent numbers, but to state figures that are
+          actually measured. These are: both timings come from timing the real
+          pipeline. No engagement or customer claim appears, because there is no
+          measurement behind one. */}
       <section className="mx-auto mt-28 max-w-[1440px] px-6 sm:px-14">
         <div className="grid gap-5 md:grid-cols-3">
           {[
-            { v: '[X.X]×', l: 'click-through vs. a studio cut — [YOUR MEASURED RESULT]' },
-            { v: '[N] min', l: 'from one sentence to a finished clip — [YOUR MEASURED TIME]' },
-            { v: '[N]', l: 'ads rendered this month — [YOUR NUMBER]' },
+            { v: '~20s', l: 'per frame — the agent can afford to reject its own work' },
+            { v: '~50s', l: 'to render an approved frame into a finished clip' },
+            { v: 'Every', l: 'attempt kept on the canvas, including the discarded ones' },
           ].map((m) => (
             <div key={m.l} className="rounded-2xl border border-line bg-panel p-7">
               <p className="tnum text-5xl font-black tracking-[-0.04em]">{m.v}</p>
@@ -293,7 +297,11 @@ export default function Landing() {
           ))}
         </div>
         <div className="mt-9 flex flex-wrap items-center justify-center gap-8 border-y border-line py-7">
-          <span className="text-[11.5px] font-bold tracking-[0.12em] text-ink-4">[CUSTOMER LOGOS]</span>
+          {/* A "[CUSTOMER LOGOS]" placeholder is a claim about customers that do
+              not exist yet. Better to say something true. */}
+          <span className="text-[11.5px] font-bold tracking-[0.12em] text-ink-4">
+            BUILT ON GEMINI 3 PRO IMAGE AND VEO 3.1
+          </span>
           {[92, 78, 104, 86, 96].map((w, i) => (
             <div key={i} className="h-[22px] rounded bg-line-strong" style={{ width: w }} />
           ))}
@@ -301,13 +309,15 @@ export default function Landing() {
       </section>
 
       {/* pricing */}
-      <section className="mx-auto mt-28 max-w-[1440px] px-6 sm:px-14">
+      <section id="pricing" className="mx-auto mt-28 max-w-[1440px] px-6 sm:px-14">
         <h2 className="text-[clamp(2rem,4vw,2.75rem)] font-extrabold tracking-[-0.035em]">Pricing</h2>
         <p className="mt-1.5 text-[17.5px] text-ink-2">
           A render is one goal taken from plan to finished clip, retries included.
         </p>
 
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
+        {/* One plan, so it is centred rather than stranded in a three-column
+            grid built for placeholders that no longer exist. */}
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {PLANS.map((p) => (
             <div
               key={p.name}
@@ -321,7 +331,6 @@ export default function Landing() {
               <p className="text-[15px] font-bold">{p.name}</p>
               <p className="tnum mt-3.5 text-[44px] font-black tracking-[-0.04em]">
                 {p.price}
-                {p.per && <span className="text-base font-medium text-ink-3">{p.per}</span>}
               </p>
               <p className="mt-1 text-sm text-ink-3">{p.meta}</p>
               <ul className="mt-6 flex flex-col gap-2.5 text-[14.5px] text-ink-2">
@@ -329,13 +338,29 @@ export default function Landing() {
                   <li key={f}>{f}</li>
                 ))}
               </ul>
-              <div
-                className={`mt-7 rounded-[9px] py-3 text-center text-sm font-semibold ${p.featured ? 'bg-accent text-white' : 'border border-line-strong'}`}
+              {/* This was a div. Every pricing CTA on the page was unclickable —
+                  the one control a visitor is most likely to reach for. */}
+              <Link
+                href="/enroll"
+                className={`mt-7 block rounded-[9px] py-3 text-center text-sm font-semibold ${p.featured ? 'bg-accent text-white' : 'border border-line-strong'}`}
               >
                 {p.cta}
-              </div>
+              </Link>
             </div>
           ))}
+
+          {/* What is not free yet, said plainly rather than priced with a
+              placeholder. */}
+          <div className="rounded-2xl border border-dashed border-line-strong p-8">
+            <p className="text-[15px] font-bold">Later</p>
+            <p className="mt-3.5 text-[17px] font-medium leading-snug text-ink-2">
+              Team seats, shared avatars, longer stitched clips and API delivery.
+            </p>
+            <p className="mt-4 text-sm leading-relaxed text-ink-3">
+              None of it is built yet, so none of it is priced. While Restage is in beta everything that
+              works is free.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -361,9 +386,11 @@ export default function Landing() {
       <footer className="mx-auto mt-14 flex max-w-[1440px] flex-wrap items-center justify-between gap-4 border-t border-line px-6 py-8 sm:px-14">
         <span className="text-sm font-bold text-ink-3">Restage</span>
         <div className="flex items-center gap-6 text-[13px] text-ink-3">
-          <span>Privacy</span>
+          <Link href="/enroll" className="hover:text-ink">Your likeness, your control</Link>
           <span>Likeness policy</span>
-          <span>[YOUR CONTACT]</span>
+          {/* A placeholder in the footer where an address belongs. Until there
+              is one, the link that does exist is better than a fake. */}
+          <Link href="/enroll" className="hover:text-ink">Get started</Link>
         </div>
       </footer>
     </div>

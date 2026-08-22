@@ -83,6 +83,17 @@ function PlanPanel({ run }: { run: Run }) {
         </div>
       )}
 
+      {/* A failed run used to render as an empty plan, forever — the same screen
+          as a slow one. */}
+      {run.status === 'failed' && (
+        <div className="mx-3.5 mb-3 rounded-card border border-crit/40 bg-crit-soft/40 p-3">
+          <p className="text-[11px] font-bold tracking-[0.1em] text-crit">RUN STOPPED</p>
+          <p className="mt-1.5 text-[12.5px] leading-snug text-ink-2">
+            {run.failureReason || 'Something went wrong and the run could not continue.'}
+          </p>
+        </div>
+      )}
+
       <div className="relative flex flex-1 flex-col gap-0.5 overflow-y-auto px-3.5 pb-3">
         <span className="absolute bottom-3.5 left-[27px] top-3.5 w-px bg-line" />
 

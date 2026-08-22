@@ -25,7 +25,7 @@ async function main() {
     uid: 'test-creator',
     goal,
     aspect: '9:16' as const,
-    seconds: 15 as const,
+    seconds: 8 as const,
     avatarDataUrl,
     avatarMultiViews: {
       front: avatarDataUrl,

@@ -877,7 +877,7 @@ export function EnrollmentCamera() {
                 onClick={() => startBurstSweep('front', 2000)}
                 className="flex items-center gap-2 rounded-xl bg-accent-strong px-8 py-3 text-sm font-semibold text-white shadow-md hover:opacity-90 disabled:opacity-50"
               >
-                📸 Capture Front Base (Starts Auto Sweep)
+                Take the front shot
               </button>
             )}
 
@@ -887,7 +887,7 @@ export function EnrollmentCamera() {
                 onClick={() => startBurstSweep('left', 2600)}
                 className="flex items-center gap-2 rounded-xl border border-line bg-panel px-6 py-2.5 text-xs font-medium text-ink-3 hover:text-ink hover:bg-subtle disabled:opacity-50"
               >
-                Manual Trigger (or just turn head left)
+                Or take it now
               </button>
             )}
 
@@ -897,7 +897,7 @@ export function EnrollmentCamera() {
                 onClick={() => startBurstSweep('right', 2600)}
                 className="flex items-center gap-2 rounded-xl border border-line bg-panel px-6 py-2.5 text-xs font-medium text-ink-3 hover:text-ink hover:bg-subtle disabled:opacity-50"
               >
-                Manual Trigger (or just turn head right)
+                Or take it now
               </button>
             )}
 
@@ -941,8 +941,8 @@ export function EnrollmentCamera() {
         <div className="rounded-2xl border border-line bg-panel p-8 shadow-sm">
           <div className="flex items-center justify-between border-b border-line pb-4">
             <div>
-              <h3 className="text-xl font-bold">Review Captured Multi-Angle Identity</h3>
-              <p className="mt-1 text-xs text-ink-3">Hover any photo or audio below to retake or replace individually</p>
+              <h3 className="text-[19px] font-bold tracking-[-0.01em]">Does this look like you?</h3>
+              <p className="mt-1 text-[12.5px] text-ink-3">Hover any of them to retake that one on its own.</p>
             </div>
             <span className="rounded-chip bg-good-soft px-3 py-1 text-xs font-bold text-good-ink">
               {[capturedFrames.front, capturedFrames.left, capturedFrames.right].filter(Boolean).length} angles
@@ -950,90 +950,73 @@ export function EnrollmentCamera() {
             </span>
           </div>
 
-          <div className="mt-6 grid grid-cols-3 gap-5">
-            {/* Left Card */}
-            <div className="group relative overflow-hidden rounded-xl border border-line bg-canvas">
-              {capturedFrames.left ? (
-                <img src={capturedFrames.left} alt="Left" className="h-48 w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-              ) : (
-                <div className="flex h-48 w-full items-center justify-center bg-subtle text-ink-4">No Image</div>
-              )}
-              {/* Hover Action Overlay */}
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 p-3 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-                <span className="text-[11px] font-bold text-white uppercase tracking-wider">Left Profile (~60°)</span>
-                <button
-                  type="button"
-                  onClick={() => handleRetake('left')}
-                  className="flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90 active:scale-95"
-                >
-                  🔄 Retake with Camera
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fileInputLeftRef.current?.click()}
-                  className="flex items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 active:scale-95"
-                >
-                  Replace
-                </button>
-              </div>
-              <p className="py-2 text-center text-xs font-semibold text-ink-2">Left Profile (~60°)</p>
-            </div>
+          {/*
+            One card, mapped three times.
 
-            {/* Front Card */}
-            <div className="group relative overflow-hidden rounded-xl border-2 border-accent bg-canvas shadow-xs">
-              {capturedFrames.front ? (
-                <img src={capturedFrames.front} alt="Front" className="h-48 w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-              ) : (
-                <div className="flex h-48 w-full items-center justify-center bg-subtle text-ink-4">No Image</div>
-              )}
-              {/* Hover Action Overlay */}
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 p-3 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-                <span className="text-[11px] font-bold text-white uppercase tracking-wider">Front Face (Base)</span>
-                <button
-                  type="button"
-                  onClick={() => handleRetake('front')}
-                  className="flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90 active:scale-95"
-                >
-                  🔄 Retake with Camera
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fileInputFrontRef.current?.click()}
-                  className="flex items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 active:scale-95"
-                >
-                  Replace
-                </button>
-              </div>
-              <p className="py-2 text-center text-xs font-semibold text-accent-ink">Front Face (Base)</p>
-            </div>
+            This was the same forty lines pasted three times with the angle
+            swapped, which is how "Left Profile (~60°)" ended up asserting a
+            measured angle in three places — a number the brightness heuristic
+            behind the capture cannot actually measure.
 
-            {/* Right Card */}
-            <div className="group relative overflow-hidden rounded-xl border border-line bg-canvas">
-              {capturedFrames.right ? (
-                <img src={capturedFrames.right} alt="Right" className="h-48 w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-              ) : (
-                <div className="flex h-48 w-full items-center justify-center bg-subtle text-ink-4">No Image</div>
-              )}
-              {/* Hover Action Overlay */}
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 p-3 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-                <span className="text-[11px] font-bold text-white uppercase tracking-wider">Right Profile (~60°)</span>
-                <button
-                  type="button"
-                  onClick={() => handleRetake('right')}
-                  className="flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90 active:scale-95"
+            The front shot leads because it IS the base the others support, and
+            each card reports what its burst chose: "sharpest of 14" is real
+            information about the capture, and the reason to trust it.
+          */}
+          <div className="mt-6 grid gap-5 sm:grid-cols-3">
+            {([
+              { key: 'left' as const, label: 'Left', hint: 'Turned away from the lens', input: fileInputLeftRef },
+              { key: 'front' as const, label: 'Straight on', hint: 'The base every frame starts from', input: fileInputFrontRef },
+              { key: 'right' as const, label: 'Right', hint: 'The other side', input: fileInputRightRef },
+            ]).map(({ key, label, hint, input }) => {
+              const src = capturedFrames[key];
+              const stat = burstStats[key];
+              const primary = key === 'front';
+              return (
+                <div
+                  key={key}
+                  className={`group relative overflow-hidden rounded-card bg-canvas ${
+                    primary ? 'border-2 border-accent' : 'border border-line'
+                  }`}
                 >
-                  🔄 Retake with Camera
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fileInputRightRef.current?.click()}
-                  className="flex items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 active:scale-95"
-                >
-                  Replace
-                </button>
-              </div>
-              <p className="py-2 text-center text-xs font-semibold text-ink-2">Right Profile (~60°)</p>
-            </div>
+                  {src ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={src}
+                      alt={`${label} capture`}
+                      className="h-48 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-48 w-full items-center justify-center bg-subtle text-[12px] text-ink-4">
+                      not captured
+                    </div>
+                  )}
+
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 p-3 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => handleRetake(key)}
+                      className="rounded-lg bg-accent-strong px-3.5 py-1.5 text-[12.5px] font-semibold text-white active:scale-95"
+                    >
+                      Retake
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => input.current?.click()}
+                      className="rounded-lg border border-white/35 bg-white/10 px-3.5 py-1.5 text-[12.5px] font-medium text-white hover:bg-white/20 active:scale-95"
+                    >
+                      Use a photo instead
+                    </button>
+                  </div>
+
+                  <div className="px-2.5 py-2 text-center">
+                    <p className="text-[12.5px] font-semibold">{label}</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-ink-3">
+                      {stat ? `Sharpest of ${stat.kept}` : hint}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Voice Sample Playback & Individual Hover/Action Bar */}
@@ -1058,7 +1041,7 @@ export function EnrollmentCamera() {
                   onClick={() => handleRetake('audio')}
                   className="flex items-center gap-1 rounded-lg border border-line bg-panel px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-accent hover:text-accent-ink active:scale-95"
                 >
-                  🔄 Re-record
+                  Re-record
                 </button>
                 <button
                   type="button"

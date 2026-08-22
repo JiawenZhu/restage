@@ -143,7 +143,12 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
     /* 700px of fixed side panels meant the canvas had negative width on a
        tablet and the page scrolled sideways. Below lg the three panes stack. */
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      <PlanPanel run={run} onImpact={setImpact} onNote={(t) => setSeqMsg({ text: t, bad: false })} />
+      <PlanPanel
+        run={run}
+        nodes={nodes}
+        onImpact={setImpact}
+        onNote={(t) => setSeqMsg({ text: t, bad: false })}
+      />
 
       <section className="relative min-h-[380px] min-w-0 flex-1">
         <VersionTree
@@ -163,6 +168,9 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
           onDisconnect={(id: string) => void sequenceAction({ action: 'disconnect', nodeId: id })}
           onReconnect={(id: string) => void sequenceAction({ action: 'reconnect', nodeId: id })}
           onDelete={(id: string) => void sequenceAction({ action: 'delete', nodeId: id })}
+          onReorder={(id: string, direction: 'earlier' | 'later') =>
+            void sequenceAction({ action: 'reorder', nodeId: id, direction })
+          }
           storageKey={run.id}
         />
 
@@ -285,15 +293,30 @@ function isStalled(run: Run): boolean {
 
 function PlanPanel({
   run,
+  nodes,
   onImpact,
   onNote,
 }: {
   run: Run;
+  nodes: TreeNode[];
   onImpact: (i: Impact & { seconds: number; label: string }) => void;
   onNote: (msg: string) => void;
 }) {
   const stalled = isStalled(run);
   const live = isLive(run);
+
+  /*
+   * What this run has cost, counted from the tree rather than tracked.
+   *
+   * Every frame on the canvas was a paid generation and every clip was a paid
+   * render — including the attempts the critic threw away, which is exactly the
+   * spend a person cannot see and would most want to. No new bookkeeping is
+   * needed for this: the nodes ARE the receipt, and one that is derived cannot
+   * drift from what actually happened.
+   */
+  const generated = nodes.filter((n) => n.kind === 'frame').length;
+  const rendered = nodes.filter((n) => n.kind === 'video' && n.status !== 'failed').length;
+  const discarded = nodes.filter((n) => n.kind === 'frame' && (n.discarded || n.status === 'failed')).length;
   return (
     <aside className="flex w-full shrink-0 flex-col border-b border-line bg-panel lg:max-h-none lg:w-[300px] lg:border-b-0 lg:border-r">
       <div className="flex items-baseline justify-between px-[18px] pb-3 pt-[18px]">
@@ -327,6 +350,21 @@ function PlanPanel({
             {run.failureReason || 'Something went wrong and the run could not continue.'}
           </p>
         </div>
+      )}
+
+      {/* The bill so far. Quiet, and at the bottom of the header rather than in
+          it: worth being able to find, not worth being the first thing read. */}
+      {generated > 0 && (
+        <p className="px-[18px] pb-2.5 text-[11.5px] text-ink-4">
+          <span className="tnum">{generated}</span> image{generated === 1 ? '' : 's'} generated
+          {discarded > 0 && <span className="text-ink-4"> ({discarded} thrown away)</span>}
+          {rendered > 0 && (
+            <>
+              {' · '}
+              <span className="tnum">{rendered}</span> clip{rendered === 1 ? '' : 's'} rendered
+            </>
+          )}
+        </p>
       )}
 
       {/* The shoot every shot belongs to, and the one place it can be changed.
@@ -926,6 +964,11 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Pushed into the composer when the user asks to start from what is already
+     there. Not seeded automatically: most adjustments are a short sentence —
+     "hold it higher" — and pre-filling forty words of the original makes the
+     common case the slow one. */
+  const [seed, setSeed] = useState<string | undefined>(undefined);
 
   async function go() {
     if (prompt.trim().length < 4 || busy) return;
@@ -962,7 +1005,7 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
             {node.label ? ` — ${node.label.toUpperCase()}` : ''}
           </p>
           <p className="mt-1 text-[12.5px] leading-snug text-ink-2">
-            A new attempt from the same base frame. The old one stays on the tree — nothing is overwritten.
+            A new attempt at this shot. The old one stays on the tree — nothing is overwritten.
           </p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close" className="rounded-md p-1 text-ink-3 hover:bg-subtle hover:text-ink">
@@ -970,10 +1013,29 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
         </button>
       </div>
 
+      {/* What this shot was asked for.
+          Regenerating used to be a blank box, so adjusting a shot meant
+          remembering, or reconstructing, the instruction that made it — for a
+          frame whose wording is sitting right there in the database. */}
+      {node.instruction && (
+        <div className="mt-3 rounded-lg border border-line bg-subtle p-2.5">
+          <p className="text-[10px] font-bold tracking-[0.1em] text-ink-4">ASKED FOR NOW</p>
+          <p className="mt-1 text-[12px] leading-snug text-ink-2">{node.instruction}</p>
+          <button
+            type="button"
+            onClick={() => setSeed(node.instruction)}
+            className="mt-1.5 text-[11.5px] font-semibold text-accent-ink hover:underline"
+          >
+            Start from this wording
+          </button>
+        </div>
+      )}
+
       <div className="mt-3">
         <PromptComposer
           purpose="edit"
           keywords={EDIT_KEYWORDS}
+          seed={seed}
           placeholder="Say or type what should change — one thing at a time."
           onPrompt={(finalPrompt) => setPrompt(finalPrompt)}
         />

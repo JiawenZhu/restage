@@ -60,6 +60,7 @@ export function VersionTree({
   onDisconnect,
   onReconnect,
   onDelete,
+  onReorder,
   storageKey,
 }: {
   nodes: TreeNode[];
@@ -75,6 +76,8 @@ export function VersionTree({
   onReconnect?: (id: string) => void;
   /** Destroy it and its pixels. Only offered once it is disconnected. */
   onDelete?: (id: string) => void;
+  /** Move a shot earlier or later in the cut. Costs nothing. */
+  onReorder?: (id: string, direction: 'earlier' | 'later') => void;
   storageKey?: string;
 }) {
   const w = NODE_W[aspect];
@@ -172,10 +175,11 @@ export function VersionTree({
    * "Take out of the sequence" on it while offering "Use this one instead" —
    * a swap against a frame that is not an alternate of anything.
    */
-  const inSequence = useMemo(
-    () => new Set(lineageOf(nodes as unknown as LineageNode[]).map((x) => x.id)),
+  const cutOrder = useMemo(
+    () => lineageOf(nodes as unknown as LineageNode[]).map((x) => x.id),
     [nodes],
   );
+  const inSequence = useMemo(() => new Set(cutOrder), [cutOrder]);
 
   const pos = useMemo(() => {
     const m = new Map<string, { x: number; y: number; w: number; h: number }>();
@@ -561,6 +565,7 @@ export function VersionTree({
         const target = laid.find((n) => n.id === menu.nodeId);
         if (!target) return null;
         const isDisconnected = target.removedFromSequence === true;
+        const orderIndex = cutOrder.indexOf(target.id);
         const item =
           'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] hover:bg-subtle disabled:opacity-40';
         return (
@@ -632,6 +637,23 @@ export function VersionTree({
                 {confirmDelete === target.id
                   ? `Delete ${target.kind === 'video' ? 'this clip' : 'it'} for good — click again`
                   : 'Delete permanently…'}
+              </button>
+            )}
+
+            {/* Reordering is free: shots are photographed independently, so
+                their order says nothing about how they were made. Worth saying
+                on the item itself, because with the old edit-chain this would
+                have meant regenerating half the ad. */}
+            {onReorder && inSequence.has(target.id) && orderIndex > 0 && (
+              <button type="button" className={item} onClick={() => { setMenu(null); onReorder(target.id, 'earlier'); }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M19 12H5M12 5l-7 7 7 7" /></svg>
+                Move earlier
+              </button>
+            )}
+            {onReorder && inSequence.has(target.id) && orderIndex > -1 && orderIndex < inSequence.size - 1 && (
+              <button type="button" className={item} onClick={() => { setMenu(null); onReorder(target.id, 'later'); }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                Move later
               </button>
             )}
 

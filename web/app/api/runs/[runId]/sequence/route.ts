@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminDb, requireUid } from '@/lib/firebaseAdmin';
 import { consume, tooMany } from '@/lib/rateLimit';
-import { deleteNode, disconnectNode, promoteFrame, rebuildEstimate, restoreFrame } from '@/lib/lineage';
+import { deleteNode, disconnectNode, promoteFrame, rebuildEstimate, reorderShot, restoreFrame } from '@/lib/lineage';
 import { rebuildStaleSteps } from '@/lib/orchestrator';
 
 /*
@@ -33,6 +33,12 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('disconnect'), nodeId: z.string().min(1) }),
   z.object({ action: z.literal('reconnect'), nodeId: z.string().min(1) }),
   z.object({ action: z.literal('delete'), nodeId: z.string().min(1) }),
+  /* Free, because shots no longer depend on each other — see reorderShot. */
+  z.object({
+    action: z.literal('reorder'),
+    nodeId: z.string().min(1),
+    direction: z.enum(['earlier', 'later']),
+  }),
   z.object({ action: z.literal('rebuild') }),
 ]);
 
@@ -62,6 +68,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
 
       const steps = await rebuildStaleSteps(runId, uid);
       return NextResponse.json({ rebuilding: steps, ...rebuildEstimate(steps) });
+    }
+
+    if (parsed.data.action === 'reorder') {
+      const moved = await reorderShot(runId, parsed.data.nodeId, parsed.data.direction);
+      // Nothing is invalidated, so nothing is offered for rebuilding.
+      return NextResponse.json({ movedTo: moved.movedTo, order: moved.order, staleSteps: [], staleCount: 0 });
     }
 
     if (parsed.data.action === 'delete') {

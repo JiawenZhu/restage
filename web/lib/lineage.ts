@@ -26,6 +26,7 @@ import { adminDb } from './firebaseAdmin';
 
 import {
   descendantsOf,
+  lineageOf,
   summarise,
   type LineageNode,
   type RewireResult,
@@ -294,4 +295,72 @@ export async function deleteNode(runId: string, uid: string, nodeId: string): Pr
   await batch.commit();
 
   return { deleted: doomed.map((n) => n.id), clips: clipChildren.length };
+}
+
+/**
+ * Move a shot earlier or later in the cut.
+ *
+ * FREE, and that is the whole reason this can exist. While every step was an
+ * edit of the one before, moving shot 5 in front of shot 3 meant shot 5 no
+ * longer descended from what it had been painted on top of, and both it and
+ * everything after would have had to be regenerated. Shots are photographed
+ * independently now — each against the run's look — so their order carries no
+ * information about how they were made. Rearranging them is exactly as cheap as
+ * rearranging clips on a timeline, which is what a person expects a storyboard
+ * to be.
+ *
+ * The chain is rewritten so the canvas and lineageOf() still read left to right
+ * in the new order. Each node keeps its OWN children, which is what makes this
+ * safe: alternates and rendered clips belong to their shot and travel with it.
+ */
+export async function reorderShot(
+  runId: string,
+  nodeId: string,
+  direction: 'earlier' | 'later',
+): Promise<{ order: string[]; movedTo: number }> {
+  const db = adminDb();
+  const nodesRef = db.collection('runs').doc(runId).collection('nodes');
+  const nodes = await loadNodes(runId);
+
+  const chain = lineageOf(nodes);
+  const at = chain.findIndex((n) => n.id === nodeId);
+  if (at === -1) throw new Error('that shot is not in the cut');
+
+  const to = direction === 'earlier' ? at - 1 : at + 1;
+  if (to < 0 || to >= chain.length) {
+    throw new Error(direction === 'earlier' ? 'that is already the first shot' : 'that is already the last shot');
+  }
+
+  const order = [...chain];
+  [order[at], order[to]] = [order[to], order[at]];
+
+  const batch = db.batch();
+  order.forEach((n, i) => {
+    batch.update(nodesRef.doc(n.id), {
+      parentId: i === 0 ? 'root' : order[i - 1].id,
+      stepNo: i + 1,
+    });
+  });
+
+  /*
+   * The plan moves with it.
+   *
+   * The left panel is what a person reads as the shape of the ad, so leaving it
+   * in the old order while the canvas and the render use the new one would mean
+   * two answers to "what order is this in" — and the one they read would be the
+   * wrong one.
+   */
+  const runRef = db.collection('runs').doc(runId);
+  const plan = ((await runRef.get()).data()?.plan ?? []) as Record<string, unknown>[];
+  if (plan.length === chain.length) {
+    const moved = [...plan];
+    [moved[at], moved[to]] = [moved[to], moved[at]];
+    batch.update(runRef, {
+      plan: moved.map((p, i) => ({ ...p, stepNo: i + 1 })),
+      updatedAt: Date.now(),
+    });
+  }
+
+  await batch.commit();
+  return { order: order.map((n) => n.id), movedTo: to + 1 };
 }

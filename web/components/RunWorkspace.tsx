@@ -6,6 +6,7 @@ import { useUser } from './AuthGate';
 import { PromptComposer } from './PromptComposer';
 import { lineageOf, rebuildEstimate, shotPlan, type LineageNode } from '@/lib/sequence';
 import { ImpactModal, ShootPanel } from './ShootPanel';
+import { StoryboardPlayer } from './StoryboardPlayer';
 import type { Impact } from '@/lib/impact';
 import type { Run, TreeNode } from '@/lib/types';
 
@@ -43,6 +44,9 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
    * Deriving it means the bar is simply true whenever the tree says it is.
    */
   const [dismissedStale, setDismissedStale] = useState('');
+  /* The preview costs nothing, so it lives at the workspace level and is
+     reachable whenever there is a sequence to watch. */
+  const [previewing, setPreviewing] = useState(false);
   const [busySeq, setBusySeq] = useState(false);
   const [seqMsg, setSeqMsg] = useState<{ text: string; bad: boolean } | null>(null);
   /* Raised when a change to the shoot invalidates work. Held at this level, not
@@ -117,6 +121,12 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
    * finished. The generating node still carries its pulsing ring, so "the agent
    * is here now" is not lost by not selecting it.
    */
+  /* The cut, in order, for the preview. Same walk the renderer uses, so what
+     you watch is what would be built. */
+  const previewShots = lineageOf(nodes as unknown as LineageNode[]).filter(
+    (n) => n.frameUrl,
+  ) as unknown as TreeNode[];
+
   const staleFrames = nodes.filter(
     (n) => n.kind === 'frame' && n.stale && !n.discarded && !n.removedFromSequence,
   );
@@ -186,6 +196,27 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
         )}
         {regenTarget && (
           <RegeneratePanel run={run} node={regenTarget} onClose={() => setRegenTarget(null)} />
+        )}
+        {/* Watching the cut costs nothing, so it sits on the canvas rather than
+            behind a node selection — it is a question about the whole ad. */}
+        {previewShots.length > 1 && !previewing && (
+          <button
+            type="button"
+            onClick={() => setPreviewing(true)}
+            className="absolute right-3 top-3 z-20 flex items-center gap-1.5 rounded-lg border border-line-strong bg-panel/95 px-2.5 py-1.5 text-[12px] font-semibold text-ink-2 shadow-sm backdrop-blur-sm hover:border-accent hover:text-accent-ink"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
+            Watch it · {previewShots.length} shots
+          </button>
+        )}
+
+        {previewing && (
+          <StoryboardPlayer
+            run={run}
+            shots={previewShots}
+            seconds={run.seconds ?? 8}
+            onClose={() => setPreviewing(false)}
+          />
         )}
         {impact && (
           <ImpactModal

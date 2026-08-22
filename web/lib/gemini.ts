@@ -19,6 +19,23 @@ if (typeof window !== 'undefined') {
 import { getTemplateById } from './templates';
 import { VIDEO_NEGATIVE_PROMPT } from './look';
 import type { LookBible, ShotKind } from './types';
+import { fetchJson, HttpError, withRetry } from './backoff';
+
+/* The shape generateContent answers with. fetchJson returns a plain record —
+   deliberately, since it does not know what it fetched — so each reader says
+   what it expects rather than every call site guessing with `any`. */
+type GenJson = {
+  candidates?: {
+    content?: { parts?: { text?: string; inlineData?: { data: string; mimeType?: string } }[] };
+    finishReason?: string;
+  }[];
+  name?: string;
+};
+
+/** The one JSON string a structured call is asked for. */
+function firstText(json: Record<string, unknown>): string | undefined {
+  return (json as GenJson).candidates?.[0]?.content?.parts?.[0]?.text;
+}
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -58,6 +75,22 @@ export interface FrameRequest {
   /** Enrolment captures. Passing them is what holds one face across every scene. */
   refs?: { data: Buffer | Uint8Array; mimeType: string }[];
   aspect: Aspect;
+  /**
+   * When the interactive quota is exhausted, fall through to the Batch API
+   * rather than failing.
+   *
+   * THIS IS THE SCALING VALVE, and it is the only honest use of batch on a path
+   * somebody is watching. Interactive RPM and TPM are shared across every user
+   * at once; batch has its own pool of 100 concurrent jobs. So when the shared
+   * pool is full, the choice is not "fast or slow" — it is a slower frame or no
+   * frame at all.
+   *
+   * It costs about 103 seconds against roughly 20 interactive, measured, so it
+   * is never the first choice and never silent: `onOverflow` fires so the run
+   * can say on the canvas that it is queued and why.
+   */
+  overflowToBatch?: boolean;
+  onOverflow?: (estimateMs: number) => void;
 }
 
 export async function generateFrame(req: FrameRequest): Promise<{ bytes: Buffer; mimeType: string }> {
@@ -68,23 +101,66 @@ export async function generateFrame(req: FrameRequest): Promise<{ bytes: Buffer;
     { text: req.prompt },
   ];
 
-  const res = await fetch(`${BASE}/models/${IMAGE_MODEL}:generateContent?key=${key()}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: {
-        responseModalities: ['IMAGE'],
-        imageConfig: { aspectRatio: req.aspect },
-      },
-    }),
-  });
+  /* Retried on a rate limit rather than thrown straight through. Interactive
+     RPM and TPM are shared across every user at once, so under any concurrency
+     at all the second person to press Start is the one who gets the 429 — and
+     before this, that 429 abandoned their step. */
+  let json: Record<string, unknown>;
+  try {
+    json = await withRetry(
+      () =>
+        fetchJson(
+          `${BASE}/models/${IMAGE_MODEL}:generateContent?key=${key()}`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts }],
+              generationConfig: {
+                responseModalities: ['IMAGE'],
+                imageConfig: { aspectRatio: req.aspect },
+              },
+            }),
+          },
+          scrub,
+        ),
+      { label: 'frame' },
+    );
+  } catch (err) {
+    /*
+     * Out of interactive quota, with a separate pool sitting unused.
+     *
+     * Retrying already waited as long as it was allowed to; a further wait is
+     * just a longer version of the same failure. Batch is a different quota
+     * entirely — 100 concurrent jobs, not shared with the interactive limit
+     * that is currently full — so the frame can still be made. It takes about
+     * five times as long, which is why this is a last resort and why the caller
+     * is told rather than left wondering.
+     */
+    const http = err instanceof HttpError ? err : null;
+    if (!req.overflowToBatch || !http || http.status !== 429) throw err;
 
-  const json = await res.json();
-  if (!res.ok) throw new Error(scrub(json?.error?.message ?? `image generation failed (${res.status})`));
+    const { runBatch, BATCHABLE, batchEstimate } = await import('./batch');
+    if (!BATCHABLE.has(IMAGE_MODEL)) throw err;
 
-  const img = json?.candidates?.[0]?.content?.parts?.find((p: { inlineData?: unknown }) => p.inlineData);
-  if (!img) throw new Error(`no image returned: ${json?.candidates?.[0]?.finishReason ?? 'empty response'}`);
+    req.onOverflow?.(batchEstimate(1).ms);
+    console.warn(`[frame] interactive quota exhausted, overflowing one frame to batch`);
+
+    const [result] = await runBatch(
+      IMAGE_MODEL,
+      [{ key: 'overflow', prompt: req.prompt, refs: req.refs, aspect: req.aspect, wantsImage: true }],
+      'restage-overflow',
+      { pollMs: 10_000, timeoutMs: 8 * 60_000 },
+    );
+    if (!result || result.error || !result.bytes) {
+      throw new Error(result?.error ?? 'the queued frame came back empty');
+    }
+    return { bytes: result.bytes, mimeType: result.mimeType ?? 'image/png' };
+  }
+
+  const cand = (json as GenJson).candidates?.[0];
+  const img = cand?.content?.parts?.find((p) => p.inlineData);
+  if (!img?.inlineData) throw new Error(`no image returned: ${cand?.finishReason ?? 'empty response'}`);
 
   return {
     bytes: Buffer.from(img.inlineData.data, 'base64'),
@@ -158,7 +234,8 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
 
   const seconds = normalizeVeoDuration(req.durationSeconds);
 
-  const res = await fetch(`${BASE}/models/${VIDEO_MODEL}:predictLongRunning?key=${key()}`, {
+    const json = await withRetry(
+    () => fetchJson(`${BASE}/models/${VIDEO_MODEL}:predictLongRunning?key=${key()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -174,13 +251,13 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
         negativePrompt: VIDEO_NEGATIVE_PROMPT,
       },
     }),
-  });
+  }, scrub),
+    { label: 'veo:submit' },
+  );
+  const name = (json as GenJson).name;
+  if (!name) throw new Error('render submitted but no operation name came back');
 
-  const json = await res.json();
-  if (!res.ok) throw new Error(scrub(json?.error?.message ?? `render submit failed (${res.status})`));
-  if (!json.name) throw new Error('render submitted but no operation name came back');
-
-  return { operation: json.name };
+  return { operation: name };
 }
 
 export type RenderStatus =
@@ -189,10 +266,12 @@ export type RenderStatus =
   | { done: true; error: string };
 
 export async function pollRender(operation: string): Promise<RenderStatus> {
-  const res = await fetch(`${BASE}/${operation}?key=${key()}`);
-  const op = await res.json();
-
-  if (!res.ok) throw new Error(scrub(op?.error?.message ?? `poll failed (${res.status})`));
+  /* Polling is cheap and frequent, so it retries briefly and gives up fast —
+     the caller polls again in a few seconds regardless. */
+  const op = (await withRetry(
+    () => fetchJson(`${BASE}/${operation}?key=${key()}`, { method: 'GET' }, scrub),
+    { label: 'veo:poll', attempts: 3, baseMs: 500, maxDelayMs: 4_000, budgetMs: 10_000 },
+  )) as Record<string, any>;
   if (!op.done) return { done: false };
   if (op.error) return { done: true, error: scrub(op.error.message ?? 'render failed') };
 
@@ -311,27 +390,34 @@ export async function generateOmniVideo(req: OmniVideoRequest): Promise<OmniVide
   if (req.firstFrame) inputs.push(asImage(req.firstFrame));
   inputs.push({ type: 'text', text: req.prompt });
 
-  const res = await fetch(`${BASE}/interactions?key=${key()}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: 'gemini-omni-flash-preview',
-      input: inputs.length === 1 && inputs[0].type === 'text' ? inputs[0].text : inputs,
-      response_format: {
-        type: 'video',
-        aspect_ratio: req.aspect,
-        resolution: req.resolution ?? '1080p',
-      },
-    }),
-  });
+  /* A long call — measured at 20-40s — so a rate limit here costs the user the
+     whole wait before it fails. Fewer attempts than a frame, and a longer
+     budget, because each try is expensive. */
+  const json = await withRetry(
+    () =>
+      fetchJson(
+        `${BASE}/interactions?key=${key()}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: 'gemini-omni-flash-preview',
+            input: inputs.length === 1 && inputs[0].type === 'text' ? inputs[0].text : inputs,
+            response_format: {
+              type: 'video',
+              aspect_ratio: req.aspect,
+              resolution: req.resolution ?? '1080p',
+            },
+          }),
+        },
+        scrub,
+      ),
+    { label: 'omni', attempts: 3, budgetMs: 120_000 },
+  );
 
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(scrub(json?.error?.message ?? `omni render failed (${res.status})`));
-  }
-
-  const modelOutput = json.steps?.find((s: { type: string }) => s.type === 'model_output');
-  const videoObj = modelOutput?.content?.find((c: { type: string }) => c.type === 'video');
+  type OmniStep = { type: string; content?: { type: string; data?: string }[] };
+  const modelOutput = (json as { steps?: OmniStep[] }).steps?.find((st) => st.type === 'model_output');
+  const videoObj = modelOutput?.content?.find((c) => c.type === 'video');
 
   if (!videoObj?.data) {
     throw new Error('Omni finished but returned no video stream');
@@ -380,7 +466,8 @@ const TEXT_MODEL = process.env.RESTAGE_TEXT_MODEL ?? 'gemini-3.7-flash';
  * problem instead of ours.
  */
 async function structured<T>(prompt: string, schema: object, system?: string): Promise<T> {
-  const res = await fetch(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
+    const json = await withRetry(
+    () => fetchJson(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -388,12 +475,12 @@ async function structured<T>(prompt: string, schema: object, system?: string): P
       ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
       generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
     }),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(scrub(json?.error?.message ?? `text call failed (${res.status})`));
+  }, scrub),
+    { label: 'text' },
+  );
 
-  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error(`no content: ${json?.candidates?.[0]?.finishReason ?? 'empty'}`);
+  const text = firstText(json);
+  if (!text) throw new Error(`no content: ${(json as GenJson).candidates?.[0]?.finishReason ?? 'empty'}`);
   return JSON.parse(text) as T;
 }
 
@@ -671,7 +758,8 @@ export async function critique(args: {
    *  triggers a retry that produces another coffee cup. */
   subject?: ShotKind;
 }): Promise<Critique> {
-  const res = await fetch(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
+    const json = await withRetry(
+    () => fetchJson(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -718,10 +806,10 @@ export async function critique(args: {
         },
       },
     }),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(scrub(json?.error?.message ?? `critique failed (${res.status})`));
-  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  }, scrub),
+    { label: 'text' },
+  );
+  const text = firstText(json);
   if (!text) throw new Error('critic returned nothing');
   return JSON.parse(text) as Critique;
 }
@@ -770,7 +858,8 @@ export async function verifyIdentity(
     { inlineData: { mimeType: mv.mimeType, data: Buffer.from(mv.data).toString('base64') } },
   ]);
 
-  const res = await fetch(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
+    const json = await withRetry(
+    () => fetchJson(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -805,10 +894,10 @@ export async function verifyIdentity(
         },
       },
     }),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(scrub(json?.error?.message ?? `identity check failed (${res.status})`));
-  const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  }, scrub),
+    { label: 'text' },
+  );
+  const text = firstText(json);
   if (!text) throw new Error('identity check returned nothing');
   const parsed = JSON.parse(text) as IdentityCheck & { featuresA: string; featuresB: string };
   return { differences: parsed.differences, samePerson: parsed.samePerson };

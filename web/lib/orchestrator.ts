@@ -507,7 +507,28 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
                 : '') +
               `THE SHOT: ${step.instruction}${retryNote}`;
 
-          const frame = await generateFrame({ prompt, aspect: args.aspect, refs });
+          /* Overflow is enabled here and nowhere else that a person waits on a
+             single click. This loop already runs detached in the background and
+             already takes minutes, so a shot arriving late is far better than a
+             run collapsing because somebody else was generating at the same
+             moment. */
+          const frame = await generateFrame({
+            prompt,
+            aspect: args.aspect,
+            refs,
+            overflowToBatch: true,
+            onOverflow: () => {
+              /* Deliberately vague, because the measurements are: the same job
+                 shape came back in 109s once and 200s another time. Promising
+                 "about two minutes" and taking four is worse than saying what
+                 is actually known. */
+              void nodeRef.update({
+                rationale:
+                  'The image service is busy right now, so this shot has been queued — ' +
+                  'a few minutes. Nothing is lost, and it costs less this way.',
+              });
+            },
+          });
           const url = await uploadToStorage(
             frame.bytes,
             `users/${args.uid}/runs/${runId}/nodes/${nodeRef.id}.jpg`,
@@ -938,6 +959,8 @@ export async function rebuildStaleSteps(runId: string, uid: string, only?: strin
           prompt,
           aspect: run.aspect,
           refs: isPerson ? [avatar] : [],
+          // A rebuild is background work the user was told takes minutes.
+          overflowToBatch: true,
         });
 
         const url = await uploadToStorage(

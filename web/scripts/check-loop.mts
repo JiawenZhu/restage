@@ -22,7 +22,7 @@ const args = {
   uid: '_looptest',
   goal: 'A 15-second ad where I actually use the serum, in my kitchen. Should feel filmed, not shot.',
   aspect: '9:16' as const,
-  seconds: 15 as const,
+  seconds: 8 as const,
   avatarDataUrl: `data:image/jpeg;base64,${avatar.toString('base64')}`,
 };
 

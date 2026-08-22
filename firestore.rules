@@ -19,10 +19,22 @@ service cloud.firestore {
     match /users/{uid} {
       allow read, write: if isOwner(uid);
 
-      // Enrolment captures are biometric-adjacent. Only the owner, ever — no
-      // "public avatars" path, no sharing by link.
+      /*
+       * Enrolment captures are biometric-adjacent. Only the owner reads them —
+       * no "public avatars" path, no sharing by link — and NOBODY writes them
+       * from a client.
+       *
+       * Client write was allowed here, and the avatar document stores Storage
+       * PATHS which GET /api/avatars signs with admin credentials. Admin
+       * signing bypasses storage rules, so a forged document naming
+       * `users/<someone-else>/avatars/.../front.jpg` would have been signed and
+       * returned — a read of another user's face through a document the
+       * attacker was permitted to write. Writes go through the API, which takes
+       * the uid from the token and builds the path itself.
+       */
       match /avatars/{avatarId} {
-        allow read, write: if isOwner(uid);
+        allow read: if isOwner(uid);
+        allow write: if false;
       }
 
       // The taste model is written by the server as it learns from rejections.

@@ -50,7 +50,20 @@ function bucket() {
   );
 }
 
-async function signPath(path: string): Promise<string | null> {
+async function signPath(path: string, uid: string): Promise<string | null> {
+  /*
+   * Never sign a path outside the caller's own namespace.
+   *
+   * getSignedUrl runs with admin credentials and ignores storage rules, so this
+   * function will sign ANY path it is handed. The paths come from a Firestore
+   * document, and defence that relies on "the rules stop anyone writing a bad
+   * one" is one rules edit away from being a cross-user file read. The check
+   * belongs where the signing happens.
+   */
+  if (!path.startsWith(`users/${uid}/avatars/`) || path.includes('..')) {
+    console.warn('[avatars] refused to sign an out-of-namespace path');
+    return null;
+  }
   try {
     const [url] = await bucket()
       .file(path)
@@ -124,9 +137,9 @@ export async function POST(req: Request) {
       .set({ uid, latestAvatarId: avatarId, updatedAt: Date.now() }, { merge: true });
 
     const urls = {
-      front: await signPath(frontPath),
-      left: await signPath(leftPath),
-      right: await signPath(rightPath),
+      front: await signPath(frontPath, uid),
+      left: await signPath(leftPath, uid),
+      right: await signPath(rightPath, uid),
     };
 
     return NextResponse.json({ avatarId, avatar: { ...record, urls } });
@@ -167,9 +180,9 @@ export async function GET(req: Request) {
           createdAt: a.createdAt,
           hasVoice: !!a.voicePath,
           urls: {
-            front: a.paths?.front ? await signPath(a.paths.front) : null,
-            left: a.paths?.left ? await signPath(a.paths.left) : null,
-            right: a.paths?.right ? await signPath(a.paths.right) : null,
+            front: a.paths?.front ? await signPath(a.paths.front, uid) : null,
+            left: a.paths?.left ? await signPath(a.paths.left, uid) : null,
+            right: a.paths?.right ? await signPath(a.paths.right, uid) : null,
           },
         };
       }),

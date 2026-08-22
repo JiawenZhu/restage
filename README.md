@@ -240,9 +240,10 @@ Firestore rules and indexes are in `firestore.rules` and `firestore.indexes.json
 
 ## Deploy
 
-Running on **Cloud Run** at `https://restage-944688033911.us-central1.run.app`
-(project `restage-studio`, region `us-central1`). Built from `web/Dockerfile`
-via `web/cloudbuild.yaml`.
+Served at **https://restage-studio.web.app** — Firebase Hosting in front of a
+Cloud Run service (`restage`, project `restage-studio`, region `us-central1`),
+built from `web/Dockerfile` via `web/cloudbuild.yaml`. The Cloud Run origin
+answers directly too, which is useful when you need to rule the CDN out.
 
 ```bash
 cd web
@@ -317,7 +318,7 @@ requirements, stated plainly rather than optimistically:
 | A Google Agent Framework | ✅ **Antigravity** — as the environment this was built in, not as a runtime dependency |
 | Spin-up instructions | ✅ above |
 | Architecture diagram | ✅ above |
-| Hosted URL | ⬜ `apphosting.yaml` is written; the deploy needs `firebase login --reauth` |
+| Hosted URL | ✅ https://restage-studio.web.app — Firebase Hosting → Cloud Run |
 | ~4-min demo video | ⬜ needs proof of Google Cloud deployment |
 
 ## What's next

@@ -9,6 +9,7 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   updateProfile,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { auth, googleProvider } from './firebase';
 
@@ -19,6 +20,8 @@ interface AuthContextType {
   signInWithEmail: (email: string, pass: string) => Promise<void>;
   signUpWithEmail: (email: string, pass: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Email accounts had no recovery path anywhere in the product. */
+  resetPassword: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -28,6 +31,7 @@ const AuthContext = createContext<AuthContextType>({
   signInWithEmail: async () => {},
   signUpWithEmail: async () => {},
   logout: async () => {},
+  resetPassword: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -57,6 +61,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const resetPassword = async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
+  };
+
   const logout = async () => {
     await signOut(auth);
   };
@@ -70,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithEmail,
         signUpWithEmail,
         logout,
+        resetPassword,
       }}
     >
       {children}

@@ -309,9 +309,8 @@ export default function Landing() {
           <span className="text-[11.5px] font-bold tracking-[0.12em] text-ink-4">
             BUILT ON GEMINI 3 PRO IMAGE AND VEO 3.1
           </span>
-          {[92, 78, 104, 86, 96].map((w, i) => (
-            <div key={i} className="h-[22px] rounded bg-line-strong" style={{ width: w }} />
-          ))}
+          {/* Was five grey placeholder bars standing in for customer logos there are
+              no customers for yet. An empty band says less than a true sentence. */}
         </div>
       </section>
 
@@ -324,7 +323,9 @@ export default function Landing() {
 
         {/* One plan, so it is centred rather than stranded in a three-column
             grid built for placeholders that no longer exist. */}
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Two cards, so two columns — a three-column grid left an empty third
+            that the comment above claimed had been removed. */}
+        <div className="mx-auto mt-10 grid max-w-3xl gap-5 sm:grid-cols-2">
           {PLANS.map((p) => (
             <div
               key={p.name}
@@ -394,7 +395,6 @@ export default function Landing() {
         <span className="text-sm font-bold text-ink-3">Restage</span>
         <div className="flex items-center gap-6 text-[13px] text-ink-3">
           <Link href="/likeness" className="hover:text-ink">Your likeness, your control</Link>
-          <span>Likeness policy</span>
           {/* A placeholder in the footer where an address belongs. Until there
               is one, the link that does exist is better than a fake. */}
           <Link href="/enroll" className="hover:text-ink">Get started</Link>

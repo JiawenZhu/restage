@@ -8,13 +8,23 @@ import type { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firesto
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-/** An inline image, or a file in our own buckets. Nothing the caller chooses. */
+/**
+ * An inline image, or a file in OUR bucket specifically.
+ *
+ * Allowing the storage HOSTS was too broad: every public Google Cloud Storage
+ * bucket on the internet lives on those two hostnames, so the server could
+ * still be pointed at an arbitrary object and made to buffer it. The bucket
+ * name has to be in the path.
+ */
 function isOwnImageSource(v: string): boolean {
   if (v.startsWith('data:image/')) return true;
+  const bucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'restage-studio.firebasestorage.app';
   try {
     const u = new URL(v);
     if (u.protocol !== 'https:') return false;
-    return u.hostname === 'firebasestorage.googleapis.com' || u.hostname === 'storage.googleapis.com';
+    if (u.hostname === 'firebasestorage.googleapis.com') return u.pathname.startsWith(`/v0/b/${bucket}/`);
+    if (u.hostname === 'storage.googleapis.com') return u.pathname.startsWith(`/${bucket}/`);
+    return false;
   } catch {
     return false;
   }
@@ -87,11 +97,6 @@ export async function GET(req: Request) {
 
   try {
 
-  // Every call below spends money; nothing capped how many a single account
-  // could make.
-  const rate = await consume(uid, 'run');
-  if (!rate.ok) return tooMany(rate);
-
     const db = adminDb();
     const { searchParams } = new URL(req.url);
     const limitParam = Number.parseInt(searchParams.get('limit') || '60', 10);
@@ -159,6 +164,19 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: 'sign in to start a run' }, { status: 401 });
   }
+
+  /*
+   * The ceiling belongs to POST, which is the expensive verb.
+   *
+   * A mechanical edit put it on GET instead, and the consequences were exactly
+   * inverted: the Library polls every 8 seconds while a run is in flight, so
+   * watching one 3-minute run spent 20+ of a 20/hour budget and then locked the
+   * user out of their own library for an hour — while the most expensive route
+   * in the product, 5-7 image generations plus judges plus a Veo render, had no
+   * ceiling at all.
+   */
+  const rate = await consume(uid, 'run');
+  if (!rate.ok) return tooMany(rate);
 
   try {
     const rawJson = await req.json().catch(() => null);

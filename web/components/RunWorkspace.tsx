@@ -64,7 +64,12 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
         )}
       </section>
 
-      <Inspector node={selected} run={run} nodes={nodes} />
+      <Inspector
+        node={selected}
+        run={run}
+        nodes={nodes}
+        onRegenerate={(id) => setRegenTarget(nodes.find((n) => n.id === id) ?? null)}
+      />
     </div>
   );
 }
@@ -197,7 +202,17 @@ const VERDICT_STYLE = {
   failed: { border: 'border-crit/35', text: 'text-crit', label: 'CRITIC · REJECTED' },
 } as const;
 
-function Inspector({ node, run, nodes }: { node: TreeNode | null; run: Run; nodes: TreeNode[] }) {
+function Inspector({
+  node,
+  run,
+  nodes,
+  onRegenerate,
+}: {
+  node: TreeNode | null;
+  run: Run;
+  nodes: TreeNode[];
+  onRegenerate?: (id: string) => void;
+}) {
   const { user } = useUser();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -237,6 +252,26 @@ function Inspector({ node, run, nodes }: { node: TreeNode | null; run: Run; node
       cancelled = true;
     };
   }, [videoNodeId, user, run.id, playable?.nodeId]);
+
+  async function judge(status: 'rejected' | 'achieved') {
+    if (!user || !node) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/runs/${run.id}/nodes/${node.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? 'could not save that');
+      // The change arrives back through the live subscription.
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'could not save that');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function downloadClip() {
     if (!user || !videoNodeId) return;
@@ -377,6 +412,34 @@ function Inspector({ node, run, nodes }: { node: TreeNode | null; run: Run; node
 
       <div className="flex flex-col gap-2 border-t border-line px-[18px] py-3.5">
         {(error || clipError) && <p className="text-[12.5px] text-crit">{error ?? clipError}</p>}
+
+        {/* The human verdict. The critic catches gross identity swaps but not
+            subtle drift — measured on a real run where both verifiers passed a
+            frame the user rejected on sight. */}
+        {node.kind === 'frame' && node.frameUrl && (
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => judge(node.status === 'rejected' ? 'achieved' : 'rejected')}
+              className={`rounded-lg border py-2.5 text-[12.5px] font-semibold disabled:opacity-40 ${
+                node.status === 'rejected'
+                  ? 'border-crit bg-crit-soft text-crit'
+                  : 'border-line-strong text-ink-2 hover:border-crit hover:text-crit'
+              }`}
+            >
+              {node.status === 'rejected' ? 'Rejected — undo' : 'Reject this frame'}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onRegenerate?.(node.id)}
+              className="rounded-lg border border-line-strong py-2.5 text-[12.5px] font-semibold text-ink-2 hover:border-accent hover:text-accent disabled:opacity-40"
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
         {node.kind === 'video' && node.status === 'achieved' ? (
           <button

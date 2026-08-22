@@ -26,8 +26,20 @@ export const demoRun: Run = {
     { stepNo: 5, instruction: 'Loosen the expression', rationale: 'Mid-sentence beats posed. A closed mouth reads as a photograph.', status: 'pending' },
     { stepNo: 6, instruction: 'Render the clip', rationale: 'The approved frame becomes the first frame of the clip.', status: 'pending' },
   ],
-  createdAt: 0,
-  updatedAt: 0,
+  /*
+   * Relative to now, not zero.
+   *
+   * The workspace flags a live run with no progress for ten minutes as stopped
+   * — and epoch-zero timestamps are always older than that, so the public demo
+   * the landing page links to always displayed the "NO PROGRESS" warning. A
+   * getter keeps it fresh however long the module has been cached.
+   */
+  get createdAt() {
+    return Date.now() - 90_000;
+  },
+  get updatedAt() {
+    return Date.now() - 5_000;
+  },
 };
 
 const t = (n: number) => n * 1000;

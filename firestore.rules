@@ -58,7 +58,18 @@ service cloud.firestore {
     // A run and its tree.
     match /runs/{runId} {
       allow read: if signedIn() && resource.data.uid == request.auth.uid;
-      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      /*
+       * Server-only creation.
+       *
+       * A client could create a runs/{id} document carrying arbitrary
+       * server-owned fields — videoKey, avatarUrl, previewFrames — and the
+       * server reads those back and acts on them: videoKey is signed against
+       * the private renders bucket with admin credentials, and avatarUrl is
+       * fetched server-side. That is a signing oracle and a fetch primitive,
+       * reachable by anyone with an account. Runs are created through
+       * POST /api/runs, which builds every one of those fields itself.
+       */
+      allow create: if false;
 
       // Only the goal and status are the user's to change. Everything else —
       // the plan, the verdicts, the credit cost — is the server's account of

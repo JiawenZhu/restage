@@ -373,6 +373,9 @@ export function EnrollmentCamera() {
     };
 
     recorder.onstop = () => {
+      // Review needs no camera. It stayed live through the whole review screen,
+      // recording indicator and all.
+      stopMedia();
       /*
        * Whatever the browser actually recorded. MediaRecorder produces WebM
        * (or MP4 on Safari) — never WAV — so labelling the blob 'audio/wav' put
@@ -478,7 +481,8 @@ export function EnrollmentCamera() {
           front: capturedFrames.front,
           left: capturedFrames.left,
           right: capturedFrames.right,
-          audio: audioBase64,
+          // undefined, not null — the field is optional, and null is a value.
+          audio: audioBase64 ?? undefined,
         }),
       });
 
@@ -891,6 +895,23 @@ export function EnrollmentCamera() {
                 {isCapturingBurst ? 'Recording Speech Sample…' : 'Start Reading Prompter'}
               </button>
             )}
+
+            {/* The only transition out of this step was recorder.onstop, so a
+                user who would not record simply could not finish enrolling —
+                on a step the upload path itself calls optional and which
+                nothing reads yet. */}
+            {!isCapturingBurst && (
+              <button
+                type="button"
+                onClick={() => {
+                  stopMedia();
+                  setStep('review');
+                }}
+                className="rounded-xl border border-line-strong px-6 py-3 text-sm font-semibold text-ink-2 hover:bg-subtle"
+              >
+                Skip — no voice sample
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1052,6 +1073,8 @@ export function EnrollmentCamera() {
             </button>
             <button
               onClick={() => {
+                // Reset means reset, camera included — it stayed live after this.
+                stopMedia();
                 setCapturedFrames({ front: null, left: null, right: null });
                 setAudioBlob(null);
                 setAudioUrl(null);

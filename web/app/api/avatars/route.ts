@@ -29,18 +29,35 @@ export const maxDuration = 60;
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const SIGNED_URL_TTL_MS = 60 * 60 * 1000; // an hour: long enough to work in, short enough to matter
 
-const dataUrl = z.string().regex(/^data:(image|audio)\/[a-zA-Z0-9.+-]+;base64,.+$/, 'must be a data URL');
+/*
+ * A data URL, including its media-type parameters.
+ *
+ * The previous pattern had no way to cross a ';', so every real recording was
+ * rejected: Chrome and Edge produce 'audio/webm;codecs=opus' and Firefox
+ * 'audio/ogg; codecs=opus'. A user completed all four capture steps, pressed
+ * save, and was bounced back with "front, left and right captures are required"
+ * printed above three photos that were plainly there. Reproduced against this
+ * repo's own zod before fixing.
+ */
+const dataUrl = z
+  .string()
+  .regex(/^data:(image|audio)\/[a-zA-Z0-9.+-]+(\s*;[^;,]+)*;base64,.+$/, 'must be a data URL');
 
 const Body = z.object({
   name: z.string().max(80).optional(),
   front: dataUrl,
   left: dataUrl,
   right: dataUrl,
-  audio: dataUrl.optional(),
+  // nullish, not optional: the upload path sends `audio: null` explicitly, and
+  // .optional() accepts only undefined — so an enrolment without a voice sample
+  // failed in every browser.
+  audio: dataUrl.nullish(),
 });
 
 function decode(b64: string): Buffer {
-  const m = b64.match(/^data:([^;]+);base64,(.+)$/);
+  // Non-greedy up to ';base64,' so parameters between the type and the encoding
+  // do not defeat the match.
+  const m = b64.match(/^data:(.+?);base64,(.+)$/);
   return Buffer.from(m ? m[2] : b64, 'base64');
 }
 
@@ -84,7 +101,11 @@ export async function POST(req: Request) {
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'front, left and right captures are required' }, { status: 400 });
+    // Naming the real field, because the generic message sent people back to
+    // check three photos when the problem was the audio sample.
+    const first = parsed.error.issues[0];
+    const where = first?.path?.join('.') || 'request';
+    return NextResponse.json({ error: `${where}: ${first?.message ?? 'invalid'}` }, { status: 400 });
   }
 
   const { name, front, left, right, audio } = parsed.data;

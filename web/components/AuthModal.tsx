@@ -10,7 +10,16 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) {
-  const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword } = useAuth();
+  const [resetSent, setResetSent] = useState(false);
+
+  // Escape closes it, like every other dialog in the app.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
 
   /* useState only reads initialMode on first mount, so the dialog kept whatever
@@ -90,7 +99,15 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label={mode === 'signup' ? 'Create an account' : 'Sign in'}
+      /* Clicking the backdrop closes it. The panel below already stops
+         propagation, so this cannot fire from inside the dialog. */
+      onClick={onClose}
+    >
       <div
         className="relative w-full max-w-md rounded-2xl border border-line bg-panel p-7 shadow-2xl transition-all"
         onClick={(e) => e.stopPropagation()}
@@ -186,7 +203,28 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-ink-2">Password</label>
+            <div className="flex items-baseline justify-between">
+              <label className="block text-xs font-semibold text-ink-2">Password</label>
+              {/* An account you cannot get back into is an account you have
+                  lost. There was no recovery path anywhere in the product. */}
+              {mode === 'signin' && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!email.trim()) return;
+                    try {
+                      await resetPassword(email.trim());
+                      setResetSent(true);
+                    } catch {
+                      setResetSent(true); // never reveal whether an address exists
+                    }
+                  }}
+                  className="text-[11.5px] font-medium text-accent hover:underline"
+                >
+                  Forgot password?
+                </button>
+              )}
+            </div>
             <input
               type="password"
               required
@@ -195,6 +233,11 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
               placeholder="At least 6 characters"
               className="mt-1 w-full rounded-lg border border-line bg-canvas px-3.5 py-2 text-sm text-ink placeholder-ink-4 outline-none transition-colors focus:border-accent"
             />
+            {resetSent && (
+              <p className="mt-1.5 text-[11.5px] text-ink-3">
+                If an account exists for that address, a reset link is on its way.
+              </p>
+            )}
           </div>
 
           <button

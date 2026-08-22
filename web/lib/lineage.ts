@@ -197,3 +197,101 @@ export async function restoreFrame(runId: string, nodeId: string): Promise<Rewir
   }
   return result;
 }
+
+/**
+ * Disconnect a node — a frame OR a rendered clip.
+ *
+ * The user-facing half of delete. Detaching and destroying are two different
+ * risks, so they are two different actions: disconnecting is instant, reversible
+ * and costs nothing, and it is the only way to reach delete. Nothing can be
+ * destroyed straight off the canvas by one click on a menu item.
+ *
+ * Clips are leaves, so there is nothing to reattach; frames hand their children
+ * up to their parent exactly as before, so the chain stays unbroken.
+ */
+export async function disconnectNode(runId: string, nodeId: string): Promise<RewireResult> {
+  const nodes = await loadNodes(runId);
+  const node = nodes.find((n) => n.id === nodeId);
+  if (!node) throw new Error('no such node');
+  if (node.kind === 'avatar' || node.id === 'root') throw new Error('the source avatar cannot be disconnected');
+
+  if (node.kind === 'frame') return removeFrame(runId, nodeId);
+
+  if (node.removedFromSequence) throw new Error('that clip is already disconnected');
+  await adminDb()
+    .collection('runs')
+    .doc(runId)
+    .collection('nodes')
+    .doc(nodeId)
+    .update({ removedFromSequence: true, reattachedOnRemoval: [] });
+  // A clip has nothing hanging off it, so nothing became stale.
+  return { staleIds: [], rebuildableIds: [], staleSteps: [] };
+}
+
+export interface DeleteResult {
+  deleted: string[];
+  /** Clips destroyed alongside the frame they were rendered from. */
+  clips: number;
+}
+
+/**
+ * Destroy a disconnected node, and the pixels behind it.
+ *
+ * Gated on being disconnected first. That gate is the whole safety model here:
+ * this is the one operation in the product that cannot be undone, and requiring
+ * a separate, reversible step in front of it means nobody reaches it by
+ * mis-clicking a context menu.
+ *
+ * Clips rendered FROM the frame go with it. A clip is an artefact of one
+ * specific frame — it has no meaning once that frame is gone, and leaving it
+ * behind would leave a playable video whose source the canvas can no longer
+ * show. Frame children are refused instead of cascaded: those are real steps
+ * with work in them, and deleting somebody's storyboard because they deleted
+ * one frame is not a thing to do quietly.
+ *
+ * The pixels go before the record, deliberately. A Firestore document with no
+ * image is recoverable confusion; an image with no document is unreachable and
+ * permanent.
+ */
+export async function deleteNode(runId: string, uid: string, nodeId: string): Promise<DeleteResult> {
+  const db = adminDb();
+  const nodesRef = db.collection('runs').doc(runId).collection('nodes');
+  const nodes = await loadNodes(runId);
+
+  const node = nodes.find((n) => n.id === nodeId);
+  if (!node) throw new Error('no such node');
+  if (node.kind === 'avatar' || node.id === 'root') throw new Error('the source avatar cannot be deleted');
+  if (!node.removedFromSequence) throw new Error('disconnect it first, then delete');
+
+  const children = nodes.filter((n) => n.parentId === nodeId);
+  const frameChildren = children.filter((n) => n.kind === 'frame');
+  if (frameChildren.length) {
+    throw new Error(
+      `${frameChildren.length} step${frameChildren.length > 1 ? 's are' : ' is'} still built on this frame — disconnect ${frameChildren.length > 1 ? 'those' : 'that'} first`,
+    );
+  }
+  const clipChildren = children.filter((n) => n.kind === 'video');
+  const doomed = [node, ...clipChildren];
+
+  const { adminStorage } = await import('./firebaseAdmin');
+  const { deleteVideo } = await import('./r2');
+  const bucket = adminStorage().bucket(
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'restage-studio.firebasestorage.app',
+  );
+
+  for (const n of doomed) {
+    const key = (n as { videoKey?: string }).videoKey;
+    if (key) await deleteVideo(key).catch(() => {});
+    // Frames are written to a path derived from their own id, so it can be
+    // rebuilt here rather than parsed back out of a signed download URL.
+    if (n.kind === 'frame') {
+      await bucket.file(`users/${uid}/runs/${runId}/nodes/${n.id}.jpg`).delete().catch(() => {});
+    }
+  }
+
+  const batch = db.batch();
+  for (const n of doomed) batch.delete(nodesRef.doc(n.id));
+  await batch.commit();
+
+  return { deleted: doomed.map((n) => n.id), clips: clipChildren.length };
+}

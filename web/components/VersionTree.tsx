@@ -57,8 +57,9 @@ export function VersionTree({
   onSelect,
   onRegenerate,
   onSwapIn,
-  onRemove,
-  onRestore,
+  onDisconnect,
+  onReconnect,
+  onDelete,
   storageKey,
 }: {
   nodes: TreeNode[];
@@ -69,9 +70,11 @@ export function VersionTree({
   onRegenerate?: (id: string) => void;
   /** Put this frame into the sequence in place of the one it is an alternate of. */
   onSwapIn?: (id: string) => void;
-  /** Take this frame out of the sequence. */
-  onRemove?: (id: string) => void;
-  onRestore?: (id: string) => void;
+  /** Detach this node — a frame or a clip — from the canvas. Reversible. */
+  onDisconnect?: (id: string) => void;
+  onReconnect?: (id: string) => void;
+  /** Destroy it and its pixels. Only offered once it is disconnected. */
+  onDelete?: (id: string) => void;
   storageKey?: string;
 }) {
   const w = NODE_W[aspect];
@@ -83,10 +86,17 @@ export function VersionTree({
   const suppressClick = useRef(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  // Cut connections are the viewer's arrangement, like drag positions: they
-  // hide an edge, they do not rewrite parentId — the tree's record of what was
-  // edited from what is history, and history is not editable.
-  const [cutIds, setCutIds] = useState<Set<string>>(new Set());
+  /*
+   * There is no local "cut" state any more.
+   *
+   * Cutting an edge used to be a viewer-side arrangement kept in localStorage:
+   * it hid the line and labelled the node "disconnected — right-click to
+   * reconnect" while nothing whatsoever had been disconnected. The scissors was
+   * the most physical control on the canvas and it was the one that did the
+   * least. It performs the real detach now, and the disconnected state is read
+   * from the node itself, which means it survives a reload and means something
+   * to the renderer.
+   */
   const [edgeHover, setEdgeHover] = useState<{ id: string; x: number; y: number } | null>(null);
   /*
    * The scissors sits ON the edge it belongs to, so moving the pointer from the
@@ -98,6 +108,10 @@ export function VersionTree({
    */
   const dismissEdge = useRef<number | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
+  /* Delete asks twice, in place. A native confirm() dialog is heavier than this
+     needs to be, and a second click on a button that has changed its own label
+     is a clearer signal of intent than a browser modal nobody reads. */
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   // Load saved positions once per run. localStorage throws in some privacy
   // modes; losing a layout preference is not worth losing the page.
@@ -106,8 +120,6 @@ export function VersionTree({
     try {
       const raw = localStorage.getItem(`rs-tree-${storageKey}`);
       if (raw) setOffsets(JSON.parse(raw));
-      const cuts = localStorage.getItem(`rs-cut-${storageKey}`);
-      if (cuts) setCutIds(new Set(JSON.parse(cuts)));
     } catch {
       /* keep defaults */
     }
@@ -135,23 +147,6 @@ export function VersionTree({
   useEffect(() => () => {
     if (dismissEdge.current) window.clearTimeout(dismissEdge.current);
   }, []);
-
-  const setCut = (id: string, cut: boolean) => {
-    setCutIds((prev) => {
-      const next = new Set(prev);
-      if (cut) next.add(id);
-      else next.delete(id);
-      if (storageKey) {
-        try {
-          localStorage.setItem(`rs-cut-${storageKey}`, JSON.stringify([...next]));
-        } catch {
-          /* session-only is fine */
-        }
-      }
-      return next;
-    });
-    setEdgeHover(null);
-  };
 
   const persist = (next: Offsets) => {
     if (!storageKey) return;
@@ -212,6 +207,7 @@ export function VersionTree({
   }, [pos]);
 
   function openMenuFor(nodeId: string, clientX: number, clientY: number) {
+    setConfirmDelete(null);
     const r = wrapRef.current?.getBoundingClientRect();
     if (r) setMenu({ x: clientX - r.left, y: clientY - r.top, nodeId });
   }
@@ -278,7 +274,7 @@ export function VersionTree({
             from the same position map */}
         <svg className="pointer-events-none absolute inset-0" width={extent.w} height={extent.h} aria-hidden>
           {laid.map((n) => {
-            if (!n.parentId || cutIds.has(n.id)) return null;
+            if (!n.parentId || n.removedFromSequence) return null;
             const a = pos.get(n.parentId);
             const b = pos.get(n.id);
             if (!a || !b) return null;
@@ -321,10 +317,15 @@ export function VersionTree({
         {edgeHover && (
           <button
             type="button"
-            aria-label="Cut this connection"
+            aria-label="Disconnect this node"
+            title="Disconnect — reversible, and the only route to deleting it"
             onPointerEnter={() => holdEdge(edgeHover)}
             onPointerLeave={releaseEdge}
-            onClick={() => setCut(edgeHover.id, true)}
+            onClick={() => {
+              const id = edgeHover.id;
+              setEdgeHover(null);
+              onDisconnect?.(id);
+            }}
             className="absolute z-20 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-line-strong bg-panel text-ink-2 shadow-[0_6px_18px_-6px_rgba(0,0,0,0.35)] hover:border-crit hover:text-crit-ink"
             style={{ left: edgeHover.x, top: edgeHover.y }}
           >
@@ -338,7 +339,7 @@ export function VersionTree({
         {/* verdict badges at edge midpoints. A discarded stub carries none — the
             word under it already says so, and the badge was the collision. */}
         {laid.map((n) => {
-          if (!n.parentId || !n.verdict || n.discarded || cutIds.has(n.id)) return null;
+          if (!n.parentId || !n.verdict || n.discarded || n.removedFromSequence) return null;
           const a = pos.get(n.parentId);
           const b = pos.get(n.id);
           if (!a || !b) return null;
@@ -428,7 +429,11 @@ export function VersionTree({
                 )}
               </span>
 
-              {selected && n.kind === 'frame' && (
+              {/* Clips get the affordance too, now that there is something on
+                  the menu for them. Right-click always reached it, but that is
+                  no path at all on touch, where contextmenu never fires — so a
+                  rendered clip was effectively unreachable for most people. */}
+              {selected && n.kind !== 'avatar' && (
                 <span
                   role="button"
                   tabIndex={0}
@@ -468,17 +473,18 @@ export function VersionTree({
                 </span>
               )}
 
+              {/* One state, one label. "taken out" and "disconnected — right-click
+                  to reconnect" were two labels for two different mechanisms that
+                  looked identical on screen, drawn at the same offset, on top of
+                  each other. */}
               {n.removedFromSequence && (
                 <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-ink-3">
-                  taken out
+                  disconnected
                 </span>
               )}
 
               {n.discarded && (
                 <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-crit-ink">discarded</span>
-              )}
-              {cutIds.has(n.id) && !n.discarded && (
-                <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-ink-3">disconnected — right-click to reconnect</span>
               )}
               {n.status === 'rejected' && (
                 <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-ink-3">you rejected this</span>
@@ -543,7 +549,7 @@ export function VersionTree({
       {menu && (() => {
         const target = laid.find((n) => n.id === menu.nodeId);
         if (!target) return null;
-        const isCut = cutIds.has(target.id);
+        const isDisconnected = target.removedFromSequence === true;
         const item =
           'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] hover:bg-subtle disabled:opacity-40';
         return (
@@ -577,20 +583,44 @@ export function VersionTree({
               </button>
             )}
 
-            {target.kind === 'frame' && onRemove && inSequence.has(target.id) && target.id !== 'root' && (
-              <button type="button" className={item} onClick={() => { setMenu(null); onRemove(target.id); }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
-                Take out of the sequence
+            {/* Frames AND clips. "I do not want this any more" is the same
+                sentence about either, and only frames could hear it. */}
+            {target.kind !== 'avatar' && onDisconnect && !isDisconnected && target.id !== 'root' && (
+              <button type="button" className={item} onClick={() => { setMenu(null); onDisconnect(target.id); }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M8.1 8.1 20 20M8.1 15.9 20 4" /></svg>
+                Disconnect
               </button>
             )}
 
-            {/* The way back. Taking a frame out used to be permanent — the flag
-                was written in one place and cleared in none — so a mis-click
-                cost a paid regeneration of a frame sitting right there. */}
-            {target.kind === 'frame' && onRestore && target.removedFromSequence && (
-              <button type="button" className={item} onClick={() => { setMenu(null); onRestore(target.id); }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M1 4v6h6" /><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10" /></svg>
-                Put back in the sequence
+            {/* The way back. Disconnecting used to be permanent — the flag was
+                written in one place and cleared in none — so a mis-click cost a
+                paid regeneration of a frame sitting right there. */}
+            {onReconnect && isDisconnected && (
+              <button type="button" className={item} onClick={() => { setMenu(null); onReconnect(target.id); }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 12h12M15 6l6 6-6 6" /><path d="M3 5v14" /></svg>
+                Reconnect
+              </button>
+            )}
+
+            {/* Only reachable from a disconnected node, and only on the second
+                click. Detaching and destroying are different risks, so they are
+                different actions — this is the one thing here that cannot be
+                undone. */}
+            {onDelete && isDisconnected && (
+              <button
+                type="button"
+                className={`${item} ${confirmDelete === target.id ? 'text-crit-ink' : ''}`}
+                onClick={() => {
+                  if (confirmDelete !== target.id) { setConfirmDelete(target.id); return; }
+                  setMenu(null);
+                  setConfirmDelete(null);
+                  onDelete(target.id);
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
+                {confirmDelete === target.id
+                  ? `Delete ${target.kind === 'video' ? 'this clip' : 'it'} for good — click again`
+                  : 'Delete permanently…'}
               </button>
             )}
 
@@ -604,16 +634,6 @@ export function VersionTree({
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /></svg>
               Inspect
             </button>
-            {target.parentId && !target.discarded && (
-              <button type="button" className={item} onClick={() => { setCut(target.id, !isCut); setMenu(null); }}>
-                {isCut ? (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 12h12M15 6l6 6-6 6" /><path d="M3 5v14" /></svg>
-                ) : (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M8.1 8.1 20 20M8.1 15.9 20 4" /></svg>
-                )}
-                {isCut ? 'Reconnect' : 'Cut connection'}
-              </button>
-            )}
             {offsets[target.id] && (
               <button
                 type="button"

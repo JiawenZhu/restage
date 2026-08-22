@@ -114,12 +114,44 @@ export function stillDirection(): string {
   return establishingDirection();
 }
 
-/** Everything, for a video segment, where drift across time is the added risk. */
+/*
+ * Everything, for a video segment.
+ *
+ * WHAT WENT WRONG HERE, seen in a real render: across six frames of one clip the
+ * mouth and jaw did something different every frame — chin elongating, jaw
+ * widening, teeth bared — until two of the six frames were a rounder-jawed
+ * stranger. The upper face held. The lower face did not. Three causes, all of
+ * them things the prompt was asking for:
+ *
+ *   1. IT ASKED THE JAW TO MOVE. "The creator speaks with authentic charisma,
+ *      fluid subtle jaw articulation" — a talking mouth at close range is the
+ *      single hardest thing a video model renders, and it was requested by name.
+ *      Worse, it buys nothing: the voiceover is a separate TTS track muxed on
+ *      afterwards, so the mouth is not synced to any words. A mouth moving to
+ *      words it is not saying is worse than a mouth at rest, AND it deforms.
+ *
+ *   2. IT ASKED FOR A CLOSE-UP. Arm's length plus a face-filling frame means
+ *      every pixel of jawline has to be generated, at 720p, at 24fps. Compare a
+ *      medium shot of the same person from the same model family: the face sits
+ *      at a fraction of the frame height and holds perfectly.
+ *
+ *   3. IT PUT THE ARTEFACTS IN THE POSITIVE PROMPT. "no drift, no morphing, no
+ *      rubbery skin, no warping" conditions on drift, morphing, rubbery skin and
+ *      warping. Those words belong in VIDEO_NEGATIVE_PROMPT, which is where they
+ *      are now, and nowhere near here.
+ */
 export function motionDirection(): string {
   return (
     `${IDENTITY_LOCK}\n${FLATTERING_CAMERA}\n` +
-    'MOTION: The face must stay identical in every frame — no drift, no morphing, ' +
-    'no rubbery skin, no warping. Natural 24fps motion blur.\n' +
+    'FRAMING: A medium shot. Head and shoulders with clear headroom above and ' +
+    'air on both sides, at a comfortable conversational distance — the face ' +
+    'occupies a modest part of the frame, the way a person filmed across a table ' +
+    'looks. Keep the whole head inside the frame for the entire clip.\n' +
+    'MOTION: Small and calm. A gentle breath, a slow blink, the faintest shift of ' +
+    'weight, one small head movement at most. The mouth stays closed or holds a ' +
+    'soft, easy smile; lips and jaw stay settled. Hold one steady expression for ' +
+    'the whole clip rather than travelling through several. Natural 24fps motion ' +
+    'blur.\n' +
     `${OUTPUT_RULES}`
   );
 }

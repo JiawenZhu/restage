@@ -32,7 +32,7 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
      generation and the decision to spend belongs to the person. */
   const [pendingRebuild, setPendingRebuild] = useState<{ steps: number[]; label: string } | null>(null);
   const [busySeq, setBusySeq] = useState(false);
-  const [seqError, setSeqError] = useState<string | null>(null);
+  const [seqMsg, setSeqMsg] = useState<{ text: string; bad: boolean } | null>(null);
 
   /*
    * Re-evaluate "has this stalled?" while the page sits open.
@@ -56,7 +56,7 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
   async function sequenceAction(body: Record<string, unknown>) {
     if (!user) return;
     setBusySeq(true);
-    setSeqError(null);
+    setSeqMsg(null);
     try {
       const token = await user.getIdToken();
       const res = await fetch(`/api/runs/${run.id}/sequence`, {
@@ -68,13 +68,26 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
       if (!res.ok) throw new Error(json.error ?? 'that did not work');
       if (json.staleCount > 0) setPendingRebuild({ steps: json.staleSteps, label: json.label });
       else setPendingRebuild(null);
+      /* Deleting a frame takes the clips rendered from it too — they are
+         artefacts of that one frame and mean nothing without it. Silently
+         removing three things when the user asked to remove one is the kind of
+         surprise that makes people stop trusting a delete button. */
+      if (typeof json.deleted === 'number') {
+        setSeqMsg({
+          text:
+            json.clips > 0
+              ? `Deleted — along with ${json.clips} clip${json.clips > 1 ? 's' : ''} rendered from it.`
+              : 'Deleted.',
+          bad: false,
+        });
+      }
     } catch (e) {
       /* Shown, not logged.
          Every failure here went to console.error and nowhere else, so a refused
          delete and a successful one looked identical from the user's side: the
          menu closed, the frame stayed where it was, and nothing said why. That
          is most of what "I cannot delete images" feels like from the outside. */
-      setSeqError(e instanceof Error ? e.message : 'that did not work');
+      setSeqMsg({ text: e instanceof Error ? e.message : 'that did not work', bad: true });
     } finally {
       setBusySeq(false);
     }
@@ -118,18 +131,23 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
             );
             if (alt && target) void sequenceAction({ action: 'swap', targetId: target.id, replacementId: id });
           }}
-          onRemove={(id) => void sequenceAction({ action: 'remove', nodeId: id })}
-          onRestore={(id) => void sequenceAction({ action: 'restore', nodeId: id })}
+          onDisconnect={(id: string) => void sequenceAction({ action: 'disconnect', nodeId: id })}
+          onReconnect={(id: string) => void sequenceAction({ action: 'reconnect', nodeId: id })}
+          onDelete={(id: string) => void sequenceAction({ action: 'delete', nodeId: id })}
           storageKey={run.id}
         />
 
-        {seqError && (
-          <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-crit/40 bg-crit-soft px-4 py-2.5">
-            <p className="text-[12.5px] text-crit-ink">{seqError}</p>
+        {seqMsg && (
+          <div
+            className={`absolute inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t px-4 py-2.5 ${
+              seqMsg.bad ? 'border-crit/40 bg-crit-soft' : 'border-line bg-subtle'
+            }`}
+          >
+            <p className={`text-[12.5px] ${seqMsg.bad ? 'text-crit-ink' : 'text-ink-2'}`}>{seqMsg.text}</p>
             <button
               type="button"
-              onClick={() => setSeqError(null)}
-              className="shrink-0 text-[12px] font-semibold text-crit-ink underline"
+              onClick={() => setSeqMsg(null)}
+              className={`shrink-0 text-[12px] font-semibold underline ${seqMsg.bad ? 'text-crit-ink' : 'text-ink-3'}`}
             >
               Dismiss
             </button>

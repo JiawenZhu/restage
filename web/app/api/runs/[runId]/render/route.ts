@@ -90,22 +90,42 @@ function buildCinematicUgcVideoPrompt(
    *  restarting. */
   continuation?: string,
 ): string {
+  /*
+   * DISTANCE, not just movement.
+   *
+   * This said "handheld at arm's length", which is a close-up — and a close-up
+   * is where a generated face comes apart. In a real render the lower face
+   * deformed frame by frame until two of six frames were a different, rounder
+   * -jawed person. The same model family, given a medium shot of the same
+   * person, holds the face perfectly: the jaw simply occupies fewer pixels and
+   * there is less of it to get wrong.
+   *
+   * The handheld feel is what makes it read as UGC and it is kept. The lens is
+   * still 85mm-equivalent, because that is what stops a face distorting. What
+   * changes is that the camera stands back.
+   */
   const cameraMovement =
     aspect === '9:16'
-      /* Vertical UGC is shot at arm's length, and the camera move should still
-         read as handheld — but the LENS matters more than the movement. 35mm at
-         face distance is what makes a phone selfie unflattering; the framing
-         here keeps the handheld feel and loses the distortion. */
-      ? 'Handheld at arm\'s length with subtle organic breathing motion, camera a touch above eye level, 85mm-equivalent compression, f/2 shallow depth of field with gentle background bokeh'
-      : 'Smooth cinematic forward push-in, camera a touch above eye level, 85mm-equivalent compression, natural spatial parallax between subject and background';
+      ? 'Handheld from a comfortable conversational distance with subtle organic breathing motion, ' +
+        'camera a touch above eye level, 85mm-equivalent compression, f/2.8 depth of field with a softly separated background'
+      : 'Slow cinematic push-in from a medium distance, camera a touch above eye level, ' +
+        '85mm-equivalent compression, natural spatial parallax between subject and background';
 
   return [
-    `Cinematic 4K UGC video clip, 24fps.`,
+    /* Not "Cinematic 4K". The output is 720p, or 1080p on a full-length shot,
+       and saying 4K neither raises it nor costs nothing — it spends the model's
+       attention on a resolution it cannot produce. */
+    'Photorealistic UGC video clip, 24fps.',
     `${goal}. ${label ? `Scene focus: ${label}.` : ''}`,
     motionDirection(),
-    `Expression & Motion Dynamics: Controlled natural micro-expressions only. The creator speaks with authentic charisma, fluid subtle jaw articulation, organic soft blinks, and gentle expressive head tilts. Absolutely NO exaggerated facial grimacing, NO jaw stretching, and NO facial shape deformation.`,
-    `Camera Dynamics: ${cameraMovement}.`,
-    `Lighting & Physics: Direct authentic cinematic lighting with realistic specular reflections shifting naturally across glasses and eyes, dynamic ambient lighting interaction, realistic skin subsurface scattering, subtle environmental dust/particles and secondary motion in the background.`,
+    `Camera: ${cameraMovement}.`,
+    /* The artefact rules that used to live here — "Absolutely NO exaggerated
+       facial grimacing, NO jaw stretching, NO facial shape deformation" — are
+       in VIDEO_NEGATIVE_PROMPT now. Naming a defect in the positive prompt is
+       how you condition on it, and the defect that showed up in real output was
+       precisely jaw stretching and facial deformation. */
+    'Lighting: soft, believable light with gentle specular reflections on glasses and a catchlight in the eyes; ' +
+      'skin looks like skin in good condition. The background stays put and stays quiet.',
 
     // Only on segments after the first: the given frame is the previous
     // segment's last, so this has to read as the same take continuing.

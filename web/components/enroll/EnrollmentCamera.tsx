@@ -12,6 +12,61 @@ type RetakeTarget = 'front' | 'left' | 'right' | 'audio' | null;
 const TELEPROMPTER_TEXT =
   "I'm testing my personal voice and likeness sample for Restage AI. Everything from lighting to tone feels authentic and ready to create.";
 
+/*
+ * Did the head actually turn?
+ *
+ * The turn detector is a brightness heuristic rather than a pose measurement —
+ * its own comment says so, and turning toward a lamp moves the reading without
+ * moving the head. In a real enrolment it fired on room lighting, and the
+ * resulting "left profile" was very nearly the straight-on shot. Three angles
+ * that are all the same angle give the model nothing extra to hold a face with,
+ * which is the entire reason enrolment takes three.
+ *
+ * This does not try to measure the sensor better. It checks the RESULT, and it
+ * needs no magic threshold, because the useful signal is a comparison rather
+ * than a number: of the three pairs, LEFT vs RIGHT must be the most different.
+ * They are the two extremes, so nothing else can be further apart. Measured on
+ * the enrolment that went wrong, they were the CLOSEST pair —
+ *
+ *     front vs left   0.117
+ *     front vs right  0.117
+ *     left  vs right  0.061   ← should have been the largest
+ *
+ * which says plainly that the two "profiles" are the same pose. Lighting and
+ * background are identical across the three captures, so almost all of the
+ * difference that survives the comparison is the head having moved.
+ */
+async function poseDifference(a: string, b: string): Promise<number> {
+  const load = (src: string) =>
+    new Promise<HTMLImageElement>((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = rej;
+      im.src = src;
+    });
+  const [ia, ib] = await Promise.all([load(a), load(b)]);
+  const W = 48;
+  const H = 64;
+  const grey = (im: HTMLImageElement) => {
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(im, 0, 0, W, H);
+    const d = ctx.getImageData(0, 0, W, H).data;
+    const out = new Float64Array(W * H);
+    for (let i = 0; i < W * H; i++) out[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
+    return out;
+  };
+  const ga = grey(ia);
+  const gb = grey(ib);
+  if (!ga || !gb) return 1;
+  let sum = 0;
+  for (let i = 0; i < ga.length; i++) sum += Math.abs(ga[i] - gb[i]);
+  return sum / ga.length / 255;
+}
+
 export function EnrollmentCamera() {
   const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -41,6 +96,7 @@ export function EnrollmentCamera() {
   const [burstProgress, setBurstProgress] = useState(0);
   /** What the burst actually chose, so the interface can say so truthfully. */
   const [burstStats, setBurstStats] = useState<Record<string, { kept: number; score: number }>>({});
+  const [turnWarning, setTurnWarning] = useState<string | null>(null);
   const [avatarName, setAvatarName] = useState('My Personal Avatar');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -124,6 +180,47 @@ export function EnrollmentCamera() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  /*
+   * Check the three captures against each other once they are all in.
+   *
+   * Run on entering review rather than at capture time, because the question is
+   * about the SET — whether these three are three angles or one angle three
+   * times — and that cannot be asked until the third one exists.
+   */
+  useEffect(() => {
+    if (step !== 'review') return;
+    const { front, left, right } = capturedFrames;
+    if (!front || !left || !right) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [fl, fr, lr] = await Promise.all([
+          poseDifference(front, left),
+          poseDifference(front, right),
+          poseDifference(left, right),
+        ]);
+        if (cancelled) return;
+        console.info(
+          `[enrol] pose spread — front/left ${fl.toFixed(3)}, front/right ${fr.toFixed(3)}, left/right ${lr.toFixed(3)}`,
+        );
+        // The two extremes have to be further apart than either is from centre.
+        setTurnWarning(
+          lr > Math.max(fl, fr)
+            ? null
+            : 'Your left and right shots look more alike than either looks like the straight-on one, ' +
+              'which usually means the head did not turn far enough. Retake them and turn until one ear ' +
+              'is pointing at the lens — about a sixty-degree turn. Three angles is what holds the face; ' +
+              'three copies of one angle will not.',
+        );
+      } catch {
+        /* A check that cannot run is not a reason to block enrolment. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step, capturedFrames]);
 
   // Initialize WebRTC and Real-time Vision/Audio Analysis Loop
   const startMedia = async (targetStep: Step = 'front') => {
@@ -995,6 +1092,13 @@ export function EnrollmentCamera() {
             each card reports what its burst chose: "sharpest of 14" is real
             information about the capture, and the reason to trust it.
           */}
+          {turnWarning && (
+            <div className="mt-5 rounded-card border border-warn/40 bg-warn-soft px-4 py-3">
+              <p className="text-[13px] font-semibold text-warn-ink">These may be the same angle three times</p>
+              <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">{turnWarning}</p>
+            </div>
+          )}
+
           <div className="mt-6 grid gap-5 sm:grid-cols-3">
             {([
               { key: 'left' as const, label: 'Left', hint: 'Turned away from the lens', input: fileInputLeftRef },

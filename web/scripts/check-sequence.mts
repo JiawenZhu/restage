@@ -12,7 +12,7 @@ for (const l of readFileSync(new URL('../.env.local', import.meta.url),'utf8').s
   const m=l.match(/^([A-Z0-9_]+)=(.*)$/); if(m&&m[2].trim()) process.env[m[1]] ??= m[2].trim().replace(/^["']|["']$/g,'');
 }
 const { adminDb } = await import('../lib/firebaseAdmin');
-const { promoteFrame, removeFrame, restoreFrame, lineageOf, shotPlan } = await import('../lib/lineage');
+const { promoteFrame, removeFrame, restoreFrame, disconnectNode, deleteNode, lineageOf, shotPlan } = await import('../lib/lineage');
 
 const uid = `_seqtest_${Date.now()}`;
 const db = adminDb();
@@ -118,6 +118,66 @@ const okRestore =
   s4?.removedFromSequence === undefined && s5?.parentId === 's4' && back.staleSteps.includes(5);
 console.log(`  ${okRestore ? '✅' : '❌'} 放回：标记清除，子节点归位，并标记为需要重建`);
 
+/*
+ * 断开与删除。
+ *
+ * 用户要的是两步：先 disconnect，然后才能删。这两件事风险完全不同 —— 断开是
+ * 即时、可逆、不花钱的；删除是这个产品里唯一一个撤不回来的操作。把删除挡在
+ * 断开后面，就没有人会因为在右键菜单里点错一下而永久丢掉东西。
+ *
+ * 而且图片和视频都要能断开。之前只有 frame 能被取出，clip 完全没有出路。
+ */
+await nodes.doc('vid2').set({
+  parentId: 's4', stepNo: 99, kind: 'video', status: 'achieved', createdAt: Date.now() + 70,
+});
+
+let refused = '';
+try { await deleteNode(runRef.id, uid, 'vid2'); } catch (e) { refused = (e as Error).message; }
+console.log(`\n  没断开就直接删 clip → ${refused || '（居然没拦住）'}`);
+const okGate = /disconnect it first/.test(refused);
+console.log(`  ${okGate ? '✅' : '❌'} 删除被挡在断开后面`);
+
+await disconnectNode(runRef.id, 'vid2');
+all = await read();
+const okVideoDisconnect = all.find((n) => n.id === 'vid2')?.removedFromSequence === true;
+console.log(`  ${okVideoDisconnect ? '✅' : '❌'} clip 也能被断开（之前只有图片可以）`);
+
+const goneClip = await deleteNode(runRef.id, uid, 'vid2');
+all = await read();
+const okDeleteClip = !all.some((n) => n.id === 'vid2') && goneClip.deleted.length === 1;
+console.log(`  ${okDeleteClip ? '✅' : '❌'} 断开之后可以真正删掉`);
+
+/*
+ * 删一张图的时候，从它渲染出来的片子要跟着走。
+ *
+ * 那支片子是这一帧的产物，离开它就没有意义；留下来就成了画布上一支再也找不到
+ * 来源的视频。而下面的步骤不会被连坐 —— disconnect 的时候就已经把它们接到上一
+ * 层了，所以删的时候底下本来就是空的，没有东西会被牵连。
+ */
+await nodes.doc('vid3').set({
+  parentId: 's4', stepNo: 99, kind: 'video', status: 'achieved', createdAt: Date.now() + 80,
+});
+const s4Parent = all.find((n) => n.id === 's4')?.parentId;
+await disconnectNode(runRef.id, 's4');
+all = await read();
+const liftedTo = all.find((n) => n.id === 's5')?.parentId;
+console.log(`\n  断开 s4：s5 被接到 ${liftedTo}（s4 原来的父节点是 ${s4Parent}）`);
+const okLift = liftedTo === s4Parent;
+console.log(`  ${okLift ? '✅' : '❌'} 断开时后续步骤先被接到上一层，所以删除不会牵连它们`);
+
+const clipsOnS4 = all.filter((n) => n.parentId === 's4' && n.kind === 'video').length;
+const gone = await deleteNode(runRef.id, uid, 's4');
+all = await read();
+const okCascade =
+  gone.clips === clipsOnS4 &&
+  !all.some((n) => n.id === 's4' || n.id === 'vid3') &&
+  all.some((n) => n.id === 's5');
+console.log(`  ${okCascade ? '✅' : '❌'} 删图片时带走挂在它下面的全部 ${gone.clips} 支片子（应为 ${clipsOnS4}），而 s5 完好无损`);
+
 for (const d of (await nodes.get()).docs) await d.ref.delete();
 await runRef.delete();
-process.exit(okSwap && okRemove && okReject && okNoSentinel && okRestore ? 0 : 1);
+process.exit(
+  okSwap && okRemove && okReject && okNoSentinel && okRestore &&
+  okGate && okVideoDisconnect && okDeleteClip && okLift && okCascade
+    ? 0 : 1,
+);

@@ -170,8 +170,12 @@ function TemplateCard({
         {!playing && hasClip && allowMotion && (
           <span className="pointer-events-none absolute right-2 top-2 flex items-center gap-1 rounded-chip bg-black/55 px-1.5 py-1 text-[9px] font-bold tracking-[0.06em] text-white backdrop-blur-sm">
             <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
-            <span className="hidden sm:inline">HOVER</span>
-            <span className="sm:hidden">CLIP</span>
+            {/* Both words are in the DOM so the label can be responsive, but a
+                screen reader would read them run together as "HOVERCLIP". The
+                visible pair is decorative; the real name is on the parent. */}
+            <span aria-hidden className="hidden sm:inline">HOVER</span>
+            <span aria-hidden className="sm:hidden">CLIP</span>
+            <span className="sr-only">has a preview clip</span>
           </span>
         )}
 
@@ -210,7 +214,7 @@ function TemplateCard({
           type="button"
           onClick={onToggleExpand}
           aria-expanded={expanded}
-          className="shrink-0 text-[11px] font-semibold text-accent hover:underline"
+          className="shrink-0 text-[11px] font-semibold text-accent-ink hover:underline"
         >
           {expanded ? 'Less' : `${tpl.presetSteps.length} steps`}
         </button>

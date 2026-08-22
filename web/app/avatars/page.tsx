@@ -96,7 +96,7 @@ export default function Avatars() {
           </Link>
         </div>
 
-        {error && <p className="mt-6 text-[13px] text-crit">{error}</p>}
+        {error && <p className="mt-6 text-[13px] text-crit-ink">{error}</p>}
 
         {authLoading || loading ? (
           <div className="mt-9 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -184,7 +184,7 @@ export default function Avatars() {
                       <button
                         type="button"
                         onClick={() => setConfirming(a.id)}
-                        className="rounded-lg border border-line-strong px-2.5 py-2 text-[12.5px] font-semibold text-ink-3 hover:border-crit hover:text-crit"
+                        className="rounded-lg border border-line-strong px-2.5 py-2 text-[12.5px] font-semibold text-ink-3 hover:border-crit hover:text-crit-ink"
                       >
                         Delete
                       </button>

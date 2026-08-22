@@ -84,14 +84,14 @@ export default function Landing() {
       <section className="mx-auto max-w-[1440px] px-6 pt-10 sm:px-14">
         <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,600px)_minmax(0,1fr)]">
           <div>
-            <p className="inline-flex items-center gap-2 rounded-chip bg-accent-soft px-3.5 py-1.5 text-[12.5px] font-semibold text-accent">
+            <p className="inline-flex items-center gap-2 rounded-chip bg-accent-soft px-3.5 py-1.5 text-[12.5px] font-semibold text-accent-ink">
               <span className="block h-1.5 w-1.5 rounded-full bg-accent" />
               Your face — not a stock actor
             </p>
 
             <h1 className="mt-5 text-[clamp(2.75rem,7vw,4.75rem)] font-black leading-[0.95] tracking-[-0.05em] text-balance">
               Never film another
-              <span className="block text-accent">UGC ad.</span>
+              <span className="block text-accent-ink">UGC ad.</span>
             </h1>
 
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-ink-2 text-pretty">
@@ -100,7 +100,7 @@ export default function Landing() {
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link href="/enroll" className="rounded-lg bg-accent px-7 py-3.5 text-[15px] font-semibold text-white">
+              <Link href="/enroll" className="rounded-lg bg-accent-strong px-7 py-3.5 text-[15px] font-semibold text-white">
                 Build your avatar — free
               </Link>
               {/* Pointed at /studio — an empty form behind a sign-in wall, which
@@ -244,7 +244,7 @@ export default function Landing() {
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {STEPS.map((s) => (
             <div key={s.n} className="rounded-2xl border border-line bg-panel p-7">
-              <span className="tnum flex h-9 w-9 items-center justify-center rounded-[10px] bg-accent-soft text-[15px] font-extrabold text-accent">
+              <span className="tnum flex h-9 w-9 items-center justify-center rounded-[10px] bg-accent-soft text-[15px] font-extrabold text-accent-ink">
                 {s.n}
               </span>
               <h3 className="mt-5 text-[21px] font-bold tracking-[-0.02em]">{s.title}</h3>
@@ -274,7 +274,7 @@ export default function Landing() {
           <div className="flex items-end gap-5">
             <div className="relative w-[180px] shrink-0 overflow-hidden rounded-2xl shadow-[0_22px_50px_-24px_rgba(20,20,26,0.4)] sm:w-[260px]">
               <Image src="/img/f4.jpg" alt="" width={260} height={462} className="h-[320px] w-full object-cover sm:h-[462px]" />
-              <span className="absolute left-3 top-3 rounded-[5px] bg-accent px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] text-white">9:16</span>
+              <span className="absolute left-3 top-3 rounded-[5px] bg-accent-strong px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] text-white">9:16</span>
             </div>
             <div className="relative min-w-0 flex-1 overflow-hidden rounded-2xl shadow-[0_22px_50px_-24px_rgba(20,20,26,0.4)]">
               <Image src="/img/w4.jpg" alt="" width={520} height={300} className="h-[200px] w-full object-cover sm:h-[300px]" />
@@ -332,7 +332,7 @@ export default function Landing() {
               className={`relative rounded-2xl bg-panel p-8 ${p.featured ? 'border-2 border-accent shadow-[0_22px_50px_-26px_rgba(57,135,229,0.5)]' : 'border border-line'}`}
             >
               {p.featured && (
-                <span className="absolute -top-[11px] left-8 rounded-chip bg-accent px-3 py-1 text-[11px] font-bold tracking-[0.07em] text-white">
+                <span className="absolute -top-[11px] left-8 rounded-chip bg-accent-strong px-3 py-1 text-[11px] font-bold tracking-[0.07em] text-white">
                   FOR CREATORS
                 </span>
               )}
@@ -350,7 +350,7 @@ export default function Landing() {
                   the one control a visitor is most likely to reach for. */}
               <Link
                 href="/enroll"
-                className={`mt-7 block rounded-[9px] py-3 text-center text-sm font-semibold ${p.featured ? 'bg-accent text-white' : 'border border-line-strong'}`}
+                className={`mt-7 block rounded-[9px] py-3 text-center text-sm font-semibold ${p.featured ? 'bg-accent-strong text-white' : 'border border-line-strong'}`}
               >
                 {p.cta}
               </Link>

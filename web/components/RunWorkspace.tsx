@@ -130,7 +130,7 @@ function PlanPanel({ run }: { run: Run }) {
 
       {stalled && (
         <div className="rs-tint-warn mx-3.5 mb-3 rounded-card border border-warn/40 p-3">
-          <p className="text-[11px] font-bold tracking-[0.1em] text-warn">NO PROGRESS</p>
+          <p className="text-[11px] font-bold tracking-[0.1em] text-warn-ink">NO PROGRESS</p>
           <p className="mt-1.5 text-[12.5px] leading-snug text-ink-2">
             Nothing has changed here for over ten minutes, so this run has most likely stopped. The frames it did
             produce are on the canvas and can still be rendered.
@@ -142,7 +142,7 @@ function PlanPanel({ run }: { run: Run }) {
           as a slow one. */}
       {run.status === 'failed' && (
         <div className="mx-3.5 mb-3 rounded-card border border-crit/40 rs-tint-crit p-3">
-          <p className="text-[11px] font-bold tracking-[0.1em] text-crit">RUN STOPPED</p>
+          <p className="text-[11px] font-bold tracking-[0.1em] text-crit-ink">RUN STOPPED</p>
           <p className="mt-1.5 text-[12.5px] leading-snug text-ink-2">
             {run.failureReason || 'Something went wrong and the run could not continue.'}
           </p>
@@ -197,9 +197,9 @@ function PlanPanel({ run }: { run: Run }) {
 }
 
 const VERDICT_STYLE = {
-  met: { border: 'border-good/35', text: 'text-good', label: 'CRITIC · ACHIEVED' },
-  partial: { border: 'border-warn/35', text: 'text-warn', label: 'CRITIC · PARTIAL' },
-  failed: { border: 'border-crit/35', text: 'text-crit', label: 'CRITIC · REJECTED' },
+  met: { border: 'border-good/35', text: 'text-good-ink', label: 'CRITIC · ACHIEVED' },
+  partial: { border: 'border-warn/35', text: 'text-warn-ink', label: 'CRITIC · PARTIAL' },
+  failed: { border: 'border-crit/35', text: 'text-crit-ink', label: 'CRITIC · REJECTED' },
 } as const;
 
 function Inspector({
@@ -337,7 +337,7 @@ function Inspector({
              with a play badge, labelled "RENDERED CLIP", while the reason sat
              unread in criticNotes. */
           <div className="rounded-card border border-crit/40 rs-tint-crit p-3.5">
-            <p className="text-[11px] font-bold tracking-[0.08em] text-crit">RENDER FAILED</p>
+            <p className="text-[11px] font-bold tracking-[0.08em] text-crit-ink">RENDER FAILED</p>
             <p className="mt-2 text-[13px] leading-relaxed">
               {node.criticNotes || 'The clip could not be rendered.'}
             </p>
@@ -411,7 +411,7 @@ function Inspector({
       </div>
 
       <div className="flex flex-col gap-2 border-t border-line px-[18px] py-3.5">
-        {(error || clipError) && <p className="text-[12.5px] text-crit">{error ?? clipError}</p>}
+        {(error || clipError) && <p className="text-[12.5px] text-crit-ink">{error ?? clipError}</p>}
 
         {/* The human verdict. The critic catches gross identity swaps but not
             subtle drift — measured on a real run where both verifiers passed a
@@ -424,8 +424,8 @@ function Inspector({
               onClick={() => judge(node.status === 'rejected' ? 'achieved' : 'rejected')}
               className={`rounded-lg border py-2.5 text-[12.5px] font-semibold disabled:opacity-40 ${
                 node.status === 'rejected'
-                  ? 'border-crit bg-crit-soft text-crit'
-                  : 'border-line-strong text-ink-2 hover:border-crit hover:text-crit'
+                  ? 'border-crit bg-crit-soft text-crit-ink'
+                  : 'border-line-strong text-ink-2 hover:border-crit hover:text-crit-ink'
               }`}
             >
               {node.status === 'rejected' ? 'Rejected — undo' : 'Reject this frame'}
@@ -434,7 +434,7 @@ function Inspector({
               type="button"
               disabled={busy}
               onClick={() => onRegenerate?.(node.id)}
-              className="rounded-lg border border-line-strong py-2.5 text-[12.5px] font-semibold text-ink-2 hover:border-accent hover:text-accent disabled:opacity-40"
+              className="rounded-lg border border-line-strong py-2.5 text-[12.5px] font-semibold text-ink-2 hover:border-accent hover:text-accent-ink disabled:opacity-40"
             >
               Try again
             </button>
@@ -540,7 +540,7 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
         />
       </div>
 
-      {error && <p className="mt-2 text-[12.5px] text-crit">{error}</p>}
+      {error && <p className="mt-2 text-[12.5px] text-crit-ink">{error}</p>}
 
       <button
         type="button"

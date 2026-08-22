@@ -296,7 +296,7 @@ export function VersionTree({
             onPointerEnter={() => holdEdge(edgeHover)}
             onPointerLeave={releaseEdge}
             onClick={() => setCut(edgeHover.id, true)}
-            className="absolute z-20 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-line-strong bg-panel text-ink-2 shadow-[0_6px_18px_-6px_rgba(0,0,0,0.35)] hover:border-crit hover:text-crit"
+            className="absolute z-20 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-line-strong bg-panel text-ink-2 shadow-[0_6px_18px_-6px_rgba(0,0,0,0.35)] hover:border-crit hover:text-crit-ink"
             style={{ left: edgeHover.x, top: edgeHover.y }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -375,7 +375,7 @@ export function VersionTree({
 
                 {n.status === 'generating' && (
                   <span className="absolute inset-0 flex items-center justify-center bg-black/45">
-                    <span className="flex items-center gap-1.5 rounded-chip bg-black/70 px-2.5 py-1.5 text-[9px] font-bold tracking-[0.05em] text-accent">
+                    <span className="flex items-center gap-1.5 rounded-chip bg-black/70 px-2.5 py-1.5 text-[9px] font-bold tracking-[0.05em] text-accent-ink">
                       <span className="rs-cursor block h-[5px] w-[5px] rounded-full bg-accent" />
                       {n.kind === 'video' ? 'RENDERING' : 'GENERATING'}
                     </span>
@@ -424,7 +424,7 @@ export function VersionTree({
               )}
 
               {n.discarded && (
-                <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-crit">discarded</span>
+                <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-crit-ink">discarded</span>
               )}
               {cutIds.has(n.id) && !n.discarded && (
                 <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-ink-3">disconnected — right-click to reconnect</span>
@@ -557,9 +557,9 @@ function VerdictBadge({ verdict, x, y }: { verdict: 'met' | 'partial' | 'failed'
      failure on every edge of a real run — a partial that was never retried is
      not a retry, and the discarded stub already marks the ones that were. */
   const style = {
-    met: { cls: 'bg-good-soft text-good border-good/45', label: 'MET' },
-    partial: { cls: 'bg-warn-soft text-warn border-warn/45', label: 'PARTIAL' },
-    failed: { cls: 'bg-crit-soft text-crit border-crit/45', label: 'DISCARDED' },
+    met: { cls: 'bg-good-soft text-good-ink border-good/45', label: 'MET' },
+    partial: { cls: 'bg-warn-soft text-warn-ink border-warn/45', label: 'PARTIAL' },
+    failed: { cls: 'bg-crit-soft text-crit-ink border-crit/45', label: 'DISCARDED' },
   }[verdict];
 
   return (

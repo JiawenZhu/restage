@@ -24,14 +24,53 @@
 
   --text-primary: #17171a;
   --text-secondary: #5b5b63;
-  --text-muted: #8b8b93;
-  --text-faint: #a8a8b0;
+  /*
+   * The two quiet tiers, moved up one step each so they can actually be read.
+   *
+   * Measured against the real surfaces: --text-muted was 3.16:1 on canvas and
+   * --text-faint was 2.21:1, both far under the 4.5 that small text needs — and
+   * these carry the 12-14px labels the interface leans on most ("Free while in
+   * beta", the section eyebrows, the pricing meta). Quiet has to mean quiet,
+   * not unreadable. The hierarchy still separates cleanly: 6.28 / 5.39 / 4.51.
+   */
+  --text-muted: #65656e;
+  --text-faint: #71717a;
 
   --primary: #232326;
   --primary-ink: #ffffff;
 
   --accent: #3987e5;
   --accent-soft: #eef4fc;
+  /*
+   * The accent, one step darker, for FILLS behind white text.
+   *
+   * --accent is Arcads' blue and stays exactly as it is — it is the brand, and
+   * it is correct as a border, a ring and a 12% tint. But white on it measures
+   * 3.64:1, below the 4.5 AA threshold, and the two most important buttons in
+   * the product sit on it. This is the lightest value in the same hue family
+   * that passes: 5.07:1. Darkening --accent itself would have dragged every
+   * border and tint with it.
+   */
+  --accent-strong: #2a6ec6;
+
+  /*
+   * Semantic colours have two jobs and only one value, and the values were
+   * tuned for the fill job.
+   *
+   * As a badge fill, a ring or a border, --good/--warn/--crit are right. As
+   * TEXT on their own soft tint — which is exactly how the critic verdicts and
+   * the tree badges use them — they measured 3.31 (warn), 3.78 (good) and 3.29
+   * (accent) against a 4.5 requirement. The "CRITIC · PARTIAL" line, the single
+   * most persuasive element in the product, was among them.
+   *
+   * These are the same hues carried to a legible weight, checked on all three
+   * light grounds: the soft tint, the panel and the canvas. --crit already
+   * passed at 4.61 and is unchanged.
+   */
+  --good-ink: #097c34;
+  --warn-ink: #8f5f18;
+  --crit-ink: #c8372f;
+  --accent-ink: #2a6ec6;
 
   --good: #0a8f3c;
   --good-soft: #eaf6ee;
@@ -52,14 +91,31 @@
 
   --text-primary: #ffffff;
   --text-secondary: #c3c2b7;
-  --text-muted: #898781;
-  --text-faint: #6d6b66;
+  /* Same shift in dark, where --text-faint measured 3.65:1. Now 7.51 / 5.41. */
+  --text-muted: #a3a199;
+  --text-faint: #898781;
+
+  /* In dark these read on their soft tints at 6.9-8.7, so the hue itself is
+     already the legible weight — no darkening, only naming. */
+  --good-ink: var(--good);
+  --warn-ink: var(--warn);
+  --crit-ink: var(--crit);
+  --accent-ink: var(--accent);
 
   --primary: #f4f1e9;
   --primary-ink: #17171a;
 
   --accent: #6fa8ec;
   --accent-soft: rgba(57, 135, 229, 0.14);
+  /*
+   * The same fill in both themes.
+   *
+   * A lighter blue was tried here on the assumption that dark-theme buttons
+   * would carry dark text — they do not, they carry white, and it measured
+   * 4.08:1. Contrast is between a button and its own label, so it does not
+   * depend on the page behind it, which means one value serves both themes.
+   */
+  --accent-strong: #2a6ec6;
 
   --good: #4ec26e;
   --good-soft: rgba(78, 194, 110, 0.13);
@@ -94,6 +150,11 @@
 
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-strong: var(--accent-strong);
+  --color-good-ink: var(--good-ink);
+  --color-warn-ink: var(--warn-ink);
+  --color-crit-ink: var(--crit-ink);
+  --color-accent-ink: var(--accent-ink);
 
   --color-good: var(--good);
   --color-good-soft: var(--good-soft);

@@ -95,7 +95,7 @@ export function AppShell({
                         className="h-8 w-8 rounded-full border border-line object-cover"
                       />
                     ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-xs font-bold text-accent">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-xs font-bold text-accent-ink">
                         {(user.displayName || user.email || 'U')[0].toUpperCase()}
                       </div>
                     )}

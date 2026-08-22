@@ -181,7 +181,7 @@ export function PromptComposer({
               aria-pressed={listening}
               aria-label={listening ? 'Stop dictating' : 'Dictate'}
               className={`flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${
-                listening ? 'rs-cursor border-accent bg-accent-soft text-accent' : 'border-line-strong text-ink-3 hover:text-ink'
+                listening ? 'rs-cursor border-accent bg-accent-soft text-accent-ink' : 'border-line-strong text-ink-3 hover:text-ink'
               }`}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -230,7 +230,7 @@ export function PromptComposer({
       {(refined || refining) && (
         <div className="rs-enter rounded-card border border-accent/35 rs-tint-accent p-4">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-bold tracking-[0.12em] text-accent">AI PROMPT — WHAT THE MODEL RECEIVES</p>
+            <p className="text-[10px] font-bold tracking-[0.12em] text-accent-ink">AI PROMPT — WHAT THE MODEL RECEIVES</p>
             {refined && (
               <button type="button" onClick={refine} className="text-[11.5px] font-medium text-ink-3 hover:text-ink" disabled={refining}>
                 rewrite again
@@ -257,7 +257,7 @@ export function PromptComposer({
         </div>
       )}
 
-      {error && <p className="text-[12.5px] text-crit">{error}</p>}
+      {error && <p className="text-[12.5px] text-crit-ink">{error}</p>}
     </div>
   );
 }

@@ -290,7 +290,7 @@ function NewRun() {
           </button>
 
           {user && enrolled.length === 0 && (
-            <Link href="/enroll" className="text-[12.5px] font-semibold text-accent hover:underline">
+            <Link href="/enroll" className="text-[12.5px] font-semibold text-accent-ink hover:underline">
               Enrol a face once instead →
             </Link>
           )}
@@ -310,7 +310,7 @@ function NewRun() {
               <button
                 type="button"
                 onClick={clearTemplate}
-                className="text-[11px] font-semibold text-accent hover:underline"
+                className="text-[11px] font-semibold text-accent-ink hover:underline"
               >
                 Clear template ({selectedTemplate.name})
               </button>
@@ -352,7 +352,7 @@ function NewRun() {
             <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">THE GOAL & SCRIPT PROMPT</p>
             {selectedTemplate && (
               <span className="text-[11px] font-semibold text-ink-3">
-                Applied: <span className="text-accent font-bold">{selectedTemplate.name}</span>
+                Applied: <span className="text-accent-ink font-bold">{selectedTemplate.name}</span>
               </span>
             )}
           </div>
@@ -408,7 +408,7 @@ function NewRun() {
           </div>
         </div>
 
-        {error && <p className="mt-6 rounded-card border border-crit/40 bg-crit-soft px-4 py-3 text-[13.5px] text-crit">{error}</p>}
+        {error && <p className="mt-6 rounded-card border border-crit/40 bg-crit-soft px-4 py-3 text-[13.5px] text-crit-ink">{error}</p>}
 
         <div className="mt-8 flex items-center justify-between gap-4">
           <span className="text-[13px] text-ink-4">

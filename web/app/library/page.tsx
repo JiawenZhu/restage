@@ -46,13 +46,13 @@ const isStalled = (r: RunCard) =>
   IN_FLIGHT.has(r.status) && Date.now() - (r.updatedAt || r.createdAt || 0) > STALL_AFTER_MS;
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
-  planning: { text: 'Planning', cls: 'border-accent/40 text-accent' },
-  running: { text: 'Running', cls: 'border-accent/40 text-accent' },
-  'awaiting-approval': { text: 'Ready to render', cls: 'border-warn/40 text-warn' },
-  rendering: { text: 'Rendering', cls: 'border-accent/40 text-accent' },
-  complete: { text: 'Clip ready', cls: 'border-good/40 text-good' },
-  completed: { text: 'Clip ready', cls: 'border-good/40 text-good' },
-  failed: { text: 'Failed', cls: 'border-crit/40 text-crit' },
+  planning: { text: 'Planning', cls: 'border-accent/40 text-accent-ink' },
+  running: { text: 'Running', cls: 'border-accent/40 text-accent-ink' },
+  'awaiting-approval': { text: 'Ready to render', cls: 'border-warn/40 text-warn-ink' },
+  rendering: { text: 'Rendering', cls: 'border-accent/40 text-accent-ink' },
+  complete: { text: 'Clip ready', cls: 'border-good/40 text-good-ink' },
+  completed: { text: 'Clip ready', cls: 'border-good/40 text-good-ink' },
+  failed: { text: 'Failed', cls: 'border-crit/40 text-crit-ink' },
 };
 
 function whenever(ms: number) {
@@ -206,7 +206,7 @@ export default function Library() {
             {shown.map((r) => {
               const stalled = isStalled(r);
               const badge = stalled
-                ? { text: 'Stopped', cls: 'border-warn/40 text-warn' }
+                ? { text: 'Stopped', cls: 'border-warn/40 text-warn-ink' }
                 : (STATUS_LABEL[r.status] ?? { text: r.status, cls: 'border-line-strong text-ink-3' });
               return (
                 <Link

@@ -579,7 +579,7 @@ export function EnrollmentCamera() {
       )}
 
       {errorMessage && (
-        <div className="mb-6 rounded-xl border border-crit/30 bg-crit-soft p-4 text-sm text-crit">
+        <div className="mb-6 rounded-xl border border-crit/30 bg-crit-soft p-4 text-sm text-crit-ink">
           {errorMessage}
         </div>
       )}
@@ -587,7 +587,7 @@ export function EnrollmentCamera() {
       {/* Ready View */}
       {step === 'ready' && mode === 'camera' && (
         <div className="rounded-2xl border border-line bg-panel p-10 text-center shadow-sm">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-soft text-accent">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-soft text-accent-ink">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
               <circle cx="12" cy="13" r="4" />
@@ -601,7 +601,7 @@ export function EnrollmentCamera() {
           </p>
           <button
             onClick={() => startMedia('front')}
-            className="mt-8 inline-flex items-center gap-2 rounded-xl bg-accent px-8 py-3.5 text-sm font-semibold text-white shadow-md transition-transform hover:scale-[1.02] active:scale-[0.98]"
+            className="mt-8 inline-flex items-center gap-2 rounded-xl bg-accent-strong px-8 py-3.5 text-sm font-semibold text-white shadow-md transition-transform hover:scale-[1.02] active:scale-[0.98]"
           >
             Start Auto-Capture Experience
           </button>
@@ -636,7 +636,7 @@ export function EnrollmentCamera() {
                 ) : (
                   <div className="text-center p-3">
                     <span className="text-2xl">👤</span>
-                    <span className="mt-2 block text-xs font-semibold text-accent">Front Face (Base)</span>
+                    <span className="mt-2 block text-xs font-semibold text-accent-ink">Front Face (Base)</span>
                   </div>
                 )}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload('front', e.target.files[0])} />
@@ -679,7 +679,7 @@ export function EnrollmentCamera() {
             <button
               disabled={!capturedFrames.front || !capturedFrames.left || !capturedFrames.right}
               onClick={() => setStep('review')}
-              className="rounded-xl bg-accent px-8 py-3 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
+              className="rounded-xl bg-accent-strong px-8 py-3 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
             >
               Next: Review & Save
             </button>
@@ -693,7 +693,7 @@ export function EnrollmentCamera() {
           {/* Header Step Pill */}
           <div className="mb-4 text-center">
             <div className="flex items-center justify-center gap-3">
-              <span className="rounded-chip bg-accent-soft px-4 py-1.5 text-xs font-bold text-accent">
+              <span className="rounded-chip bg-accent-soft px-4 py-1.5 text-xs font-bold text-accent-ink">
                 {retakeTarget
                   ? `Retaking ${retakeTarget.toUpperCase()} Capture`
                   : step === 'front'
@@ -747,7 +747,7 @@ export function EnrollmentCamera() {
               <div className="pointer-events-none absolute inset-0 flex items-center justify-start pl-8">
                 <div
                   className={`flex items-center gap-2 rounded-xl px-4 py-2.5 backdrop-blur-md transition-all duration-300 ${
-                    angleLocked ? 'bg-good/90 text-white scale-110' : 'bg-black/70 text-accent animate-bounce'
+                    angleLocked ? 'bg-good/90 text-white scale-110' : 'bg-black/70 text-accent-ink animate-bounce'
                   }`}
                 >
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -764,7 +764,7 @@ export function EnrollmentCamera() {
               <div className="pointer-events-none absolute inset-0 flex items-center justify-end pr-8">
                 <div
                   className={`flex items-center gap-2 rounded-xl px-4 py-2.5 backdrop-blur-md transition-all duration-300 ${
-                    angleLocked ? 'bg-good/90 text-white scale-110' : 'bg-black/70 text-accent animate-bounce'
+                    angleLocked ? 'bg-good/90 text-white scale-110' : 'bg-black/70 text-accent-ink animate-bounce'
                   }`}
                 >
                   <span className="text-xs font-bold tracking-wide">
@@ -829,7 +829,7 @@ export function EnrollmentCamera() {
           {step === 'audio' && (
             <div className="mt-5 w-full max-w-2xl rounded-2xl border-2 border-accent/40 bg-panel p-5 shadow-lg">
               <div className="flex items-center justify-between border-b border-line pb-3">
-                <span className="flex items-center gap-2 text-xs font-bold text-accent">
+                <span className="flex items-center gap-2 text-xs font-bold text-accent-ink">
                   <span className="h-2 w-2 rounded-full bg-accent animate-ping" />
                   TELEPROMPTER • READ OUT LOUD
                 </span>
@@ -855,7 +855,7 @@ export function EnrollmentCamera() {
               <button
                 disabled={isCapturingBurst}
                 onClick={() => startBurstSweep('front', 2000)}
-                className="flex items-center gap-2 rounded-xl bg-accent px-8 py-3 text-sm font-semibold text-white shadow-md hover:opacity-90 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-xl bg-accent-strong px-8 py-3 text-sm font-semibold text-white shadow-md hover:opacity-90 disabled:opacity-50"
               >
                 📸 Capture Front Base (Starts Auto Sweep)
               </button>
@@ -924,7 +924,7 @@ export function EnrollmentCamera() {
               <h3 className="text-xl font-bold">Review Captured Multi-Angle Identity</h3>
               <p className="mt-1 text-xs text-ink-3">Hover any photo or audio below to retake or replace individually</p>
             </div>
-            <span className="rounded-chip bg-good-soft px-3 py-1 text-xs font-bold text-good">
+            <span className="rounded-chip bg-good-soft px-3 py-1 text-xs font-bold text-good-ink">
               {[capturedFrames.front, capturedFrames.left, capturedFrames.right].filter(Boolean).length} angles
               captured{audioUrl ? ' · voice sample saved' : ''}
             </span>
@@ -944,7 +944,7 @@ export function EnrollmentCamera() {
                 <button
                   type="button"
                   onClick={() => handleRetake('left')}
-                  className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90 active:scale-95"
+                  className="flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90 active:scale-95"
                 >
                   🔄 Retake with Camera
                 </button>
@@ -972,7 +972,7 @@ export function EnrollmentCamera() {
                 <button
                   type="button"
                   onClick={() => handleRetake('front')}
-                  className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90 active:scale-95"
+                  className="flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90 active:scale-95"
                 >
                   🔄 Retake with Camera
                 </button>
@@ -984,7 +984,7 @@ export function EnrollmentCamera() {
                   📁 Replace File
                 </button>
               </div>
-              <p className="py-2 text-center text-xs font-semibold text-accent">Front Face (Base)</p>
+              <p className="py-2 text-center text-xs font-semibold text-accent-ink">Front Face (Base)</p>
             </div>
 
             {/* Right Card */}
@@ -1000,7 +1000,7 @@ export function EnrollmentCamera() {
                 <button
                   type="button"
                   onClick={() => handleRetake('right')}
-                  className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90 active:scale-95"
+                  className="flex items-center gap-1.5 rounded-lg bg-accent-strong px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90 active:scale-95"
                 >
                   🔄 Retake with Camera
                 </button>
@@ -1020,7 +1020,7 @@ export function EnrollmentCamera() {
           {audioUrl && (
             <div className="group relative mt-6 flex items-center justify-between rounded-xl border border-line bg-subtle p-4 transition-colors hover:border-accent/50">
               <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent-soft text-accent">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent-soft text-accent-ink">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
@@ -1036,7 +1036,7 @@ export function EnrollmentCamera() {
                 <button
                   type="button"
                   onClick={() => handleRetake('audio')}
-                  className="flex items-center gap-1 rounded-lg border border-line bg-panel px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-accent hover:text-accent active:scale-95"
+                  className="flex items-center gap-1 rounded-lg border border-line bg-panel px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-accent hover:text-accent-ink active:scale-95"
                 >
                   🔄 Re-record
                 </button>
@@ -1102,7 +1102,7 @@ export function EnrollmentCamera() {
 
       {step === 'done' && (
         <div className="rounded-2xl border border-line bg-panel p-10 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-good-soft text-good">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-good-soft text-good-ink">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
               <path d="M20 6L9 17l-5-5" />
             </svg>
@@ -1114,7 +1114,7 @@ export function EnrollmentCamera() {
           <div className="mt-7 flex justify-center gap-4">
             <a
               href="/studio"
-              className="rounded-xl bg-accent px-7 py-3 text-sm font-semibold text-white shadow-md hover:opacity-90"
+              className="rounded-xl bg-accent-strong px-7 py-3 text-sm font-semibold text-white shadow-md hover:opacity-90"
             >
               Go to Studio & Create Ad
             </a>

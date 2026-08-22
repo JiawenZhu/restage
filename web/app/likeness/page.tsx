@@ -55,7 +55,7 @@ export default function Likeness() {
                 {p.link && (
                   <>
                     {' '}
-                    <Link href={p.link.href} className="font-medium text-accent hover:underline">
+                    <Link href={p.link.href} className="font-medium text-accent-ink hover:underline">
                       {p.link.label}
                     </Link>
                   </>

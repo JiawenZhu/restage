@@ -170,7 +170,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
 
         {/* Error Alert */}
         {error && (
-          <div className="mb-4 rounded-lg border border-crit/30 bg-crit-soft p-3 text-xs leading-relaxed text-crit">
+          <div className="mb-4 rounded-lg border border-crit/30 bg-crit-soft p-3 text-xs leading-relaxed text-crit-ink">
             {error}
           </div>
         )}
@@ -219,7 +219,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
                       setResetSent(true); // never reveal whether an address exists
                     }
                   }}
-                  className="text-[11.5px] font-medium text-accent hover:underline"
+                  className="text-[11.5px] font-medium text-accent-ink hover:underline"
                 >
                   Forgot password?
                 </button>
@@ -266,7 +266,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
                   setMode('signup');
                   setError(null);
                 }}
-                className="font-semibold text-accent hover:underline"
+                className="font-semibold text-accent-ink hover:underline"
               >
                 Sign up
               </button>
@@ -280,7 +280,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
                   setMode('signin');
                   setError(null);
                 }}
-                className="font-semibold text-accent hover:underline"
+                className="font-semibold text-accent-ink hover:underline"
               >
                 Sign in
               </button>

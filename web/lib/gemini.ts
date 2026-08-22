@@ -234,7 +234,9 @@ export async function planRun(
   goal: string,
   aspect: Aspect,
   seconds: number,
-  templateId?: string
+  templateId?: string,
+  /** What this user has rejected before. See the taste block below. */
+  avoid?: string[],
 ): Promise<PlannedStep[]> {
   const tpl = templateId ? getTemplateById(templateId) : undefined;
 
@@ -265,8 +267,26 @@ export async function planRun(
       `this template for its structure, not only its palette.`
     : '';
 
+  /*
+   * What the user turned down last time.
+   *
+   * Every rejection was recorded to users/{uid}/taste and read by nothing,
+   * while the landing page promised "what you rejected changes how the next
+   * session opens". Framed as things to avoid rather than rules, because a
+   * rejection is evidence about taste, not a specification — and because a
+   * hard constraint from an old run would quietly sabotage a new goal that
+   * genuinely needs the same treatment.
+   */
+  const tasteContext =
+    avoid && avoid.length
+      ? `\n\nThis person has previously rejected frames produced by these instructions:\n` +
+        avoid.slice(0, 8).map((a) => `  - ${a}`).join('\n') +
+        `\nTreat that as evidence about their taste. Prefer different choices where the goal allows, ` +
+        `and do not repeat an instruction from that list verbatim.`
+      : '';
+
   const { steps } = await structured<{ steps: PlannedStep[] }>(
-    `Goal: ${goal}\nOutput format: ${aspect}, ${seconds} seconds.${templateContext}\n\nPlan the edits.`,
+    `Goal: ${goal}\nOutput format: ${aspect}, ${seconds} seconds.${templateContext}${tasteContext}\n\nPlan the edits.`,
     {
       type: 'object',
       properties: {

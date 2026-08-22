@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb, adminStorage, requireUid } from '@/lib/firebaseAdmin';
+import { deleteVideo } from '@/lib/r2';
 
 /*
  * Deleting an enrolled face, for real.
@@ -35,6 +36,36 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ avatarId: st
     );
     await bucket.deleteFiles({ prefix: `users/${uid}/avatars/${avatarId}/` });
 
+    /*
+     * The copies, too.
+     *
+     * createRun copies the enrolment captures into each run's own folder and
+     * stamps them with permanent download tokens, so deleting only the avatar
+     * folder left byte-for-byte copies of the user's face behind for every run
+     * they had ever started from it — each still reachable by a URL recorded in
+     * a document that survived. On a product whose only input is a person's
+     * likeness, this is the one promise that cannot be decorative, and both
+     * /enroll and /likeness make it in plain words.
+     *
+     * Runs built from this avatar are removed entirely: their frames are
+     * derived from the same face, so leaving them would defeat the point.
+     */
+    const runs = await db.collection('runs').where('uid', '==', uid).where('avatarId', '==', avatarId).get();
+    for (const runDoc of runs.docs) {
+      await bucket.deleteFiles({ prefix: `users/${uid}/runs/${runDoc.id}/` }).catch(() => {});
+
+      const clipKey = runDoc.data().videoKey;
+      if (clipKey) await deleteVideo(clipKey).catch(() => {});
+
+      const nodes = await runDoc.ref.collection('nodes').get();
+      for (const n of nodes.docs) {
+        const nodeKey = n.data().videoKey;
+        if (nodeKey && nodeKey !== clipKey) await deleteVideo(nodeKey).catch(() => {});
+        await n.ref.delete();
+      }
+      await runDoc.ref.delete();
+    }
+
     await ref.delete();
 
     const userRef = db.collection('users').doc(uid);
@@ -43,7 +74,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ avatarId: st
       await userRef.set({ latestAvatarId: null, updatedAt: Date.now() }, { merge: true });
     }
 
-    return NextResponse.json({ deleted: avatarId });
+    return NextResponse.json({ deleted: avatarId, runsDeleted: runs.size });
   } catch (err) {
     console.error('[avatars] delete failed', err);
     return NextResponse.json({ error: 'could not delete that avatar' }, { status: 500 });

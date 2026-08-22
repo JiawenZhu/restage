@@ -347,10 +347,26 @@ function Inspector({
   }
 
   const v = node.verdict ? VERDICT_STYLE[node.verdict] : null;
-  const rendering = run.status === 'rendering';
+  /* A run stuck in 'rendering' has a dead background task — the stall banner
+     says its frames "can still be rendered", so the controls that would do that
+     must not stay disabled and labelled "Rendering…". */
+  const rendering = run.status === 'rendering' && !isStalled(run);
   // Rendering the same frame twice buys a second clip for nothing, so a frame
   // that already has a video child says so instead of offering again.
-  const alreadyRendered = nodes.some((n) => n.kind === 'video' && n.parentId === node?.id);
+  /*
+   * A FAILED render is not a clip.
+   *
+   * This matched any video child regardless of status, and the failure path
+   * leaves the node in place with its parentId intact — so one Veo error, one
+   * unreachable R2, or one poll timeout disabled the Render button forever, on
+   * the exact frame the user had approved, behind the words "Already rendered
+   * — the clip is on the tree" when no clip existed. The only escape was paying
+   * to regenerate a frame that was already good.
+   */
+  const failedRender = nodes.some((n) => n.kind === 'video' && n.parentId === node?.id && n.status === 'failed');
+  const alreadyRendered = nodes.some(
+    (n) => n.kind === 'video' && n.parentId === node?.id && n.status !== 'failed',
+  );
   const canRender =
     node.kind === 'frame' && !!node.frameUrl && !rendering && !alreadyRendered && run.status !== 'planning';
 
@@ -470,7 +486,8 @@ function Inspector({
           <div className="grid grid-cols-2 gap-1.5">
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || !user}
+              title={!user ? 'Sign in to judge frames' : undefined}
               onClick={() => judge(node.status === 'rejected' ? 'achieved' : 'rejected')}
               className={`rounded-lg border py-2.5 text-[12.5px] font-semibold disabled:opacity-40 ${
                 node.status === 'rejected'
@@ -482,7 +499,8 @@ function Inspector({
             </button>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || !user}
+              title={!user ? 'Sign in to regenerate' : undefined}
               onClick={() => onRegenerate?.(node.id)}
               className="rounded-lg border border-line-strong py-2.5 text-[12.5px] font-semibold text-ink-2 hover:border-accent hover:text-accent-ink disabled:opacity-40"
             >
@@ -515,7 +533,9 @@ function Inspector({
                 ? 'Already rendered — the clip is on the tree'
                 : busy
                   ? 'Starting…'
-                  : 'Render this frame to video'}
+                  : failedRender
+                    ? 'Render failed — try again'
+                    : 'Render this frame to video'}
           </button>
         )}
       </div>

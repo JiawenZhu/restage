@@ -219,7 +219,13 @@ export async function createRun(args: StartArgs): Promise<string> {
   if (args.avatarId) {
     const snap = await db.collection('users').doc(args.uid).collection('avatars').doc(args.avatarId).get();
     const paths = snap.data()?.paths as { front?: string; left?: string; right?: string } | undefined;
-    if (paths?.front) {
+    /* Deleting an avatar now deletes its runs, but a stale id can still arrive
+       from an old tab. Failing here beats building a run on an empty string and
+       discovering it six generations later. */
+    if (!paths?.front) {
+      throw new Error('that enrolled face is no longer available — pick another');
+    }
+    {
       const bucket = adminStorage().bucket(
         process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'restage-studio.firebasestorage.app',
       );
@@ -371,7 +377,21 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
     }
 
     // ── 2. Plan Storyboard & Edits ──────────────────────────────────────────
-    const steps = await planRun(args.goal, args.aspect, args.seconds, args.templateId);
+    /* The taste model, finally read. Newest first and capped, so a long
+       history does not crowd out the goal itself. */
+    const tasteSnap = await db
+      .collection('users')
+      .doc(args.uid)
+      .collection('taste')
+      .orderBy('at', 'desc')
+      .limit(8)
+      .get()
+      .catch(() => null);
+    const avoid = (tasteSnap?.docs ?? [])
+      .map((d) => d.data().instruction as string | undefined)
+      .filter((x): x is string => !!x);
+
+    const steps = await planRun(args.goal, args.aspect, args.seconds, args.templateId, avoid);
     await touch({
       status: 'running',
       plan: steps.map((s) => ({ ...s, status: 'pending' })),

@@ -40,6 +40,8 @@ const STATUS_WORD: Record<string, string> = {
   generating: 'generating',
   achieved: 'achieved',
   partial: 'partial',
+  // For a frame, a failed verdict means the attempt was discarded. For a video
+  // node it means the render itself failed — see VIDEO_STATUS_WORD.
   failed: 'discarded',
   rejected: 'rejected by you',
   pending: 'pending',
@@ -382,7 +384,7 @@ export function VersionTree({
                   </span>
                 )}
 
-                {n.kind === 'video' && n.status !== 'generating' && (
+                {n.kind === 'video' && n.status === 'achieved' && (
                   <span className="absolute inset-0 flex items-center justify-center bg-black/25">
                     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" className="ml-0.5" aria-hidden><path d="M8 5v14l11-7z" /></svg>
@@ -421,6 +423,12 @@ export function VersionTree({
                     <circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" />
                   </svg>
                 </span>
+              )}
+
+              {/* A failed render carried a play badge and read as a finished
+                  clip. It has its own mark now. */}
+              {n.kind === 'video' && n.status === 'failed' && (
+                <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-crit-ink">render failed</span>
               )}
 
               {n.discarded && (

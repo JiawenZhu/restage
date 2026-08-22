@@ -17,4 +17,9 @@ web/next-env.d.ts
 # Template preview clips are generated assets, regenerable with
 # `npx tsx scripts/make-template-previews.mts`. They are committed on purpose —
 # a fresh clone should show the gallery without spending Veo credits.
+#
+# The global *.mp4 rule above was quietly excluding them, so lib/templatePreviews.ts
+# (which IS committed) advertised three clips that no clone would have. Roughly
+# 2MB total, and regenerating them costs a Veo render each.
+!web/public/templates/*.mp4
 web/public/templates/.generating

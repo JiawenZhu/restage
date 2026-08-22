@@ -203,6 +203,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ runId });
   } catch (err) {
     console.error('POST /api/runs error:', err);
+    // A stale avatar id is the user's problem to fix, not a server fault, and
+    // "could not start the run" gives them nothing to act on.
+    const msg = err instanceof Error ? err.message : '';
+    if (msg.includes('no longer available')) {
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
     return NextResponse.json({ error: 'could not start the run' }, { status: 500 });
   }
 }

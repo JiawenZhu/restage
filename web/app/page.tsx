@@ -266,10 +266,12 @@ export default function Landing() {
               A 16:9 ad is not a 9:16 ad with the sides cut off — the subject sits differently, and
               so does the product.
             </p>
-            <p className="mt-4 text-[15px] leading-relaxed text-ink-2">
-              Already approved a frame? Re-render it in the other ratio without paying for the plan
-              again.
-            </p>
+            {/* Removed: "re-render an approved frame in the other ratio". No
+                such path exists — and the paragraph directly above argues that
+                a 16:9 ad is not a 9:16 ad with the sides cut off, which is
+                exactly what re-rendering one frame into the other ratio would
+                produce. The page was selling the thing it had just argued
+                against. */}
           </div>
           <div className="flex items-end gap-5">
             <div className="relative w-[180px] shrink-0 overflow-hidden rounded-2xl shadow-[0_22px_50px_-24px_rgba(20,20,26,0.4)] sm:w-[260px]">

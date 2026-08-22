@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { consume, tooMany } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { adminDb, requireUid } from '@/lib/firebaseAdmin';
-import { downloadRendered, pollRender, submitRender } from '@/lib/gemini';
+import { downloadRendered, MAX_CLIP_SECONDS, pollRender, submitRender } from '@/lib/gemini';
 import { putVideo, signedVideoUrl, videoKey } from '@/lib/r2';
 
 /*
@@ -106,7 +106,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
   const firstFrame = await resolveImage(frame.frameUrl);
   if (!firstFrame) return NextResponse.json({ error: 'frame is not readable' }, { status: 400 });
 
-  // The video node appears on the tree immediately, in the generating state
+  /*
+   * Claim the run before spending on it.
+   *
+   * The status check and the write were separate, so two tabs — or one
+   * double-click — could both pass the check and both submit a Veo render, then
+   * race to write videoUrl. Claiming in a transaction means the second request
+   * is refused rather than billed.
+   */
+  const priorStatus: string = run.status ?? 'awaiting-approval';
+  const claimed = await adminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(runRef);
+    if (snap.data()?.status === 'rendering') return false;
+    tx.update(runRef, { status: 'rendering', updatedAt: Date.now() });
+    return true;
+  });
+  if (!claimed) {
+    return NextResponse.json({ error: 'this run is already rendering' }, { status: 409 });
+  }
+  // Only now, with the run claimed: a node created before the claim would have
+  // to be deleted again on a refusal, flickering onto the live tree first.
   const videoRef = runRef.collection('nodes').doc();
   await videoRef.set({
     parentId: frameSnap.id,
@@ -118,7 +137,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     frameUrl: frame.frameUrl, // poster while the clip cooks
     createdAt: Date.now(),
   });
-  await runRef.update({ status: 'rendering', updatedAt: Date.now() });
 
   void (async () => {
     try {
@@ -131,14 +149,31 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         aspect: run.aspect,
       });
 
+      /*
+       * A transient poll failure is not a failed render.
+       *
+       * One network blip threw straight out of the loop and abandoned a Veo
+       * job that had already been submitted and paid for — the clip finished on
+       * Google's side and the user was told it failed. Only a real terminal
+       * error, or several consecutive failures, ends it now.
+       */
       let uri: string | null = null;
+      let consecutiveErrors = 0;
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
-        const st = await pollRender(operation);
-        if (st.done) {
-          if ('error' in st) throw new Error(st.error);
-          uri = st.videoUri;
-          break;
+        try {
+          const st = await pollRender(operation);
+          consecutiveErrors = 0;
+          if (st.done) {
+            if ('error' in st) throw new Error(st.error);
+            uri = st.videoUri;
+            break;
+          }
+        } catch (pollErr) {
+          // A terminal error from the operation itself must still end the loop.
+          if (pollErr instanceof Error && /safety|invalid|quota|blocked/i.test(pollErr.message)) throw pollErr;
+          if (++consecutiveErrors >= 4) throw pollErr;
+          console.warn('[render] transient poll failure', consecutiveErrors, pollErr);
         }
       }
       if (!uri) throw new Error('render did not finish in five minutes');
@@ -147,6 +182,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
 
       // ── Audio Muxing Pipeline ──
       // If voiceover audio exists on the run, mux it into the video with ffmpeg
+      let hasAudio = false;
+      let audioNote: string | null = null;
       if (run.audioUrl) {
         try {
           const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'veo-mux-'));
@@ -162,33 +199,49 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
             const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
             await fs.writeFile(audioPath, audioBuffer);
 
-            // Mux video and audio stream
+            /*
+             * Explicit stream mapping, and no -shortest.
+             *
+             * Veo clips can carry their own audio track. Without -map, ffmpeg
+             * picks one audio stream by its own rules and the written voiceover
+             * — the line the workspace shows the user before they render — was
+             * the one that lost. And -shortest truncated the video whenever the
+             * voiceover was shorter than the clip, so an 8-second ad became a
+             * 5-second one. The video governs the length; the audio is padded
+             * with silence to match.
+             */
             await execFileAsync('ffmpeg', [
               '-y',
-              '-i',
-              videoPath,
-              '-i',
-              audioPath,
-              '-c:v',
-              'copy',
-              '-c:a',
-              'aac',
-              '-b:a',
-              '192k',
-              '-shortest',
+              '-i', videoPath,
+              '-i', audioPath,
+              '-map', '0:v:0',
+              '-map', '1:a:0',
+              '-c:v', 'copy',
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-af', 'apad',
+              '-t', String(Math.min(MAX_CLIP_SECONDS, run.seconds || MAX_CLIP_SECONDS)),
               outputPath,
             ]);
 
             const muxedBytes = await fs.readFile(outputPath);
             if (muxedBytes && muxedBytes.length > 0) {
               finalVideoBytes = muxedBytes;
+              hasAudio = true;
             }
           }
 
           // Clean up temp folder
           await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
         } catch (muxErr) {
-          console.warn('[render] Audio muxing fallback notice:', muxErr);
+          /* A silent clip is a usable clip, but shipping one while the
+             workspace still displays the spoken line tells the user something
+             untrue. The reason is recorded on the node and shown. */
+          audioNote =
+            muxErr instanceof Error && /ENOENT/.test(muxErr.message)
+              ? 'ffmpeg is not installed on the server, so the voiceover could not be added.'
+              : 'The voiceover could not be added to this clip.';
+          console.warn('[render] audio mux failed:', muxErr);
         }
       }
 
@@ -205,14 +258,28 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
        */
       await videoRef.update({
         status: 'achieved',
+        hasAudio,
+        audioNote,
         videoKey: key,
         videoUrl: `/api/runs/${runId}/video?nodeId=${videoRef.id}`,
       });
-      await runRef.update({
-        status: 'complete',
-        videoKey: key,
-        videoUrl: `/api/runs/${runId}/video?nodeId=${videoRef.id}`,
-        updatedAt: Date.now(),
+      /*
+       * Only move off 'rendering', and only if this render still owns it.
+       *
+       * These writes were unconditional, so a second render failing would stamp
+       * its status over a run that was already 'complete' with a downloadable
+       * clip — the library then read "Ready to render" beside a finished video.
+       * The same shape as claimTerminalStatus in the orchestrator.
+       */
+      await adminDb().runTransaction(async (tx) => {
+        const snap = await tx.get(runRef);
+        if (snap.data()?.status !== 'rendering') return;
+        tx.update(runRef, {
+          status: 'complete',
+          videoKey: key,
+          videoUrl: `/api/runs/${runId}/video?nodeId=${videoRef.id}`,
+          updatedAt: Date.now(),
+        });
       });
     } catch (err) {
       console.error('[render]', runId, err);

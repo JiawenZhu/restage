@@ -7,7 +7,9 @@ export default function Enroll() {
       <div className="mx-auto w-full max-w-5xl px-6 py-8">
         <h1 className="text-center text-[32px] font-bold tracking-[-0.025em]">Three Angles. Once.</h1>
         <p className="mx-auto mt-2 max-w-xl text-center text-base leading-relaxed text-ink-3">
-          Capture once. Every UGC ad generated from now on uses this face and voice.
+          {/* "and voice" — the sample is stored and nothing reads it. The
+              component and /likeness both already say so. */}
+          Capture once. Every UGC ad generated from now on uses this face.
         </p>
 
         <div className="mt-6">

@@ -83,6 +83,10 @@ export function AppShell({
           {right}
           <ThemeToggle />
 
+          {/* A fixed-width stand-in while auth resolves. Rendering nothing made
+              every app page shift sideways the moment Firebase answered. */}
+          {loading && <span aria-hidden className="h-7 w-[132px] rounded-lg bg-subtle" />}
+
           {!loading && (
             <>
               {user ? (

@@ -300,6 +300,9 @@ export function EnrollmentCamera() {
 
   // Cancel retake and jump back to review screen
   const cancelRetake = () => {
+    // Returning to review from a retake left the webcam live, same as the
+    // original review-screen bug.
+    stopMedia();
     setRetakeTarget(null);
     setStep('review');
   };
@@ -342,6 +345,8 @@ export function EnrollmentCamera() {
         setTimeout(() => {
           setBurstProgress(0);
           if (retakeTarget) {
+            // Finishing a retake goes back to review, where no camera is needed.
+            stopMedia();
             setRetakeTarget(null);
             setStep('review');
           } else {

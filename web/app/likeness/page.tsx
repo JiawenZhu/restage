@@ -15,11 +15,11 @@ export const metadata = {
 const POINTS = [
   {
     q: 'Who can see the face I enrol?',
-    a: 'Only you. The storage bucket denies reads by default and the rules allow a file only to the account that owns its folder. Nothing is world-readable, and there is no share-by-link path.',
+    a: 'Your enrolment captures: only you. The storage bucket denies reads by default and the rules allow a file only to the account that owns its folder — nothing is world-readable, and no link to them exists outside your account. Generated frames work differently: each carries an unguessable token in its URL so the app can display it, which means anyone you send that URL to can open it. The URL only ever appears in your own run, so it is yours to share or not.',
   },
   {
     q: 'Where is it stored?',
-    a: 'Your captures live in Google Cloud Storage under your account’s own folder. Generated frames sit beside them, and finished clips live in Cloudflare R2 behind URLs that are signed fresh on every request and expire within the hour.',
+    a: 'Your captures live in Google Cloud Storage under your account’s own folder. Generated frames sit beside them. Finished clips live in Cloudflare R2 behind URLs signed fresh on every request, which expire within the hour and re-check that the run is yours each time.',
   },
   {
     q: 'Does anyone else’s system see it?',
@@ -27,7 +27,7 @@ const POINTS = [
   },
   {
     q: 'Can I delete it?',
-    a: 'Yes, and it deletes for real. Removing an avatar deletes the stored image files first and then the record, so nothing is left pointing at bytes that still exist.',
+    a: 'Yes, and it deletes for real — including the copies. Every run made from a face keeps its own copy of the captures, so removing an avatar deletes those runs, their frames and their rendered clips as well as the enrolment folder itself. Verified by a test that counts the files before and after.',
     link: { href: '/avatars', label: 'Manage your enrolled faces' },
   },
   {

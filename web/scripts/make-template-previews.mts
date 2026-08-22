@@ -71,7 +71,18 @@ for (const t of targets) {
       aspect: '9:16',
       refs: [],
     });
-    writeFileSync(jpg, frame.bytes);
+    /*
+     * Compress the still immediately, not after the video.
+     *
+     * The poster used to be derived from the finished mp4, so when a Veo render
+     * failed — a quota limit, most often — the full-size frame stayed on disk.
+     * Seven of those shipped at ~750KB each into cards that never render wider
+     * than about 280px. The still is the deliverable when the clip is not.
+     */
+    const rawJpg = join(OUT, `${t.id}.raw.jpg`);
+    writeFileSync(rawJpg, frame.bytes);
+    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', rawJpg, '-vf', 'scale=480:-2', '-q:v', '6', jpg]);
+    unlinkSync(rawJpg);
 
     console.log(`${stamp()}  ${t.id}: video…`);
     const { operation } = await submitRender({
@@ -113,7 +124,8 @@ for (const t of targets) {
     ]);
     unlinkSync(raw);
 
-    // The poster is what shows before the clip plays, so it must be small too.
+    // Refresh the poster from the encoded clip so the first painted frame and
+    // the still are the same image.
     execFileSync('ffmpeg', [
       '-y', '-loglevel', 'error', '-i', mp4,
       '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '6',

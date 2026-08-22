@@ -15,6 +15,7 @@ const Body = z.object({
   goal: z.string().min(8).max(600),
   aspect: z.enum(['9:16', '16:9']),
   seconds: z.union([z.literal(8), z.literal(15), z.literal(30)]),
+  templateId: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -31,7 +32,12 @@ export async function POST(req: Request) {
   }
 
   try {
-    const steps = await planRun(parsed.data.goal, parsed.data.aspect, parsed.data.seconds);
+    const steps = await planRun(
+      parsed.data.goal,
+      parsed.data.aspect,
+      parsed.data.seconds,
+      parsed.data.templateId
+    );
     return NextResponse.json({ steps });
   } catch (err) {
     // The adapter already scrubs `key=`; this keeps the response body from

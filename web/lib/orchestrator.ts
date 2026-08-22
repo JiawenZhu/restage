@@ -15,7 +15,8 @@ if (typeof window !== 'undefined') {
   throw new Error('lib/orchestrator is server-only.');
 }
 
-import { adminDb } from './firebaseAdmin';
+import { adminDb, adminStorage } from './firebaseAdmin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { critique, generateFrame, planRun, verifyIdentity } from './gemini';
 import type { Aspect } from './types';
 
@@ -23,51 +24,130 @@ import type { Aspect } from './types';
  *  a loop that retries forever is a bill, not a feature. */
 const MAX_RETRIES_PER_STEP = 1;
 
+import { synthesizeSpeech } from './tts';
+
 export interface StartArgs {
   uid: string;
   goal: string;
   aspect: Aspect;
   seconds: 8 | 15 | 30;
-  /** Enrolment capture as a data URL. Passed to every frame so the face holds. */
+  templateId?: string;
+  /** Enrolment capture as a data URL or HTTP URL. */
   avatarDataUrl: string;
+  avatarMultiViews?: {
+    front?: string;
+    left?: string;
+    right?: string;
+  };
 }
 
-function decodeDataUrl(u: string) {
-  const m = u.match(/^data:([^;]+);base64,(.+)$/);
-  if (!m) throw new Error('avatar must be a data URL');
-  return { mimeType: m[1], data: Buffer.from(m[2], 'base64') };
+export async function uploadToStorage(
+  input: string | Buffer | Uint8Array,
+  path: string,
+  contentType = 'image/jpeg'
+): Promise<string> {
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'restage-studio.firebasestorage.app';
+  const bucket = adminStorage().bucket(bucketName);
+
+  let dataBuffer: Buffer;
+  if (typeof input === 'string') {
+    if (input.startsWith('http://') || input.startsWith('https://')) return input;
+    const match = input.match(/^data:([^;]+);base64,(.+)$/);
+    dataBuffer = match ? Buffer.from(match[2], 'base64') : Buffer.from(input, 'base64');
+    if (match) contentType = match[1];
+  } else {
+    dataBuffer = Buffer.from(input);
+  }
+
+  const file = bucket.file(path);
+  await file.save(dataBuffer, {
+    contentType,
+    metadata: { cacheControl: 'public, max-age=31536000' },
+  });
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
 }
 
-/** Frames are stored inline as data URLs for now. See note in executeRun. */
-function toDataUrl(bytes: Buffer, mimeType: string) {
-  return `data:${mimeType};base64,${bytes.toString('base64')}`;
+async function resolveImageInput(u: string): Promise<{ mimeType: string; data: Buffer }> {
+  if (u.startsWith('data:')) {
+    const m = u.match(/^data:([^;]+);base64,(.+)$/);
+    if (!m) throw new Error('unreadable data url');
+    return { mimeType: m[1], data: Buffer.from(m[2], 'base64') };
+  }
+  if (u.startsWith('http://') || u.startsWith('https://')) {
+    const res = await fetch(u);
+    if (!res.ok) throw new Error(`failed to fetch image from url (${res.status})`);
+    const arrayBuf = await res.arrayBuffer();
+    const contentType = res.headers.get('content-type') || 'image/jpeg';
+    return { mimeType: contentType, data: Buffer.from(arrayBuf) };
+  }
+  throw new Error('image must be a valid data URL or HTTP URL');
+}
+
+function sanitizeFirestore<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj, (_, v) => (v === undefined ? null : v)));
 }
 
 export async function createRun(args: StartArgs): Promise<string> {
   const db = adminDb();
   const ref = db.collection('runs').doc();
 
-  await ref.set({
+  // Upload avatar to Storage so the Firestore document is kept feather-light (< 1 KB)
+  const avatarStorageUrl = await uploadToStorage(
+    args.avatarDataUrl,
+    `users/${args.uid}/runs/${ref.id}/avatar_root.jpg`
+  );
+
+  let multiViewsUrls: { front?: string; left?: string; right?: string } | null = null;
+  if (args.avatarMultiViews) {
+    const [f, l, r] = await Promise.all([
+      args.avatarMultiViews.front
+        ? uploadToStorage(args.avatarMultiViews.front, `users/${args.uid}/runs/${ref.id}/views/front.jpg`)
+        : undefined,
+      args.avatarMultiViews.left
+        ? uploadToStorage(args.avatarMultiViews.left, `users/${args.uid}/runs/${ref.id}/views/left.jpg`)
+        : undefined,
+      args.avatarMultiViews.right
+        ? uploadToStorage(args.avatarMultiViews.right, `users/${args.uid}/runs/${ref.id}/views/right.jpg`)
+        : undefined,
+    ]);
+    multiViewsUrls = { front: f, left: l, right: r };
+  }
+
+  const runData = sanitizeFirestore({
     uid: args.uid,
     goal: args.goal,
     aspect: args.aspect,
     seconds: args.seconds,
+    templateId: args.templateId ?? null,
     status: 'planning',
     plan: [],
+    avatarUrl: avatarStorageUrl,
+    avatarMultiViews: multiViewsUrls,
+    previewFrames: [
+      {
+        stepNo: 0,
+        label: 'Avatar',
+        frameUrl: avatarStorageUrl,
+      },
+    ],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   });
 
-  // The root of the tree is the avatar itself: the run starts from a face, not
-  // from an empty frame.
-  await ref.collection('nodes').doc('root').set({
+  await ref.set(runData);
+
+  // The root of the tree is the avatar itself
+  const rootNodeData = sanitizeFirestore({
     parentId: null,
     stepNo: 0,
     kind: 'avatar',
     status: 'achieved',
-    frameUrl: args.avatarDataUrl,
+    frameUrl: avatarStorageUrl,
+    multiViews: multiViewsUrls,
     createdAt: Date.now(),
   });
+
+  await ref.collection('nodes').doc('root').set(rootNodeData);
 
   return ref.id;
 }
@@ -81,13 +161,45 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
   const db = adminDb();
   const run = db.collection('runs').doc(runId);
   const nodes = run.collection('nodes');
-  const avatar = decodeDataUrl(args.avatarDataUrl);
 
-  const touch = (patch: Record<string, unknown>) => run.update({ ...patch, updatedAt: Date.now() });
+  const touch = (patch: Record<string, unknown>) =>
+    run.update(sanitizeFirestore({ ...patch, updatedAt: Date.now() }));
 
   try {
-    // ── plan ────────────────────────────────────────────────────────────────
-    const steps = await planRun(args.goal, args.aspect, args.seconds);
+    const avatar = await resolveImageInput(args.avatarDataUrl);
+    const extraViews = (
+      await Promise.all([
+        args.avatarMultiViews?.left ? resolveImageInput(args.avatarMultiViews.left) : null,
+        args.avatarMultiViews?.right ? resolveImageInput(args.avatarMultiViews.right) : null,
+      ])
+    ).filter(Boolean) as { mimeType: string; data: Buffer }[];
+
+    // ── 1. Synthesize Spoken Voiceover Audio (Google Cloud TTS Chirp 3-HD) ──
+    try {
+      const voiceoverText = `Hey guys, look at how well this works! ${args.goal.replace(/\.$/, '')}. The quality is honestly unbelievable!`;
+      const audioBuffer = await synthesizeSpeech({
+        text: voiceoverText,
+        voiceName: 'en-US-Chirp3-HD-Aoede',
+        languageCode: 'en-US',
+        speakingRate: 1.05,
+        audioEncoding: 'LINEAR16',
+        sampleRateHertz: 24000,
+      });
+      const audioStorageUrl = await uploadToStorage(
+        audioBuffer,
+        `users/${args.uid}/runs/${runId}/voiceover.wav`,
+        'audio/wav'
+      );
+      await touch({
+        audioUrl: audioStorageUrl,
+        audioScript: voiceoverText,
+      });
+    } catch (ttsErr) {
+      console.warn('Background TTS synthesis notice:', ttsErr);
+    }
+
+    // ── 2. Plan Storyboard & Edits ──────────────────────────────────────────
+    const steps = await planRun(args.goal, args.aspect, args.seconds, args.templateId);
     await touch({
       status: 'running',
       plan: steps.map((s) => ({ ...s, status: 'pending' })),
@@ -144,19 +256,26 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
           // that nothing was refined in place, and the retry repeated the same
           // mistake because it had the same inputs.
           const isFirst = parentId === 'root';
-          const refs = isFirst ? [avatar] : [parentImage, avatar];
+          const refs = isFirst
+            ? [avatar, ...extraViews]
+            : [parentImage, avatar, ...extraViews];
           const prompt = isFirst
-            ? `Build the opening frame of a UGC ad, ${args.aspect}. The person is EXACTLY the one in the reference photo — same face geometry, same glasses if worn, same hairstyle, same clothing. Do not idealize, slim, or beautify the face.\n` +
+            ? `Build the opening frame of a high-converting cinematic UGC ad, ${args.aspect}. ` +
+              `IDENTITY ANCHOR: The person is 100% IDENTICAL to the reference photos (which include front and multi-angle profile captures) — exact face geometry, jawline, eye shape, nose bridge, glasses, hairstyle, and skin tone. Do NOT alter, slim, or beautify the face.\n` +
               `${step.instruction}\n\n` +
-              `Realistic photograph, authentic phone-shot creator content. No text, no logos, no watermarks.${retryNote}`
+              `Cinematic 4K photograph, natural 35mm shallow depth of field, authentic eye-level smartphone creator composition, realistic skin pores, subsurface scattering, ambient lighting interaction. No text, no logos, no watermarks.${retryNote}`
             : `The FIRST image is the current frame. Apply exactly one change to it:\n` +
               `${step.instruction}\n\n` +
               `Keep everything else in the frame — the scene, clothing, camera position and props — unchanged. ` +
-              `The SECOND image is the identity reference: the person must remain EXACTLY that person — same face geometry, same glasses if worn, same hairline. Do not idealize, slim, or beautify the face. ` +
-              `Realistic photograph. No text, no logos, no watermarks.${retryNote}`;
+              `IDENTITY ANCHOR: The OTHER images are the identity references (including front and multi-angle profile captures). The person's facial structure, bone geometry, glasses, and authentic expression MUST remain 100% stable and identical to the identity reference. Do not idealize, slim, or beautify the face. ` +
+              `Cinematic 4K photograph, natural 35mm shallow depth of field, authentic eye-level smartphone creator composition, realistic skin pores, specular lighting reflections. No text, no logos, no watermarks.${retryNote}`;
 
           const frame = await generateFrame({ prompt, aspect: args.aspect, refs });
-          const url = toDataUrl(frame.bytes, frame.mimeType);
+          const url = await uploadToStorage(
+            frame.bytes,
+            `users/${args.uid}/runs/${runId}/nodes/${nodeRef.id}.jpg`,
+            frame.mimeType
+          );
 
           // Critique and identity run in parallel — the identity check is a
           // separate call because the combined one was measured to wave through
@@ -169,7 +288,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
               before: parentImage,
               after: { data: frame.bytes, mimeType: frame.mimeType },
             }),
-            verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType }),
+            verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType }, extraViews),
           ]);
 
           // Two real runs settled how this gate works. Keyed on `failed` alone,
@@ -222,6 +341,13 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             parentImage = { data: frame.bytes, mimeType: frame.mimeType };
             landed = true;
             await markStep(attempt > 0 ? 'retried' : 'done');
+            await touch({
+              previewFrames: FieldValue.arrayUnion({
+                stepNo: step.stepNo,
+                label: step.label || `Step ${step.stepNo}`,
+                frameUrl: url,
+              }),
+            });
           } else if (!canRetry) {
             // Out of retries. An imperfect frame with the RIGHT face still
             // advances — it is a usable base. A frame with the WRONG face does
@@ -288,13 +414,16 @@ export async function regenerateNode(args: {
   const avatarUrl: string | undefined = rootSnap.data()?.frameUrl;
   if (!avatarUrl) throw new Error('the avatar is missing');
 
-  const decode = (u: string) => {
-    const m = u.match(/^data:([^;]+);base64,(.+)$/);
-    if (!m) throw new Error('unreadable frame');
-    return { mimeType: m[1], data: Buffer.from(m[2], 'base64') };
-  };
-  const parentImage = decode(parentUrl);
-  const avatarImage = decode(avatarUrl);
+  const parentImage = await resolveImageInput(parentUrl);
+  const avatarImage = await resolveImageInput(avatarUrl);
+
+  const multiViews = rootSnap.data()?.multiViews || run.avatarMultiViews;
+  const extraViews = (
+    await Promise.all([
+      multiViews?.left ? resolveImageInput(multiViews.left) : null,
+      multiViews?.right ? resolveImageInput(multiViews.right) : null,
+    ])
+  ).filter(Boolean) as { mimeType: string; data: Buffer }[];
 
   const nodeRef = runRef.collection('nodes').doc();
   await nodeRef.set({
@@ -312,13 +441,13 @@ export async function regenerateNode(args: {
     try {
       const isFromAvatar = parentId === 'root';
       const prompt = isFromAvatar
-        ? `Build the opening frame of a UGC ad, ${run.aspect}. The person is EXACTLY the one in the reference photo — same face geometry, same glasses if worn, same hairstyle. Do not idealize or beautify.\n${args.instruction}\n\nRealistic photograph, authentic phone-shot creator content. No text, no logos.`
-        : `The FIRST image is the current frame. Apply exactly one change to it:\n${args.instruction}\n\nKeep everything else unchanged. The SECOND image is the identity reference: the person must remain EXACTLY that person. Do not idealize or beautify the face. Realistic photograph. No text, no logos.`;
+        ? `Build the opening frame of a high-converting cinematic UGC ad, ${run.aspect}. The person is EXACTLY the one in the reference photos (including front and multi-angle captures) — identical face geometry, same glasses if worn, same hairstyle. Do not idealize or beautify.\n${args.instruction}\n\nCinematic 4K photograph, natural 35mm shallow depth of field, authentic eye-level smartphone creator composition, realistic skin pores, subsurface scattering. No text, no logos.`
+        : `The FIRST image is the current frame. Apply exactly one change to it:\n${args.instruction}\n\nKeep everything else unchanged. The OTHER images are the identity references (including front and multi-angle profile captures): the person must remain EXACTLY that person. Do not idealize or beautify the face. Cinematic 4K photograph, natural 35mm shallow depth of field, authentic eye-level smartphone creator composition, realistic skin pores, specular lighting reflections. No text, no logos.`;
 
       const frame = await generateFrame({
         prompt,
         aspect: run.aspect,
-        refs: isFromAvatar ? [avatarImage] : [parentImage, avatarImage],
+        refs: isFromAvatar ? [avatarImage, ...extraViews] : [parentImage, avatarImage, ...extraViews],
       });
 
       const [verdict, identity] = await Promise.all([
@@ -329,12 +458,18 @@ export async function regenerateNode(args: {
           before: parentImage,
           after: { data: frame.bytes, mimeType: frame.mimeType },
         }),
-        verifyIdentity(avatarImage, { data: frame.bytes, mimeType: frame.mimeType }),
+        verifyIdentity(avatarImage, { data: frame.bytes, mimeType: frame.mimeType }, extraViews),
       ]);
 
       const wrongFace = !identity.samePerson || !verdict.faceMatches;
+      const url = await uploadToStorage(
+        frame.bytes,
+        `users/${args.uid}/runs/${args.runId}/nodes/${nodeRef.id}.jpg`,
+        frame.mimeType
+      );
+
       await nodeRef.update({
-        frameUrl: `data:${frame.mimeType};base64,${frame.bytes.toString('base64')}`,
+        frameUrl: url,
         verdict: wrongFace ? 'failed' : verdict.verdict,
         criticNotes: wrongFace ? `The face no longer matches the enrolled person. ${identity.differences}` : verdict.notes,
         criticRubric: verdict.rubric,

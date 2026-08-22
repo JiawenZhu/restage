@@ -16,6 +16,8 @@ if (typeof window !== 'undefined') {
   );
 }
 
+import { getTemplateById } from './templates';
+
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 // Frames run on the cheap fast model on purpose: the plan expects to throw some
@@ -200,9 +202,43 @@ export interface PlannedStep {
   rationale: string;
 }
 
-export async function planRun(goal: string, aspect: Aspect, seconds: number): Promise<PlannedStep[]> {
+export async function planRun(
+  goal: string,
+  aspect: Aspect,
+  seconds: number,
+  templateId?: string
+): Promise<PlannedStep[]> {
+  const tpl = templateId ? getTemplateById(templateId) : undefined;
+
+  /*
+   * A template's presetSteps are its actual choreography — hand-authored, in
+   * order, each with a reason. They used to be passed to nobody: the planner got
+   * three sentences of adjectives and re-invented a sequence every time, so two
+   * templates with completely different step structures produced the same shape
+   * of run with different lighting words. That made "template" mean "adjective
+   * set", which is not what the gallery promises.
+   *
+   * They are given as the STARTING sequence, not a script: the user's goal still
+   * governs, and the planner is told to adapt them to it. A template the model
+   * may not deviate from would break every goal that does not happen to match
+   * the template author's imagined product.
+   */
+  const templateContext = tpl
+    ? `\nTEMPLATE: "${tpl.name}" (${tpl.category})\n` +
+      `Look: ${tpl.lightingAndColor}\n` +
+      `Camera: ${tpl.cameraMotion}\n` +
+      `Detail to preserve: ${tpl.secondaryPhysics}\n\n` +
+      `This template's authored choreography, in order:\n` +
+      tpl.presetSteps.map((s, i) => `  ${i + 1}. ${s.label} — ${s.instruction} (why: ${s.rationale})`).join('\n') +
+      `\n\nStart from that sequence. Keep its order and its intent, and rewrite each ` +
+      `step so it serves the user's stated goal and the specific product they are ` +
+      `showing. Drop a step that cannot apply and add one the goal clearly needs, ` +
+      `but do not replace the choreography with a generic plan — the user chose ` +
+      `this template for its structure, not only its palette.`
+    : '';
+
   const { steps } = await structured<{ steps: PlannedStep[] }>(
-    `Goal: ${goal}\nOutput format: ${aspect}, ${seconds} seconds.\n\nPlan the edits.`,
+    `Goal: ${goal}\nOutput format: ${aspect}, ${seconds} seconds.${templateContext}\n\nPlan the edits.`,
     {
       type: 'object',
       properties: {
@@ -367,7 +403,13 @@ export interface IdentityCheck {
 export async function verifyIdentity(
   avatar: { data: Buffer | Uint8Array; mimeType: string },
   frame: { data: Buffer | Uint8Array; mimeType: string },
+  multiViews?: { data: Buffer | Uint8Array; mimeType: string }[],
 ): Promise<IdentityCheck> {
+  const multiAngleParts = (multiViews ?? []).flatMap((mv, idx) => [
+    { text: `Enrolment profile angle #${idx + 1}:` },
+    { inlineData: { mimeType: mv.mimeType, data: Buffer.from(mv.data).toString('base64') } },
+  ]);
+
   const res = await fetch(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -376,11 +418,12 @@ export async function verifyIdentity(
       contents: [
         {
           parts: [
-            { text: 'Person A (the enrolled identity):' },
+            { text: 'Person A (Base Enrolment Photo):' },
             { inlineData: { mimeType: avatar.mimeType, data: Buffer.from(avatar.data).toString('base64') } },
-            { text: 'Person B (the generated frame):' },
+            ...multiAngleParts,
+            { text: 'Person B (Generated Scene Frame):' },
             { inlineData: { mimeType: frame.mimeType, data: Buffer.from(frame.data).toString('base64') } },
-            { text: 'Compare them.' },
+            { text: 'Compare them against all reference angles and decide.' },
           ],
         },
       ],

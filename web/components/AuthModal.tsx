@@ -28,15 +28,15 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
     try {
       if (mode === 'signup') {
         if (!email || !password) {
-          throw new Error('请填写邮箱和密码');
+          throw new Error('Please enter your email and password');
         }
         if (password.length < 6) {
-          throw new Error('密码长度至少需要 6 个字符');
+          throw new Error('Password must be at least 6 characters');
         }
         await signUpWithEmail(email, password, name);
       } else {
         if (!email || !password) {
-          throw new Error('请填写邮箱和密码');
+          throw new Error('Please enter your email and password');
         }
         await signInWithEmail(email, password);
       }
@@ -45,17 +45,17 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
       console.error('Auth error:', err);
       const code = err.code || '';
       if (code === 'auth/configuration-not-found') {
-        setError('Firebase 控制台尚未启用该登录方式。请在控制台 Authentication 中启用 Email/Password 或 Google 登录。');
+        setError('Authentication is not enabled in Firebase Console. Please enable Email/Password or Google provider.');
       } else if (code === 'auth/email-already-in-use') {
-        setError('该邮箱已被注册，请直接登录。');
+        setError('This email is already in use. Please sign in instead.');
       } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
-        setError('邮箱或密码不正确，请重新输入。');
+        setError('Invalid email or password. Please try again.');
       } else if (code === 'auth/weak-password') {
-        setError('密码强度过低，请输入至少 6 位密码。');
+        setError('Password should be at least 6 characters.');
       } else if (code === 'auth/popup-closed-by-user') {
-        setError('登录窗口已关闭，请重试。');
+        setError('Sign-in popup was closed.');
       } else {
-        setError(err.message || '登录过程中发生错误，请重试。');
+        setError(err.message || 'An error occurred during authentication.');
       }
     } finally {
       setLoading(false);
@@ -71,11 +71,11 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
     } catch (err: any) {
       console.error('Google Sign In error:', err);
       if (err.code === 'auth/configuration-not-found') {
-        setError('Firebase 控制台尚未启用 Google 登录。请在 Firebase 控制台开启 Google 提供方。');
+        setError('Google Sign-In is not enabled in Firebase Console. Please enable Google provider.');
       } else if (err.code === 'auth/popup-closed-by-user') {
-        setError('Google 登录窗口已关闭。');
+        setError('Google sign-in popup was closed.');
       } else {
-        setError(err.message || 'Google 登录失败，请重试。');
+        setError(err.message || 'Google sign-in failed.');
       }
     } finally {
       setLoading(false);
@@ -102,10 +102,10 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
         {/* Title */}
         <div className="text-center">
           <h2 className="text-2xl font-bold tracking-tight text-ink">
-            {mode === 'signin' ? '欢迎登录 Restage' : '创建 Restage 账号'}
+            {mode === 'signin' ? 'Welcome to Restage' : 'Create an Account'}
           </h2>
           <p className="mt-1 text-sm text-ink-3">
-            {mode === 'signin' ? '登录以管理您的分身与视频生成' : '开始免费定制您的专属 AI 数字分身'}
+            {mode === 'signin' ? 'Sign in to manage your avatars and video runs' : 'Start generating authentic UGC ads with your face'}
           </p>
         </div>
 
@@ -134,14 +134,14 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            使用 Google 账号继续
+            Continue with Google
           </button>
         </div>
 
         {/* Divider */}
         <div className="relative my-5 flex items-center justify-center">
           <div className="w-full border-t border-line" />
-          <span className="absolute bg-panel px-3 text-xs font-medium text-ink-3">或者使用邮箱</span>
+          <span className="absolute bg-panel px-3 text-xs font-medium text-ink-3">or with email</span>
         </div>
 
         {/* Error Alert */}
@@ -155,19 +155,19 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
         <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
           {mode === 'signup' && (
             <div>
-              <label className="block text-xs font-semibold text-ink-2">用户名 / 昵称</label>
+              <label className="block text-xs font-semibold text-ink-2">Display Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="例如：Alex"
+                placeholder="e.g. Alex"
                 className="mt-1 w-full rounded-lg border border-line bg-canvas px-3.5 py-2 text-sm text-ink placeholder-ink-4 outline-none transition-colors focus:border-accent"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-ink-2">邮箱地址</label>
+            <label className="block text-xs font-semibold text-ink-2">Email Address</label>
             <input
               type="email"
               required
@@ -179,13 +179,13 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-ink-2">密码</label>
+            <label className="block text-xs font-semibold text-ink-2">Password</label>
             <input
               type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="至少 6 位字符"
+              placeholder="At least 6 characters"
               className="mt-1 w-full rounded-lg border border-line bg-canvas px-3.5 py-2 text-sm text-ink placeholder-ink-4 outline-none transition-colors focus:border-accent"
             />
           </div>
@@ -198,9 +198,9 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
             {loading ? (
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
             ) : mode === 'signin' ? (
-              '登录'
+              'Sign In'
             ) : (
-              '注册账号'
+              'Create Account'
             )}
           </button>
         </form>
@@ -209,7 +209,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
         <div className="mt-5 text-center text-xs text-ink-3">
           {mode === 'signin' ? (
             <p>
-              还没有账号？{' '}
+              Don&apos;t have an account?{' '}
               <button
                 type="button"
                 onClick={() => {
@@ -218,12 +218,12 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
                 }}
                 className="font-semibold text-accent hover:underline"
               >
-                立即注册
+                Sign up
               </button>
             </p>
           ) : (
             <p>
-              已有账号？{' '}
+              Already have an account?{' '}
               <button
                 type="button"
                 onClick={() => {
@@ -232,7 +232,7 @@ export function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModal
                 }}
                 className="font-semibold text-accent hover:underline"
               >
-                直接登录
+                Sign in
               </button>
             </p>
           )}

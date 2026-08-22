@@ -37,17 +37,19 @@ export function PromptComposer({
   purpose,
   keywords,
   placeholder,
+  value,
   onPrompt,
 }: {
   purpose: 'goal' | 'edit';
   keywords: string[];
   placeholder: string;
+  value?: string;
   /** Called with the prompt that should actually be used: refined when it
    *  exists, the user's own words otherwise. */
   onPrompt: (finalPrompt: string, raw: string) => void;
 }) {
   const { user } = useUser();
-  const [raw, setRaw] = useState('');
+  const [raw, setRaw] = useState(value || '');
   const [interim, setInterim] = useState('');
   const [refined, setRefined] = useState<string | null>(null);
   const [refining, setRefining] = useState(false);
@@ -55,6 +57,15 @@ export function PromptComposer({
   const [listening, setListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const rawRef = useRef(raw);
+  rawRef.current = raw;
+
+  useEffect(() => {
+    if (value !== undefined && value !== rawRef.current) {
+      setRaw(value);
+      setRefined(null);
+    }
+  }, [value]);
 
   useEffect(() => {
     setSpeechSupported(!!getRecognizer());
@@ -88,12 +99,10 @@ export function PromptComposer({
         else interims += r[0].transcript;
       }
       if (finals) {
-        setRaw((prev) => {
-          const next = (prev + ' ' + finals).trim();
-          setRefined(null);
-          onPrompt(next, next);
-          return next;
-        });
+        const next = (rawRef.current + ' ' + finals).trim();
+        setRaw(next);
+        setRefined(null);
+        onPrompt(next, next);
       }
       setInterim(interims);
     };

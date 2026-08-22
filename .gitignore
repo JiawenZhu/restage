@@ -13,3 +13,8 @@ dist/
 web/node_modules/
 web/.next/
 web/next-env.d.ts
+
+# Template preview clips are generated assets, regenerable with
+# `npx tsx scripts/make-template-previews.mts`. They are committed on purpose —
+# a fresh clone should show the gallery without spending Veo credits.
+web/public/templates/.generating

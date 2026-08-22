@@ -1,13 +1,17 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { AuthButton, useUser } from '@/components/AuthGate';
 import type { Aspect } from '@/lib/types';
 import { PromptComposer } from '@/components/PromptComposer';
 
-const GOAL_KEYWORDS = [
+import { TemplateGallery } from '@/components/TemplateGallery';
+import { CREATIVE_TEMPLATES } from '@/lib/templates';
+import type { CreativeTemplate } from '@/lib/templates';
+
+const DEFAULT_KEYWORDS = [
   'in my kitchen',
   'I hold the product',
   'talking to camera',
@@ -25,29 +29,98 @@ export default function NewRun() {
   const [aspect, setAspect] = useState<Aspect>('9:16');
   const [seconds, setSeconds] = useState<8 | 15 | 30>(15);
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [multiViews, setMultiViews] = useState<{ front?: string; left?: string; right?: string } | null>(null);
+  const [avatarName, setAvatarName] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<CreativeTemplate | null>(null);
+  const [pendingTemplate, setPendingTemplate] = useState<CreativeTemplate | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canStart = !!user && !!avatar && goal.trim().length >= 8 && !busy;
+  // Auto load enrolled avatar from /enroll if available
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('restage_latest_avatar');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const frontImg = parsed?.rawImages?.front || parsed?.images?.front;
+        if (frontImg && !avatar) {
+          setAvatar(frontImg);
+          setAvatarName(parsed.name || 'Enrolled Avatar');
+          setMultiViews({
+            front: frontImg,
+            left: parsed?.rawImages?.left || parsed?.images?.left,
+            right: parsed?.rawImages?.right || parsed?.images?.right,
+          });
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  const canStart = !!avatar && goal.trim().length >= 8 && !busy;
 
   async function pickFile(file: File) {
-    // Read to a data URL so the same bytes reach the model as a reference and
-    // the tree root without a round trip through storage first.
     const reader = new FileReader();
-    reader.onload = () => setAvatar(String(reader.result));
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      setAvatar(dataUrl);
+      setAvatarName(file.name);
+      setMultiViews({ front: dataUrl });
+    };
     reader.readAsDataURL(file);
   }
 
+  /*
+   * Applying a template replaces the goal text, so it must not do that silently
+   * to work the user already did — a dictated goal can represent a minute of
+   * talking plus a paid /api/refine round-trip. When the box holds only a
+   * previous template's prose, there is nothing of the user's to lose and the
+   * swap is immediate.
+   */
+  function handleSelectTemplate(tpl: CreativeTemplate) {
+    const current = goal.trim();
+    const isUserWriting =
+      current.length > 0 && !CREATIVE_TEMPLATES.some((t) => t.defaultPrompt.trim() === current);
+
+    if (isUserWriting) {
+      setPendingTemplate(tpl);
+      return;
+    }
+    applyTemplate(tpl);
+  }
+
+  function applyTemplate(tpl: CreativeTemplate) {
+    setSelectedTemplate(tpl);
+    setGoal(tpl.defaultPrompt);
+    setPendingTemplate(null);
+  }
+
+  /* Clearing a template used to leave its prose in the goal box, so the screen
+     said "no template applied" while the goal still read like one. Clearing now
+     removes what applying put there — and only that. */
+  function clearTemplate() {
+    if (selectedTemplate && goal.trim() === selectedTemplate.defaultPrompt.trim()) setGoal('');
+    setSelectedTemplate(null);
+  }
+
   async function start() {
-    if (!user || !avatar) return;
+    if (!avatar) return;
     setBusy(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
+      const token = user ? await user.getIdToken() : 'guest';
       const res = await fetch('/api/runs', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({ goal: goal.trim(), aspect, seconds, avatarDataUrl: avatar }),
+        body: JSON.stringify({
+          goal: goal.trim(),
+          aspect,
+          seconds,
+          templateId: selectedTemplate?.id,
+          avatarDataUrl: avatar,
+          avatarMultiViews: multiViews || undefined,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'could not start the run');
@@ -58,11 +131,15 @@ export default function NewRun() {
     }
   }
 
+  const activeKeywords = selectedTemplate ? selectedTemplate.keywords : DEFAULT_KEYWORDS;
+
   return (
     <AppShell right={<AuthButton />}>
       <div className="mx-auto w-full max-w-4xl px-6 py-14">
         <h1 className="text-[32px] font-bold tracking-[-0.025em]">What should this ad do?</h1>
-        <p className="mt-2 text-base text-ink-3">Describe the result, not the shots. The agent works out the shots.</p>
+        <p className="mt-2 text-base text-ink-3">
+          Choose a scenario template below or describe a custom outcome. The AI agent plans the cinematic shots.
+        </p>
 
         {ready && !user && (
           <div className="mt-6 rounded-card border border-line bg-panel px-5 py-4 text-[13.5px] text-ink-2">
@@ -70,6 +147,7 @@ export default function NewRun() {
           </div>
         )}
 
+        {/* 1. Who is in it */}
         <p className="mt-9 text-[10.5px] font-bold tracking-[0.12em] text-ink-3">WHO IS IN IT</p>
         <div className="mt-2.5 flex items-center gap-3">
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && pickFile(e.target.files[0])} />
@@ -91,17 +169,69 @@ export default function NewRun() {
           </button>
         </div>
 
-        <p className="mt-7 text-[10.5px] font-bold tracking-[0.12em] text-ink-3">THE GOAL</p>
-        {/* Two cards: the user's words stay visible, and the model-facing
-            rewrite appears beside them. What gets planned is the refined one
-            when it exists, the raw one otherwise. */}
-        <div className="mt-2.5">
-          <PromptComposer
-            purpose="goal"
-            keywords={GOAL_KEYWORDS}
-            placeholder="Say or type the outcome you want — not the shots."
-            onPrompt={(finalPrompt) => setGoal(finalPrompt)}
-          />
+        {/* 2. Creative Thematic Scenario Templates */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between">
+            <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">SCENARIO TEMPLATES</p>
+            {selectedTemplate && (
+              <button
+                type="button"
+                onClick={clearTemplate}
+                className="text-[11px] font-semibold text-accent hover:underline"
+              >
+                Clear template ({selectedTemplate.name})
+              </button>
+            )}
+          </div>
+          {pendingTemplate && (
+            <div className="rs-enter mt-2.5 flex flex-wrap items-center gap-3 rounded-card border border-warn/40 bg-warn-soft/40 px-3.5 py-3">
+              <p className="min-w-0 flex-1 text-[13px] leading-snug">
+                Applying <span className="font-semibold">{pendingTemplate.name}</span> will replace the goal you wrote.
+              </p>
+              <button
+                type="button"
+                onClick={() => applyTemplate(pendingTemplate)}
+                className="rounded-lg bg-primary px-3 py-1.5 text-[12.5px] font-semibold text-primary-ink"
+              >
+                Replace it
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingTemplate(null)}
+                className="rounded-lg border border-line-strong px-3 py-1.5 text-[12.5px] font-semibold text-ink-2"
+              >
+                Keep mine
+              </button>
+            </div>
+          )}
+
+          <div className="mt-2.5">
+            <TemplateGallery
+              selectedTemplateId={selectedTemplate?.id || null}
+              onSelectTemplate={handleSelectTemplate}
+            />
+          </div>
+        </div>
+
+        {/* 3. The Goal & Prompt Composer */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between">
+            <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">THE GOAL & SCRIPT PROMPT</p>
+            {selectedTemplate && (
+              <span className="text-[11px] font-semibold text-ink-3">
+                Applied: <span className="text-accent font-bold">{selectedTemplate.name}</span>
+              </span>
+            )}
+          </div>
+          <div className="mt-2.5">
+            <PromptComposer
+              purpose="goal"
+              value={goal}
+              keywords={activeKeywords}
+              placeholder="Say or type the outcome you want — or choose a scenario template above."
+              onPrompt={(finalPrompt) => setGoal(finalPrompt)}
+            />
+          </div>
         </div>
 
         <div className="mt-7 grid gap-5 sm:grid-cols-2">

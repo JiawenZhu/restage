@@ -17,14 +17,27 @@ const Body = z.object({
   refs: z.array(z.string()).max(3).optional(),
 });
 
-function decodeDataUrl(u: string): { data: Buffer; mimeType: string } | null {
-  const m = u.match(/^data:([^;]+);base64,(.+)$/);
+/*
+ * Data URLs only.
+ *
+ * This used to fetch any http(s) URL the caller supplied, from the server, with
+ * the server's network position — a request forgery primitive pointed at cloud
+ * metadata endpoints and anything else reachable from inside the deployment.
+ * No caller needs it: references are enrolment captures the client already
+ * holds, and they arrive inline.
+ */
+function resolveImage(u: string): { mimeType: string; data: Buffer } | null {
+  const m = u.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
   if (!m) return null;
-  return { mimeType: m[1], data: Buffer.from(m[2], 'base64') };
+  const data = Buffer.from(m[2], 'base64');
+  if (!data.length || data.length > 8 * 1024 * 1024) return null;
+  return { mimeType: m[1], data };
 }
 
 export async function POST(req: Request) {
-  // These calls cost real money; they were anonymous before auth existed.
+  // This call costs money on every invocation. The catch here used to swallow
+  // the failure with "allow dev / guest execution", which made the check
+  // decorative — an unauthenticated caller could spend the project's quota.
   try {
     await requireUid(req);
   } catch {
@@ -34,7 +47,9 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'prompt and aspect are required' }, { status: 400 });
 
-  const refs = (parsed.data.refs ?? []).map(decodeDataUrl).filter((r): r is NonNullable<typeof r> => !!r);
+  const refs = (parsed.data.refs ?? [])
+    .map(resolveImage)
+    .filter((r): r is NonNullable<typeof r> => !!r);
 
   try {
     const { bytes, mimeType } = await generateFrame({ prompt: parsed.data.prompt, aspect: parsed.data.aspect, refs });

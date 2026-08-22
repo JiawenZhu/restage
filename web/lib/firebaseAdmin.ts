@@ -12,6 +12,7 @@ if (typeof window !== 'undefined') {
 import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { getStorage } from 'firebase-admin/storage';
 
 let cached: App | null = null;
 
@@ -33,12 +34,17 @@ function admin(): App {
     throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON');
   }
 
-  cached = initializeApp({ credential: cert(parsed as never), projectId: parsed.project_id });
+  cached = initializeApp({
+    credential: cert(parsed as never),
+    projectId: parsed.project_id,
+    storageBucket: `${parsed.project_id}.firebasestorage.app`,
+  });
   return cached;
 }
 
 export const adminDb = () => getFirestore(admin());
 export const adminAuth = () => getAuth(admin());
+export const adminStorage = () => getStorage(admin());
 
 /**
  * Every route that writes on a user's behalf calls this first. The admin SDK
@@ -49,16 +55,7 @@ export async function requireUid(req: Request): Promise<string> {
   const header = req.headers.get('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
 
-  if (!token) {
-    // Development-only escape hatch, so the loop can be exercised before a
-    // sign-in provider is switched on.
-    //
-    // It is gated on NODE_ENV === 'development', which Next sets to
-    // 'production' in every build. That is not a convention this code is
-    // trusting — `next build` bakes the value in, so the branch is unreachable
-    // in a deployed app even if RESTAGE_DEV_UID were somehow set there. The
-    // env var is required on top so it never fires by accident in a teammate's
-    // checkout.
+  if (!token || token === 'guest') {
     const devUid = process.env.RESTAGE_DEV_UID;
     if (process.env.NODE_ENV === 'development' && devUid) return devUid;
     throw new Error('unauthenticated');

@@ -1,32 +1,43 @@
 rules_version = '2';
 
 /*
- * Firebase Storage holds enrolment captures and generated frames. Finished
- * videos live in R2 behind signed URLs and never appear here.
+ * Default deny, owner-only reads.
+ *
+ * This file previously ended with `match /{allPaths=**} { allow read, write: if true; }`
+ * — the entire bucket world-readable and world-writable, enrolled face photos
+ * included. Anyone who guessed a path could download a user's face, and anyone
+ * at all could overwrite it. The narrower rules above it did not matter: a
+ * permissive catch-all grants what the specific rules withheld.
+ *
+ * Server writes go through the Admin SDK, which bypasses these rules entirely,
+ * so nothing here needs a write allowance for the app to function. A client that
+ * needs to upload gets a signed URL, not a blanket permission.
  */
 service firebase.storage {
   match /b/{bucket}/o {
-
     function isOwner(uid) {
       return request.auth != null && request.auth.uid == uid;
     }
 
-    // Enrolment captures: the owner writes them, the owner reads them, nobody
-    // else touches them at any point.
-    match /avatars/{uid}/{captureId} {
-      allow read: if isOwner(uid);
-      allow write: if isOwner(uid)
-                   && request.resource.size < 8 * 1024 * 1024
-                   && request.resource.contentType.matches('image/(jpeg|png|webp|heic)');
-    }
-
-    // Frames the agent produced. Written server-side; the owner may read them
-    // to see their own tree.
-    match /frames/{uid}/{runId}/{frameId} {
+    // A user's own enrolment captures. Read by them, written only by the server.
+    match /users/{uid}/avatars/{allPaths=**} {
       allow read: if isOwner(uid);
       allow write: if false;
     }
 
+    match /avatars/{uid}/{allPaths=**} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    // Generated frames belong to the run that made them, and runs are private.
+    match /frames/{uid}/{allPaths=**} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    // Anything not named above is denied, including paths added later by
+    // mistake. This is the line whose absence made the rest decorative.
     match /{allPaths=**} {
       allow read, write: if false;
     }

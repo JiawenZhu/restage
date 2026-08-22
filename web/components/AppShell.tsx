@@ -89,7 +89,7 @@ export function AppShell({
                     onClick={() => logout()}
                     className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors hover:bg-subtle hover:text-ink"
                   >
-                    退出
+                    Sign out
                   </button>
                 </div>
               ) : (
@@ -98,13 +98,13 @@ export function AppShell({
                     onClick={openSignIn}
                     className="rounded-lg px-3 py-1.5 text-xs font-semibold text-ink-2 transition-colors hover:bg-subtle hover:text-ink"
                   >
-                    登录
+                    Sign in
                   </button>
                   <button
                     onClick={openSignUp}
                     className="rounded-lg bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-ink transition-opacity hover:opacity-90"
                   >
-                    注册
+                    Sign up
                   </button>
                 </div>
               )}

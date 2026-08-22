@@ -32,6 +32,45 @@ export const QUOTAS = {
   text: { limit: 200, windowMs: 60 * 60 * 1000 },
 } satisfies Record<string, Quota>;
 
+/** One transaction. Extracted so the retry path runs exactly the same logic. */
+async function attemptConsume(
+  ref: FirebaseFirestore.DocumentReference,
+  limit: number,
+  windowMs: number,
+  want: number,
+  now: number,
+): Promise<RateResult> {
+  return adminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.data();
+    const windowStart: number = data?.windowStart ?? 0;
+    const count: number = data?.count ?? 0;
+
+    // A fresh window: the previous one has fully elapsed.
+    if (now - windowStart >= windowMs) {
+      // Still refusable: one request asking for more than the whole window
+      // holds can never be satisfied, and saying so now beats spending most of
+      // it and failing.
+      if (want > limit) {
+        return { ok: false, remaining: limit, retryAfterSeconds: 0 };
+      }
+      tx.set(ref, { windowStart: now, count: want, updatedAt: now });
+      return { ok: true, remaining: limit - want, retryAfterSeconds: 0 };
+    }
+
+    if (count + want > limit) {
+      return {
+        ok: false,
+        remaining: Math.max(0, limit - count),
+        retryAfterSeconds: Math.ceil((windowStart + windowMs - now) / 1000),
+      };
+    }
+
+    tx.set(ref, { windowStart, count: count + want, updatedAt: now }, { merge: true });
+    return { ok: true, remaining: limit - count - want, retryAfterSeconds: 0 };
+  });
+}
+
 export interface RateResult {
   ok: boolean;
   remaining: number;
@@ -63,42 +102,41 @@ export async function consume(
   const ref = adminDb().collection('rateLimits').doc(`${uid}_${bucket}`);
 
   try {
-    return await adminDb().runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const data = snap.data();
-      const windowStart: number = data?.windowStart ?? 0;
-      const count: number = data?.count ?? 0;
-
-      // A fresh window: the previous one has fully elapsed.
-      if (now - windowStart >= windowMs) {
-        // Still refusable: one request asking for more than the whole window
-        // holds can never be satisfied, and saying so now beats spending most
-        // of it and failing.
-        if (want > limit) {
-          return { ok: false, remaining: limit, retryAfterSeconds: 0 };
-        }
-        tx.set(ref, { windowStart: now, count: want, updatedAt: now });
-        return { ok: true, remaining: limit - want, retryAfterSeconds: 0 };
-      }
-
-      if (count + want > limit) {
-        return {
-          ok: false,
-          remaining: Math.max(0, limit - count),
-          retryAfterSeconds: Math.ceil((windowStart + windowMs - now) / 1000),
-        };
-      }
-
-      tx.set(ref, { windowStart, count: count + want, updatedAt: now }, { merge: true });
-      return { ok: true, remaining: limit - count - want, retryAfterSeconds: 0 };
-    });
-  } catch {
+    return await attemptConsume(ref, limit, windowMs, want, now);
+  } catch (err) {
     /*
-     * Fail OPEN, and say why: this is a spend ceiling, not an access control.
-     * A Firestore blip must not stop a paying user from working, and every one
-     * of these routes already requires an authenticated owner.
+     * RETRY BEFORE GIVING UP — because the failure mode is backwards.
+     *
+     * Every one of these transactions contends for a single document, and
+     * Firestore's own retry budget is exhausted by a large enough burst. The
+     * previous version then failed OPEN on the grounds that a spend ceiling
+     * should not block a paying user over an infrastructure blip. Reasonable in
+     * isolation, and precisely wrong in aggregate: contention is PROPORTIONAL TO
+     * LOAD, so the limiter let everything through at exactly the moment it was
+     * most needed. Measured: 70 concurrent calls against a limit of 60 admitted
+     * all 70, because all 70 transactions failed and all 70 failed open. A
+     * ceiling that lifts under load is not a ceiling.
+     *
+     * A few jittered retries convert contention — which is transient by
+     * definition, since the contending writers are finishing — into a slightly
+     * slower answer rather than no answer.
      */
-    console.error('[rateLimit] check failed; allowing the request');
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      await new Promise((r) => setTimeout(r, Math.random() * 120 * attempt));
+      try {
+        return await attemptConsume(ref, limit, windowMs, want, Date.now());
+      } catch {
+        /* keep trying */
+      }
+    }
+
+    /*
+     * Still failing after retries. This is now much more likely to be a genuine
+     * outage than contention, so the original reasoning applies again: these
+     * routes all require an authenticated owner, and refusing everyone during a
+     * Firestore incident turns a billing safeguard into an outage of our own.
+     */
+    console.error('[rateLimit] check failed after retries; allowing the request:', String(err).slice(0, 120));
     return { ok: true, remaining: -1, retryAfterSeconds: 0 };
   }
 }

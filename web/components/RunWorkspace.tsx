@@ -110,16 +110,24 @@ const STEP_GLYPH: Record<string, { cls: string; icon: React.ReactNode }> = {
  */
 const STALL_AFTER_MS = 10 * 60 * 1000;
 
+/** The states in which the agent still has work to do. */
+function isLive(run: Run): boolean {
+  return run.status === 'planning' || run.status === 'running' || run.status === 'rendering';
+}
+
 function isStalled(run: Run): boolean {
-  const live = run.status === 'planning' || run.status === 'running' || run.status === 'rendering';
-  return live && Date.now() - (run.updatedAt || run.createdAt || 0) > STALL_AFTER_MS;
+  return isLive(run) && Date.now() - (run.updatedAt || run.createdAt || 0) > STALL_AFTER_MS;
 }
 
 function PlanPanel({ run }: { run: Run }) {
   const stalled = isStalled(run);
+  const live = isLive(run);
   return (
     <aside className="flex w-full shrink-0 flex-col border-b border-line bg-panel lg:max-h-none lg:w-[300px] lg:border-b-0 lg:border-r">
-      <p className="px-[18px] pb-3 pt-[18px] text-[11px] font-bold tracking-[0.12em] text-ink-3">PLAN</p>
+      <div className="flex items-baseline justify-between px-[18px] pb-3 pt-[18px]">
+        <p className="text-[11px] font-bold tracking-[0.12em] text-ink-3">PLAN</p>
+        {live && !stalled && <Remaining run={run} />}
+      </div>
 
       {run.status === 'planning' && !stalled && (
         <div className="flex items-center gap-2.5 px-[18px] pb-3">
@@ -193,6 +201,48 @@ function PlanPanel({ run }: { run: Run }) {
         })}
       </div>
     </aside>
+  );
+}
+
+/*
+ * How much longer.
+ *
+ * A run measured 220 and 264 seconds across two real executions, and the screen
+ * said only "step 4 is generating" — leaving somebody to guess whether they had
+ * twenty seconds left or four minutes. Waiting is fine; not knowing how long is
+ * what makes people leave.
+ *
+ * The estimate comes from the run's OWN pace, not a constant: elapsed time
+ * divided by steps finished, applied to steps remaining. That way a slow run
+ * says so instead of insisting on an average it is not meeting. Before the
+ * first step lands there is nothing to divide, so it says the honest thing.
+ */
+function Remaining({ run }: { run: Run }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const total = run.plan.length;
+  const done = run.plan.filter((s) => s.status === 'done' || s.status === 'retried' || s.status === 'abandoned').length;
+
+  if (run.status === 'rendering') {
+    return <span className="tnum text-[11px] text-ink-3">rendering · about a minute</span>;
+  }
+  if (!total || done === 0) {
+    return <span className="tnum text-[11px] text-ink-3">a few minutes</span>;
+  }
+
+  const elapsed = Date.now() - (run.createdAt || Date.now());
+  const perStep = elapsed / done;
+  const left = Math.max(0, Math.round((perStep * (total - done)) / 1000));
+  const label = left < 45 ? 'under a minute' : `about ${Math.ceil(left / 60)} min`;
+
+  return (
+    <span className="tnum text-[11px] text-ink-3">
+      {done}/{total} · {label} left
+    </span>
   );
 }
 

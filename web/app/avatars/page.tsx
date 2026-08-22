@@ -93,7 +93,15 @@ export default function Avatars() {
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-[1080px] flex-1 overflow-y-auto px-6 py-12 sm:px-8">
+      {/* One scroller, and it is the document.
+          This carried `overflow-y-auto`, which never engaged — the shell here is
+          plain `min-h-screen` and grows past the viewport, so the page scrolls
+          and this nested container measured scrollHeight == clientHeight at
+          every size tested. A scroll container that never scrolls is not
+          harmless: it is the thing that swallows a wheel event and makes a page
+          feel stuck, and it turns into a real trap the moment anything is added
+          above it. */}
+      <div className="mx-auto w-full max-w-[1080px] flex-1 px-6 py-12 sm:px-8">
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div className="max-w-xl">
             <h1 className="text-[34px] font-bold tracking-[-0.03em]">Your faces</h1>

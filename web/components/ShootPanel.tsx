@@ -34,23 +34,74 @@ interface AvatarOption {
   urls?: { front?: string | null };
 }
 
-export function ShootPanel({
+/*
+ * ONE LINE in the rail, and the editor is a modal over the canvas.
+ *
+ * This used to be a permanently expanded block in a 300px column: a five-row
+ * definition list, and a "Change" that grew five textareas and a face picker
+ * inline. Measured open, that block was 706px tall inside a pane 752px tall,
+ * which is the whole scrolling bug people reported on this screen. The pane has
+ * no scroller of its own; the only child that CAN shrink is the shot list,
+ * because its overflow-y-auto zeroes its automatic minimum size — so the shot
+ * list absorbed the entire deficit, collapsed to 12px of padding, and took
+ * 1,593px of scrollable content with it into a 12px window that was itself
+ * 159px below the fold. Every shot card sat past the bottom of the screen with
+ * no scrollbar anywhere, because the shell clips.
+ *
+ * A 700px form was never going to fit a sidebar. It is a modal now, which is
+ * also what it always was conceptually — a task you finish and leave, not a
+ * panel you read the run through.
+ */
+export function ShootSummary({ run, onOpen }: { run: Run; onOpen: () => void }) {
+  const look = run.look ?? null;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="mx-3.5 mb-3 flex items-center gap-2 rounded-lg border border-line bg-elevated px-2.5 py-2 text-left hover:border-accent"
+    >
+      <span className="text-[10px] font-bold tracking-[0.1em] text-ink-3">SHOOT</span>
+      <span className="min-w-0 flex-1 truncate text-[12px] text-ink-2" title={look?.location ?? undefined}>
+        {look?.location ?? 'Not described yet'}
+      </span>
+      <span className="shrink-0 text-[11.5px] font-semibold text-accent-ink">Change</span>
+    </button>
+  );
+}
+
+export function ShootEditor({
   run,
+  onClose,
   onImpact,
   onNote,
 }: {
   run: Run;
+  onClose: () => void;
   onImpact: (i: Impact & { seconds: number; label: string }) => void;
   onNote: (msg: string) => void;
 }) {
   const { user } = useUser();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Partial<LookBible>>({});
   const [avatars, setAvatars] = useState<AvatarOption[]>([]);
   const [avatarId, setAvatarId] = useState<string | null>(run.avatarId ?? null);
 
   const look = run.look ?? null;
+
+  /* Seed the form from the run — and fill it in if `derive` produces a look
+     while this is open. Only when the draft is still untouched, so an unrelated
+     snapshot update cannot overwrite what somebody is in the middle of typing. */
+  useEffect(() => {
+    if (look) setDraft((d) => (Object.keys(d).length ? d : { ...look }));
+  }, [look]);
+
+  /* Escape closes, like every other overlay on this screen. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !busy && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, busy]);
 
   /* The faces are only needed once the panel is open — fetching them on every
      workspace mount would spend a request on a control most sessions never
@@ -88,6 +139,8 @@ export function ShootPanel({
       const r = await call({ action: 'derive' });
       onNote(`Read the shoot from ${r.tagged} of ${r.total} shots. Check it and change anything that is wrong.`);
       setOpen(true);
+      /* The run document updates over the live snapshot, so the form below
+         fills in on the next render without refetching anything here. */
     } catch (e) {
       onNote(e instanceof Error ? e.message : 'could not read this run');
     } finally {
@@ -104,14 +157,14 @@ export function ShootPanel({
     }
     const swappedFace = avatarId && avatarId !== run.avatarId ? avatarId : undefined;
     if (!Object.keys(patch).length && !swappedFace) {
-      setOpen(false);
+      onClose();
       return;
     }
 
     setBusy(true);
     try {
       const impact = await call({ action: 'save', look: patch, avatarId: swappedFace });
-      setOpen(false);
+      onClose();
       setDraft({});
       if (impact.shots?.length) onImpact(impact);
       else onNote(impact.summary ?? 'Saved.');
@@ -122,108 +175,126 @@ export function ShootPanel({
     }
   }
 
-  /* ── an older run, made before shot lists existed ───────────────────────── */
-  if (!look) {
-    return (
-      <div className="mx-3.5 mb-3 rounded-card border border-line bg-elevated p-3">
-        <p className="text-[10px] font-bold tracking-[0.1em] text-ink-3">THE SHOOT</p>
-        <p className="mt-1.5 text-[12.5px] leading-snug text-ink-2">
-          This run was made before shots were described. Read it once and you can swap the product, the place or
-          the face — and see exactly which frames that affects.
-        </p>
-        <button
-          type="button"
-          disabled={busy || !user}
-          onClick={() => void derive()}
-          className="mt-2.5 rounded-lg border border-line-strong px-3 py-1.5 text-[12.5px] font-semibold text-ink-2 hover:border-accent hover:text-accent-ink disabled:opacity-40"
-        >
-          {busy ? 'Reading…' : 'Read this shoot'}
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="mx-3.5 mb-3 rounded-card border border-line bg-elevated p-3">
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] font-bold tracking-[0.1em] text-ink-3">THE SHOOT</p>
-        <button
-          type="button"
-          onClick={() => {
-            setDraft(open ? {} : { ...look });
-            setOpen(!open);
-          }}
-          className="text-[11.5px] font-semibold text-accent-ink hover:underline"
-        >
-          {open ? 'Cancel' : 'Change'}
-        </button>
-      </div>
-
-      {!open ? (
-        <dl className="mt-2 flex flex-col gap-1.5">
-          {EDITABLE.map((f) => (
-            <div key={f} className="flex gap-2 text-[12px] leading-snug">
-              <dt className="w-[62px] shrink-0 text-ink-4">{FIELD_LABEL[f].label}</dt>
-              <dd className="min-w-0 flex-1 truncate text-ink-2" title={look[f]}>
-                {look[f]}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : (
-        <div className="mt-2.5 flex flex-col gap-2.5">
-          {EDITABLE.map((f) => (
-            <label key={f} className="block">
-              <span className="text-[11px] font-semibold text-ink-2">{FIELD_LABEL[f].label}</span>
-              <textarea
-                rows={2}
-                value={draft[f] ?? ''}
-                maxLength={400}
-                onChange={(e) => setDraft((d) => ({ ...d, [f]: e.target.value }))}
-                placeholder={FIELD_LABEL[f].hint}
-                className="mt-1 w-full resize-none rounded-lg border border-line bg-canvas px-2.5 py-1.5 text-[12.5px] leading-snug outline-none focus:border-accent"
-              />
-            </label>
-          ))}
-
-          {avatars.length > 1 && (
-            <div>
-              <span className="text-[11px] font-semibold text-ink-2">Who is in it</span>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {avatars.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => setAvatarId(a.id)}
-                    className={`flex items-center gap-1.5 rounded-chip border px-2 py-1 text-[11.5px] ${
-                      avatarId === a.id ? 'border-accent bg-accent-soft text-accent-ink' : 'border-line text-ink-2'
-                    }`}
-                  >
-                    {a.urls?.front && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={a.urls.front} alt="" className="h-4 w-4 rounded-full object-cover" />
-                    )}
-                    {a.name ?? 'Face'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
+    <div
+      className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 p-5"
+      onClick={() => !busy && onClose()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="The shoot"
+        onClick={(e) => e.stopPropagation()}
+        className="rs-enter flex max-h-full w-full max-w-[520px] flex-col overflow-hidden rounded-card border border-line bg-panel shadow-[0_24px_60px_-20px_rgba(0,0,0,0.5)]"
+      >
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line px-5 py-4">
+          <div>
+            <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">THE SHOOT</p>
+            <p className="mt-1.5 text-[13px] leading-snug text-ink-2">
+              The one shoot every shot belongs to. Change the product, the place or the face here and you will be
+              shown exactly which frames stop matching.
+            </p>
+          </div>
           <button
             type="button"
-            disabled={busy}
-            onClick={() => void save()}
-            className="rounded-lg bg-primary py-2 text-[12.5px] font-semibold text-primary-ink disabled:opacity-40"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 rounded-md p-1 text-ink-3 hover:bg-subtle hover:text-ink"
           >
-            {busy ? 'Saving…' : 'Save changes'}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M18 6L6 18M6 6l12 12" /></svg>
           </button>
-          <p className="text-[11px] leading-snug text-ink-4">
-            Saving is free. Nothing is regenerated until you say so — you will be shown exactly which shots are
-            affected first.
-          </p>
         </div>
-      )}
+
+        {/* The form's OWN scroller. This is the structural fix — five textareas
+            and a face picker are ~700px, and in the sidebar that height had
+            nowhere to go but off the bottom of the screen. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {!look ? (
+            /* ── an older run, made before shot lists existed ─────────────── */
+            <div className="rounded-card border border-line bg-elevated p-3.5">
+              <p className="text-[13px] leading-relaxed text-ink-2">
+                This run was made before shots were described. Read it once and you can swap the product, the place
+                or the face — and see exactly which frames that affects.
+              </p>
+              <button
+                type="button"
+                disabled={busy || !user}
+                onClick={() => void derive()}
+                className="mt-3 rounded-lg border border-line-strong px-3 py-1.5 text-[12.5px] font-semibold text-ink-2 hover:border-accent hover:text-accent-ink disabled:opacity-40"
+              >
+                {busy ? 'Reading…' : 'Read this shoot'}
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {EDITABLE.map((f) => (
+                <label key={f} className="block">
+                  <span className="text-[11.5px] font-semibold text-ink-2">{FIELD_LABEL[f].label}</span>
+                  <textarea
+                    rows={2}
+                    value={draft[f] ?? ''}
+                    maxLength={400}
+                    onChange={(e) => setDraft((d) => ({ ...d, [f]: e.target.value }))}
+                    placeholder={FIELD_LABEL[f].hint}
+                    className="mt-1 w-full resize-none rounded-lg border border-line bg-canvas px-2.5 py-1.5 text-[12.5px] leading-snug outline-none focus:border-accent"
+                  />
+                </label>
+              ))}
+
+              {avatars.length > 1 && (
+                <div>
+                  <span className="text-[11.5px] font-semibold text-ink-2">Who is in it</span>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {avatars.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => setAvatarId(a.id)}
+                        className={`flex items-center gap-1.5 rounded-chip border px-2 py-1 text-[11.5px] ${
+                          avatarId === a.id ? 'border-accent bg-accent-soft text-accent-ink' : 'border-line text-ink-2'
+                        }`}
+                      >
+                        {a.urls?.front && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={a.urls.front} alt="" className="h-4 w-4 rounded-full object-cover" />
+                        )}
+                        {a.name ?? 'Face'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {look && (
+          <div className="shrink-0 border-t border-line px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void save()}
+                className="flex-1 rounded-lg bg-primary py-2.5 text-[13px] font-semibold text-primary-ink disabled:opacity-40"
+              >
+                {busy ? 'Saving…' : 'Save changes'}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onClose}
+                className="rounded-lg border border-line-strong px-3.5 py-2.5 text-[13px] font-semibold text-ink-2 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+            </div>
+            <p className="mt-2 text-[11.5px] leading-snug text-ink-4">
+              Saving is free. Nothing is regenerated until you say so — you will be shown exactly which shots are
+              affected first.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

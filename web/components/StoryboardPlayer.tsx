@@ -154,7 +154,14 @@ export function StoryboardPlayer({
   };
 
   return (
-    <div className="absolute inset-0 z-40 flex flex-col bg-black/70" onClick={onClose}>
+    /* Anchored to the VIEWPORT below lg, to the canvas above it.
+       This was `absolute inset-0` against the canvas <section>, which is right
+       on a wide screen where that section fills the window — and wrong once the
+       three panes stack, because the section then sits partway down a 2800px
+       document and the "modal" opens as a box below the fold rather than over
+       the window. Measured at 900px wide: the play button and caption landed at
+       document y 1617 with the window showing 0-820. */
+    <div className="fixed inset-0 z-40 flex flex-col bg-black/70 lg:absolute" onClick={onClose}>
       <div
         className="flex min-h-0 flex-1 flex-col p-5"
         onClick={(e) => e.stopPropagation()}

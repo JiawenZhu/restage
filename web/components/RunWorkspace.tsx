@@ -5,7 +5,7 @@ import { VersionTree } from './VersionTree';
 import { useUser } from './AuthGate';
 import { PromptComposer } from './PromptComposer';
 import { lineageOf, rebuildEstimate, shotPlan, type LineageNode } from '@/lib/sequence';
-import { ImpactModal, ShootPanel } from './ShootPanel';
+import { ImpactModal, ShootEditor, ShootSummary } from './ShootPanel';
 import { StoryboardPlayer } from './StoryboardPlayer';
 import type { Impact } from '@/lib/impact';
 import type { Run, TreeNode } from '@/lib/types';
@@ -53,6 +53,11 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
      inside the panel, because the modal covers the canvas rather than the
      sidebar it was triggered from. */
   const [impact, setImpact] = useState<(Impact & { seconds: number; label: string }) | null>(null);
+  /* The shoot editor is a modal over the canvas rather than an expanding block
+     in the 300px rail, where its ~700px of textareas pushed the entire shot
+     list off the bottom of the screen. Held here for the same reason ImpactModal
+     is: it covers the canvas, not the sidebar that opens it. */
+  const [shootOpen, setShootOpen] = useState(false);
 
   /*
    * Re-evaluate "has this stalled?" while the page sits open.
@@ -146,8 +151,14 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
       <PlanPanel
         run={run}
         nodes={nodes}
-        onImpact={setImpact}
-        onNote={(t) => setSeqMsg({ text: t, bad: false })}
+        onOpenShoot={() => setShootOpen(true)}
+        /* A shot card IS the edit surface. Clicking one selects its frame on the
+           canvas and opens the same composer the canvas offers — no second
+           editor, and no separate "edit the plan" mode to learn. */
+        onEditShot={(node) => {
+          setPinned(node.id);
+          setRegenTarget(node);
+        }}
       />
 
       <section className="relative min-h-[380px] min-w-0 flex-1">
@@ -226,6 +237,14 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
             onClose={() => setPreviewing(false)}
           />
         )}
+        {shootOpen && (
+          <ShootEditor
+            run={run}
+            onClose={() => setShootOpen(false)}
+            onImpact={setImpact}
+            onNote={(t) => setSeqMsg({ text: t, bad: false })}
+          />
+        )}
         {impact && (
           <ImpactModal
             impact={impact}
@@ -294,13 +313,13 @@ function isStalled(run: Run): boolean {
 function PlanPanel({
   run,
   nodes,
-  onImpact,
-  onNote,
+  onOpenShoot,
+  onEditShot,
 }: {
   run: Run;
   nodes: TreeNode[];
-  onImpact: (i: Impact & { seconds: number; label: string }) => void;
-  onNote: (msg: string) => void;
+  onOpenShoot: () => void;
+  onEditShot: (node: TreeNode) => void;
 }) {
   const stalled = isStalled(run);
   const live = isLive(run);
@@ -318,7 +337,15 @@ function PlanPanel({
   const rendered = nodes.filter((n) => n.kind === 'video' && n.status !== 'failed').length;
   const discarded = nodes.filter((n) => n.kind === 'frame' && (n.discarded || n.status === 'failed')).length;
   return (
-    <aside className="flex w-full shrink-0 flex-col border-b border-line bg-panel lg:max-h-none lg:w-[300px] lg:border-b-0 lg:border-r">
+    /* The PANE scrolls, not one chosen child of it.
+       Every block in here except the shot list was `flex: 0 1 auto` with
+       `min-height: auto`, which flexbox refuses to shrink below its content. So
+       the shot list — the only child whose overflow-y-auto zeroed its minimum —
+       absorbed every pixel of deficit, collapsed to its own padding, and carried
+       the whole plan off the bottom of a shell that clips. Making the aside the
+       scroller means the header, the shoot line, the script and the shots move
+       together, and no single child can be squeezed to nothing. */
+    <aside className="flex min-h-0 w-full shrink-0 flex-col border-b border-line bg-panel lg:max-h-none lg:w-[300px] lg:overflow-y-auto lg:border-b-0 lg:border-r">
       <div className="flex items-baseline justify-between px-[18px] pb-3 pt-[18px]">
         <p className="text-[11px] font-bold tracking-[0.12em] text-ink-3">PLAN</p>
         {live && !stalled && <Remaining run={run} />}
@@ -357,7 +384,17 @@ function PlanPanel({
       {generated > 0 && (
         <p className="px-[18px] pb-2.5 text-[11.5px] text-ink-4">
           <span className="tnum">{generated}</span> image{generated === 1 ? '' : 's'} generated
-          {discarded > 0 && <span className="text-ink-4"> ({discarded} thrown away)</span>}
+          {/* "thrown away" described the money and not the reason, so the one
+              line reporting that the agent CAUGHT something read as the one line
+              admitting it had wasted something. Every frame counted here was
+              rejected on inspection — in the surveyed runs, for things like a
+              close-up of the wrong object — and was replaced by a better one. */}
+          {discarded > 0 && (
+            <span className="text-ink-4">
+              {' '}
+              (<span className="tnum">{discarded}</span> rejected and remade)
+            </span>
+          )}
           {rendered > 0 && (
             <>
               {' · '}
@@ -367,10 +404,9 @@ function PlanPanel({
         </p>
       )}
 
-      {/* The shoot every shot belongs to, and the one place it can be changed.
-          Above the line and below the plan because it is the thing the plan was
-          executed against. */}
-      <ShootPanel run={run} onImpact={onImpact} onNote={onNote} />
+      {/* One line, opening a modal. It was a five-row table plus an inline form
+          that grew to ~700px inside a 300px rail. */}
+      <ShootSummary run={run} onOpen={onOpenShoot} />
 
       {/* What the person is going to say. It was generated on every run and
           shown on none of them — the user's own face delivering a line they
@@ -387,14 +423,25 @@ function PlanPanel({
         </div>
       )}
 
-      <div className="relative flex flex-1 flex-col gap-0.5 overflow-y-auto px-3.5 pb-3">
+      {/* No scroller of its own any more — the aside above is the scroller, so
+          this list can no longer be squeezed to nothing by whatever sits over
+          it. */}
+      <div className="relative flex flex-col gap-0.5 px-3.5 pb-3">
         <span className="absolute bottom-3.5 left-[27px] top-3.5 w-px bg-line" />
 
         {run.plan.map((s) => {
           const glyph = STEP_GLYPH[s.status];
           const running = s.status === 'running';
-          return (
-            <div key={s.stepNo} className={`relative flex gap-2.5 rounded-lg p-2.5 ${running ? 'bg-accent-soft' : ''}`}>
+          /* The frame this step actually produced. A step with no frame yet —
+             still pending, or still generating — has nothing to take again, so
+             it stays a plain block rather than offering an action that would
+             fail. */
+          const frame = nodes.find(
+            (n) => n.kind === 'frame' && n.stepNo === s.stepNo && !n.discarded && !n.removedFromSequence && n.frameUrl,
+          );
+
+          const body = (
+            <>
               {running && <span className="absolute bottom-1.5 left-0 top-1.5 w-0.5 rounded bg-accent" />}
               <span
                 className={`z-10 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
@@ -403,7 +450,7 @@ function PlanPanel({
               >
                 {glyph?.icon}
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 {/* What this shot is OF, when it is not the person.
                     The plan is the first place the mix is visible, and the mix
                     is the thing that decides whether this comes out as an ad or
@@ -419,7 +466,35 @@ function PlanPanel({
                 <p className={`mt-0.5 text-xs leading-snug ${running ? 'text-ink-2' : s.status === 'pending' ? 'text-ink-4' : 'text-ink-3'}`}>
                   {s.rationale}
                 </p>
+                {frame && (
+                  <span className="mt-1 inline-block text-[11px] font-semibold text-accent-ink opacity-0 transition-opacity group-hover:opacity-100">
+                    Change this shot
+                  </span>
+                )}
               </div>
+            </>
+          );
+
+          /* Reading a shot and changing it are the same place.
+             There is no separate plan editor and no new writing surface: the
+             card opens the composer the canvas already uses, which is the one
+             that runs the user's words through Gemini before they become a
+             prompt. */
+          return frame ? (
+            <button
+              key={s.stepNo}
+              type="button"
+              onClick={() => onEditShot(frame)}
+              title="Change this shot — say what should be different"
+              className={`group relative flex w-full gap-2.5 rounded-lg p-2.5 text-left hover:bg-subtle ${
+                running ? 'bg-accent-soft' : ''
+              }`}
+            >
+              {body}
+            </button>
+          ) : (
+            <div key={s.stepNo} className={`group relative flex gap-2.5 rounded-lg p-2.5 ${running ? 'bg-accent-soft' : ''}`}>
+              {body}
             </div>
           );
         })}
@@ -792,8 +867,16 @@ function Inspector({
       </div>
 
       {/* shrink-0: the action bar is the point of the panel and must not be
-          the thing that gets squeezed when the notes above it run long. */}
-      <div className="flex shrink-0 flex-col gap-2 border-t border-line px-[18px] py-3.5">
+          the thing that gets squeezed when the notes above it run long.
+          max-h + its own scroller so it YIELDS rather than overflows. For a
+          frame node this bar is 456px of controls — verdict buttons, the
+          sequence panel, the engine picker, the render button — and on a short
+          window that plus the header exceeds the pane, at which point a
+          shrink-0 box simply hangs out of an aside with `overflow: visible`
+          inside a shell that clips. Measured: below about 573px of viewport the
+          Render button was cut off with nothing anywhere able to scroll to it.
+          Laptops with browser chrome on a 13" screen land near there. */}
+      <div className="flex max-h-[62%] shrink-0 flex-col gap-2 overflow-y-auto border-t border-line px-[18px] py-3.5">
         {(error || clipError) && <p className="text-[12.5px] text-crit-ink">{error ?? clipError}</p>}
 
         {/* The human verdict. The critic catches gross identity swaps but not
@@ -1030,7 +1113,10 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
     <div
       role="dialog"
       aria-modal="false"
-      aria-label={`Regenerate step ${node.stepNo}`}
+      /* Matches the visible heading. A screen reader was announcing "Regenerate
+         step 3" for a panel titled "Another take" — the old name surviving where
+         it is least likely to be noticed. */
+      aria-label={`Another take · step ${node.stepNo}`}
       className="rs-enter absolute inset-x-3 top-4 z-40 rounded-card border border-line bg-panel p-4 shadow-[0_22px_50px_-16px_rgba(0,0,0,0.45)] sm:inset-x-auto sm:right-4 sm:w-[420px]"
     >
       <div className="flex items-start justify-between gap-3">

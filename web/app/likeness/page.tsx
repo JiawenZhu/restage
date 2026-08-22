@@ -39,7 +39,8 @@ const POINTS = [
 export default function Likeness() {
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-[720px] flex-1 overflow-y-auto px-6 py-14">
+      {/* See the note on /library: the document scrolls here, not this box. */}
+      <div className="mx-auto w-full max-w-[720px] flex-1 px-6 py-14">
         <h1 className="text-[32px] font-bold tracking-[-0.025em]">Your likeness</h1>
         <p className="mt-2.5 text-[15px] leading-relaxed text-ink-2">
           This product works by putting your face in an advert. That deserves plain answers, so these describe what

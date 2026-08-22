@@ -198,7 +198,11 @@ export default function Library() {
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-[1180px] flex-1 overflow-y-auto px-8 py-10">
+      {/* No overflow-y-auto: this shell is `min-h-screen`, so the DOCUMENT is the
+          scroller and a nested one here never engages. Restore it if this route
+          is ever switched to <AppShell fill> — under `fill` the shell gets a
+          definite height at lg and this becomes the only thing that can scroll. */}
+      <div className="mx-auto w-full max-w-[1180px] flex-1 px-8 py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-[30px] font-semibold tracking-[-0.02em]">Library</h1>

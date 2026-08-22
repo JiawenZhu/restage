@@ -639,6 +639,16 @@ function Inspector({
                 Judged against: <span className="text-ink-2">{node.criticRubric}</span>
               </p>
             )}
+            {/* What moved that nobody asked to move. This is the difference
+                between "the agent retried, who knows why" and a reason — and
+                on a storyboard it is usually the reason the six frames stopped
+                looking like one take. */}
+            {node.continuityHeld === false && node.continuityBreaks && (
+              <p className="mt-2.5 border-t border-line pt-2.5 text-xs leading-relaxed text-warn-ink">
+                <span className="font-semibold">Drifted from the frame before:</span>{' '}
+                <span className="text-ink-2">{node.continuityBreaks}</span>
+              </p>
+            )}
           </div>
         )}
       </div>

@@ -60,9 +60,58 @@ export const OUTPUT_RULES =
   'Photorealistic. Authentic creator content, not a stock photo or a studio ad. ' +
   'No text, no captions, no logos, no watermarks.';
 
-/** Everything, for a still frame. */
-export function stillDirection(): string {
+/**
+ * The FIRST frame, where the look is being established.
+ *
+ * This is the only place FLATTERING_CAMERA belongs. It is a hard, absolute
+ * recipe — 85mm, camera slightly above eye level, soft key at 45 degrees — and
+ * a recipe is the right thing to give a shot that does not exist yet.
+ */
+export function establishingDirection(): string {
   return `${IDENTITY_LOCK}\n${FLATTERING_CAMERA}\n${OUTPUT_RULES}`;
+}
+
+/**
+ * Every LATER frame, which is an edit of the frame before it.
+ *
+ * THE BUG THIS EXISTS TO FIX: continuation steps were also given
+ * FLATTERING_CAMERA. So the same prompt said, in consecutive sentences, "keep
+ * the camera position and lighting of the image you are editing unchanged" and
+ * "use an 85mm lens, camera slightly above eye level, soft key light at 45
+ * degrees with a catchlight in the eyes". Those are different instructions, and
+ * the recipe was re-asserted on every single step — so the model re-framed and
+ * re-lit each time, which is exactly the frame-to-frame pop that made a
+ * six-frame storyboard look like six unrelated photographs.
+ *
+ * It also made whole categories of planned step impossible by construction: a
+ * step that asks to pull wide, or to crop in, or to move to a window, cannot be
+ * carried out by a prompt that simultaneously demands a fixed portrait setup.
+ *
+ * The look is not specified here because it is already IN the image being
+ * edited. What replaces it is a lock: whatever that image does, keep doing.
+ */
+export function continuationDirection(): string {
+  return (
+    `${IDENTITY_LOCK}\n` +
+    'CONTINUITY: The FIRST image is this shot as it already exists, and it is ' +
+    'the reference for everything the instruction does not name. Its camera ' +
+    'position, focal length, framing, key-light direction, colour temperature ' +
+    'and exposure are FIXED — reproduce them exactly. The location, the ' +
+    'furniture, the background, the clothing and the props are FIXED. This is ' +
+    'the same continuous take a moment later, not a new photograph of the same ' +
+    'person: change only what the instruction names, and change nothing else.\n' +
+    `${OUTPUT_RULES}`
+  );
+}
+
+/**
+ * @deprecated Say which of the two cases you mean — establishingDirection() for
+ * the opening frame, continuationDirection() for an edit of an existing one.
+ * One shared "still" direction is what let the camera recipe leak into every
+ * continuation step.
+ */
+export function stillDirection(): string {
+  return establishingDirection();
 }
 
 /** Everything, for a video segment, where drift across time is the added risk. */
@@ -74,3 +123,22 @@ export function motionDirection(): string {
     `${OUTPUT_RULES}`
   );
 }
+
+/*
+ * The dedicated negative channel.
+ *
+ * These rules were being carried as negations inside the POSITIVE prompt —
+ * "no warping", "NO exaggerated facial grimacing", "NO facial shape
+ * deformation" — which is the one construction a diffusion model is least
+ * reliable at honouring, because the tokens it is being told to avoid are the
+ * tokens it is being conditioned on. Veo takes a negativePrompt parameter and
+ * it was simply never sent.
+ *
+ * Kept short and concrete. A long negative prompt starts removing things nobody
+ * asked to remove.
+ */
+export const VIDEO_NEGATIVE_PROMPT =
+  'blurry, out of focus, distorted face, warped features, morphing face, ' +
+  'face drift between frames, rubbery skin, waxy plastic skin, extra fingers, ' +
+  'deformed hands, exaggerated grimace, stretched jaw, wide-angle lens ' +
+  'distortion, harsh overhead lighting, text, captions, subtitles, watermark, logo';

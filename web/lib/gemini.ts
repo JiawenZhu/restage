@@ -17,6 +17,7 @@ if (typeof window !== 'undefined') {
 }
 
 import { getTemplateById } from './templates';
+import { VIDEO_NEGATIVE_PROMPT } from './look';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -110,6 +111,41 @@ function normalizeVeoDuration(sec?: number): number {
   return valid.reduce((prev, curr) => (Math.abs(curr - sec) < Math.abs(prev - sec) ? curr : prev), 8);
 }
 
+/*
+ * Ask for the higher resolution when the clip is long enough to be allowed it.
+ *
+ * `resolution` was never sent, so every clip this product has ever made came
+ * back at the 720p default — while the prompt opened with the words "Cinematic
+ * 4K UGC video clip". Prompt text does not change the output size; the
+ * parameter does, and there wasn't one.
+ *
+ * The floor is real and worth respecting rather than discovering in production.
+ * The API refuses 1080p at anything under the full eight seconds, and refuses
+ * it during REQUEST VALIDATION, before quota is even consulted:
+ *
+ *   durationSeconds 4 → "1080p is not supported for a duration of 4 seconds."
+ *   durationSeconds 6 → "1080p is not supported for a duration of 6 seconds."
+ *   durationSeconds 8 → accepted
+ *
+ * Both of those were measured, and the second one matters: 6 looks like it
+ * ought to work, and a threshold written from the 4-second error alone would
+ * have turned every six-second shot into a hard 400. A sequence divides the
+ * chosen length across its shots, so short shots are the normal case on a
+ * multi-shot ad — this has to degrade, not fail.
+ *
+ * WHAT IS NOT VERIFIED: that 1080p is actually honoured. The account's video
+ * quota ran out before a finished 1080p clip could be measured, so the evidence
+ * stops at "the API accepts it". That distinction is worth keeping in view,
+ * because the sibling engine in this file does exactly the dishonest version —
+ * gemini-omni-flash-preview validates response_format.resolution against a list
+ * and then returns 720x1280 whatever you ask for. If Veo turns out to behave the
+ * same way, this costs nothing and changes nothing; it is still the correct
+ * request to be making.
+ */
+function veoResolution(seconds: number): '720p' | '1080p' {
+  return seconds >= MAX_CLIP_SECONDS ? '1080p' : '720p';
+}
+
 export async function submitRender(req: RenderRequest): Promise<{ operation: string }> {
   const instance: Record<string, unknown> = { prompt: req.prompt };
   if (req.firstFrame) {
@@ -119,6 +155,8 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
     };
   }
 
+  const seconds = normalizeVeoDuration(req.durationSeconds);
+
   const res = await fetch(`${BASE}/models/${VIDEO_MODEL}:predictLongRunning?key=${key()}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -126,7 +164,13 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
       instances: [instance],
       parameters: {
         aspectRatio: req.aspect,
-        durationSeconds: normalizeVeoDuration(req.durationSeconds),
+        durationSeconds: seconds,
+        resolution: veoResolution(seconds),
+        /* The artefact rules were being written as negations inside the positive
+           prompt — "no warping", "NO facial shape deformation" — which is the
+           one place a diffusion model reliably mishandles them. There is a
+           dedicated channel for this and it was unused. */
+        negativePrompt: VIDEO_NEGATIVE_PROMPT,
       },
     }),
   });
@@ -477,6 +521,21 @@ THEN decide the verdict for the edit itself:
   partial — the change happened but overshot or lost something
   failed  — the change did not happen, or made the frame worse
 
+THEN, separately, judge CONTINUITY — but only when you are told this frame is a
+continuation. Each step edits the frame before it, so the six frames of a run
+are meant to read as one continuous take: the same person, in the same room, in
+the same clothes, under the same light, from the same camera. The instruction
+named ONE change. Anything else that moved is a defect, however good it looks.
+
+List in continuityBreaks everything that differs between BEFORE and AFTER that
+the instruction did not ask for — clothing, room, furniture, background, props,
+time of day, key-light direction or colour, lens or framing or camera height.
+Set continuityHeld false if that list has anything real in it.
+
+This matters more than it looks. A drifted frame becomes the base that every
+later step edits from, so a change nobody asked for stops being a defect and
+becomes the ground truth the rest of the run is judged against.
+
 Write notes in your own voice, first person, quoting what you actually see. Be
 specific about the pixels: "the shadow under the jaw is gone" beats "lighting
 improved". Say what is still wrong even when the verdict is met.
@@ -506,6 +565,10 @@ export interface Critique {
   worthRetry: boolean;
   /** What the retry should do differently. Empty when worthRetry is false. */
   retryHint: string;
+  /** Did everything the instruction did NOT name stay put? */
+  continuityHeld: boolean;
+  /** What drifted that nobody asked to drift. Empty when continuity held. */
+  continuityBreaks: string;
 }
 
 export type Verdict = 'met' | 'partial' | 'failed';
@@ -518,6 +581,9 @@ export async function critique(args: {
   avatar: { data: Buffer | Uint8Array; mimeType: string };
   before: { data: Buffer | Uint8Array; mimeType: string };
   after: { data: Buffer | Uint8Array; mimeType: string };
+  /** False for the opening frame, where BEFORE is the enrolment photo and there
+   *  is no previous shot to be continuous with. */
+  isContinuation?: boolean;
 }): Promise<Critique> {
   const res = await fetch(`${BASE}/models/${TEXT_MODEL}:generateContent?key=${key()}`, {
     method: 'POST',
@@ -533,7 +599,14 @@ export async function critique(args: {
             { inlineData: { mimeType: args.before.mimeType, data: Buffer.from(args.before.data).toString('base64') } },
             { text: 'AFTER:' },
             { inlineData: { mimeType: args.after.mimeType, data: Buffer.from(args.after.data).toString('base64') } },
-            { text: `The instruction was: ${args.instruction}\nThe reason given was: ${args.rationale}\n\nJudge it.` },
+            {
+              text:
+                `The instruction was: ${args.instruction}\nThe reason given was: ${args.rationale}\n\n` +
+                (args.isContinuation
+                  ? 'AFTER is an edit of BEFORE and must be continuous with it. Judge the edit, the identity, and the continuity.'
+                  : 'This is the OPENING frame, so BEFORE is the enrolment photo and there is nothing to be continuous with. ' +
+                    'Set continuityHeld true and leave continuityBreaks empty. Judge the edit and the identity.'),
+            },
           ],
         },
       ],
@@ -548,8 +621,10 @@ export async function critique(args: {
             faceMatches: { type: 'boolean', description: 'is the person in AFTER the same person as the enrolment photo — strict' },
             worthRetry: { type: 'boolean' },
             retryHint: { type: 'string', description: 'what a retry should do differently; empty if worthRetry is false' },
+            continuityHeld: { type: 'boolean', description: 'did everything the instruction did not name stay put; true for an opening frame' },
+            continuityBreaks: { type: 'string', description: 'everything that changed that the instruction did not ask for; empty if none' },
           },
-          required: ['verdict', 'notes', 'rubric', 'faceMatches', 'worthRetry', 'retryHint'],
+          required: ['verdict', 'notes', 'rubric', 'faceMatches', 'worthRetry', 'retryHint', 'continuityHeld', 'continuityBreaks'],
         },
       },
     }),

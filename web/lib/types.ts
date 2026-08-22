@@ -62,6 +62,10 @@ export interface TreeNode {
   criticNotes?: string;
   /** What the critic was asked to judge against. */
   criticRubric?: string;
+  /** Did everything the instruction did not name stay put between frames? */
+  continuityHeld?: boolean;
+  /** What drifted that nobody asked to drift. */
+  continuityBreaks?: string | null;
 
   /** Set on a discarded attempt so it can be drawn stubbed off its parent's edge. */
   discarded?: boolean;

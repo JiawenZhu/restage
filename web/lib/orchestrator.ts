@@ -20,7 +20,7 @@ import { adminDb, adminStorage } from './firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { critique, generateFrame, planRun, verifyIdentity, writeScript } from './gemini';
 import type { Aspect, PlanStep } from './types';
-import { stillDirection } from './look';
+import { continuationDirection, establishingDirection } from './look';
 
 /** One retry. A second failure keeps both attempts visible and moves on, because
  *  a loop that retries forever is a bill, not a feature. */
@@ -459,13 +459,13 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             : [parentImage, avatar, ...extraViews];
           const prompt = isFirst
             ? `Build the opening frame of a high-converting cinematic UGC ad, ${args.aspect}. ` +
-              `${stillDirection()}\n` +
+              `${establishingDirection()}\n` +
               `${step.instruction}\n\n` +
               `${retryNote}`
             : `The FIRST image is the current frame. Apply exactly one change to it:\n` +
               `${step.instruction}\n\n` +
               `Keep everything else in the frame — the scene, clothing, camera position and props — unchanged. ` +
-              `The OTHER images are the identity references, including the profile captures.\n${stillDirection()}${retryNote}`;
+              `The OTHER images are the identity references, including the profile captures.\n${continuationDirection()}${retryNote}`;
 
           const frame = await generateFrame({ prompt, aspect: args.aspect, refs });
           const url = await uploadToStorage(
@@ -510,6 +510,9 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
               avatar,
               before: parentImage,
               after: { data: frame.bytes, mimeType: frame.mimeType },
+              // On the opening frame `before` IS the enrolment photo, so there
+              // is no previous shot to be continuous with.
+              isContinuation: !isFirst,
             }),
             verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType }, extraViews),
           ]);
@@ -536,8 +539,25 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
           // face-embedding comparison (ArcFace-class), which is the Python
           // worker's first job. Until then the human Reject is the last line.
           const wrongFace = !identity.samePerson || !verdict.faceMatches;
+          /*
+           * A frame that drifted counts as unsatisfactory even when the edit
+           * itself landed perfectly.
+           *
+           * Nothing used to ask this question at all, so a frame that carried
+           * out its instruction AND moved the kitchen to a living room, swapped
+           * the shirt, and turned morning into dusk scored `met` — and was then
+           * adopted as `parentImage` for every later step. Each subsequent
+           * critic compared against that drifted frame rather than the scene the
+           * run started in, so the drift stopped being a defect and became the
+           * ground truth. That is the mechanism behind six frames that do not
+           * look like one continuous take.
+           */
+          const drifted = !isFirst && verdict.continuityHeld === false;
           const unsatisfactory =
-            wrongFace || verdict.verdict === 'failed' || (verdict.verdict === 'partial' && verdict.worthRetry);
+            wrongFace ||
+            drifted ||
+            verdict.verdict === 'failed' ||
+            (verdict.verdict === 'partial' && verdict.worthRetry);
           /*
            * A `failed` verdict earns a retry on its own.
            *
@@ -550,7 +570,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
            */
           const canRetry =
             unsatisfactory &&
-            (wrongFace || verdict.worthRetry || verdict.verdict === 'failed') &&
+            (wrongFace || drifted || verdict.worthRetry || verdict.verdict === 'failed') &&
             attempt < MAX_RETRIES_PER_STEP;
 
           await nodeRef.update({
@@ -558,6 +578,8 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             verdict: verdict.verdict,
             criticNotes: verdict.notes,
             criticRubric: verdict.rubric,
+            continuityHeld: verdict.continuityHeld ?? true,
+            continuityBreaks: verdict.continuityBreaks || null,
             // A rejected attempt stays on the canvas. Hiding it would make the
             // tree tidier and delete the evidence that the agent self-corrected.
             status: wrongFace || verdict.verdict === 'failed' ? 'failed' : verdict.verdict === 'partial' ? 'partial' : 'achieved',
@@ -571,7 +593,16 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             notes: verdict.notes,
             retryHint: wrongFace
               ? `The face no longer matches the enrolled person. Differences seen: ${identity.differences || 'face geometry changed'}. Restore the exact face from the identity reference. ${verdict.retryHint}`.trim()
-              : verdict.retryHint,
+              : drifted
+                ? /* Name the specific thing that moved. A retry told only "keep
+                     everything else the same" has already been given that
+                     instruction once and did this anyway; the drift list is the
+                     one piece of information the second attempt does not
+                     already have. */
+                  `These changed and should not have: ${verdict.continuityBreaks}. ` +
+                  `Reproduce the FIRST image exactly in those respects — same room, same clothing, ` +
+                  `same light, same camera — and apply only the named change. ${verdict.retryHint}`.trim()
+                : verdict.retryHint,
           };
 
           if (!unsatisfactory) {
@@ -726,8 +757,8 @@ export async function regenerateNode(args: {
     try {
       const isFromAvatar = parentId === 'root';
       const prompt = isFromAvatar
-        ? `Build the opening frame of a UGC ad, ${run.aspect}.\n${args.instruction}\n\n${stillDirection()}`
-        : `The FIRST image is the current frame. Apply exactly one change to it:\n${args.instruction}\n\nKeep everything else in the frame unchanged. The OTHER images are the identity references.\n${stillDirection()}`;
+        ? `Build the opening frame of a UGC ad, ${run.aspect}.\n${args.instruction}\n\n${establishingDirection()}`
+        : `The FIRST image is the current frame. Apply exactly one change to it:\n${args.instruction}\n\nKeep everything else in the frame unchanged. The OTHER images are the identity references.\n${continuationDirection()}`;
 
       const frame = await generateFrame({
         prompt,
@@ -822,9 +853,9 @@ export async function rebuildStaleSteps(runId: string, uid: string): Promise<num
         const isFirst = parentId === 'root';
 
         const prompt = isFirst
-          ? `Build the opening frame of a UGC ad, ${run.aspect}.\n${instruction}\n\n${stillDirection()}`
+          ? `Build the opening frame of a UGC ad, ${run.aspect}.\n${instruction}\n\n${establishingDirection()}`
           : `The FIRST image is the current frame. Apply exactly one change to it:\n${instruction}\n\n` +
-            `Keep everything else in the frame unchanged. The OTHER images are the identity references.\n${stillDirection()}`;
+            `Keep everything else in the frame unchanged. The OTHER images are the identity references.\n${continuationDirection()}`;
 
         const frame = await generateFrame({
           prompt,

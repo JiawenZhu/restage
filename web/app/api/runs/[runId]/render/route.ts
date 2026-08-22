@@ -480,8 +480,28 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
                 '-c:v', 'copy',
                 '-c:a', 'aac',
                 '-b:a', '192k',
+                /*
+                 * apad + -shortest, and no -t.
+                 *
+                 * The clamp here was `-t min(MAX_CLIP_SECONDS, run.seconds)`,
+                 * and MAX_CLIP_SECONDS is 8 — so the min() could never exceed
+                 * 8 and every clip carrying a voiceover was cut to eight
+                 * seconds no matter what was asked for. A 24-second ad was
+                 * stitched correctly from three segments and then thrown away
+                 * two thirds of the way through. Runs almost always have a
+                 * voiceover, so this was the normal path, not an edge case. It
+                 * also read run.seconds, the length chosen before the run,
+                 * rather than the length actually being rendered.
+                 *
+                 * `apad` extends the audio indefinitely and `-shortest` then
+                 * ends the file with the video — which is the stated intent,
+                 * "the video governs the length; the audio is padded with
+                 * silence to match". -shortest alone truncated the video back
+                 * when there was no apad to outlast it; together they are the
+                 * standard idiom and need no fixed bound at all.
+                 */
                 '-af', 'apad',
-                '-t', String(Math.min(MAX_CLIP_SECONDS, run.seconds || MAX_CLIP_SECONDS)),
+                '-shortest',
                 outputPath,
               ]);
 

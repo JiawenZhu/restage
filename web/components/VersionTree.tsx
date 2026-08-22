@@ -655,7 +655,7 @@ export function VersionTree({
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
                 {confirmDelete === target.id
                   ? `Delete ${target.kind === 'video' ? 'this clip' : 'it'} for good — click again`
-                  : 'Delete permanently…'}
+                  : 'Delete permanently'}
               </button>
             )}
 
@@ -709,7 +709,7 @@ export function VersionTree({
                     button, so it gets the same name. Two names for one action
                     is a defect; "from same base" is true but belongs in the
                     tooltip and the panel, which both already say it. */}
-                Another take…
+                Another take
               </button>
             )}
             <button type="button" className={item} onClick={() => { setMenu(null); onSelect?.(target.id); }}>

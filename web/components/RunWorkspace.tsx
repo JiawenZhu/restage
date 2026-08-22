@@ -847,10 +847,16 @@ function Inspector({
                 video product. DaVinci Resolve's Take Selector holds several
                 takes of one clip, switchable, nothing destroyed — which is this
                 data model precisely: siblings sharing a parentId and a stepNo.
-                The ellipsis is the codebase's existing signal that a panel opens
-                rather than something happening immediately.
+                No ellipsis. That was in the first version of this label, on
+                the reasoning that "…" announces a panel — and an audit of every
+                trailing ellipsis in this codebase says the opposite. Sixteen of
+                them are busy states (Starting…, Rendering…, Saving…, Listening…,
+                Decomposing the goal…) and exactly one was not, which was the
+                string being replaced. Here "…" reads as IN PROGRESS, so
+                "Another take…" would announce that a take is being made right
+                now, which is the one thing this button does not do.
               */}
-              Another take…
+              Another take
             </button>
           </div>
         )}

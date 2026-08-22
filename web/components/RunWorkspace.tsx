@@ -26,6 +26,33 @@ const EDIT_KEYWORDS = [
 export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
   const [pinned, setPinned] = useState<string | null>(null);
   const [regenTarget, setRegenTarget] = useState<TreeNode | null>(null);
+  /* What a swap or a removal invalidated, and what rebuilding it would cost.
+     Held here rather than acted on, because every rebuilt step is a paid
+     generation and the decision to spend belongs to the person. */
+  const [pendingRebuild, setPendingRebuild] = useState<{ steps: number[]; label: string } | null>(null);
+  const [busySeq, setBusySeq] = useState(false);
+  const { user } = useUser();
+
+  async function sequenceAction(body: Record<string, unknown>) {
+    if (!user) return;
+    setBusySeq(true);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/runs/${run.id}/sequence`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'that did not work');
+      if (json.staleCount > 0) setPendingRebuild({ steps: json.staleSteps, label: json.label });
+      else setPendingRebuild(null);
+    } catch (e) {
+      console.error('[sequence]', e);
+    } finally {
+      setBusySeq(false);
+    }
+  }
 
   /*
    * Until the user pins one, follow the agent — but to the newest node that has
@@ -57,8 +84,27 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
           selectedId={selectedId}
           onSelect={setPinned}
           onRegenerate={(id) => setRegenTarget(nodes.find((n) => n.id === id) ?? null)}
+          onSwapIn={(id) => {
+            // The alternate replaces whichever frame sits at its step.
+            const alt = nodes.find((n) => n.id === id);
+            const target = nodes.find(
+              (n) => n.id !== id && n.kind === 'frame' && n.parentId === alt?.parentId && !n.discarded,
+            );
+            if (alt && target) void sequenceAction({ action: 'swap', targetId: target.id, replacementId: id });
+          }}
+          onRemove={(id) => void sequenceAction({ action: 'remove', nodeId: id })}
           storageKey={run.id}
         />
+
+        {pendingRebuild && (
+          <RebuildBar
+            steps={pendingRebuild.steps}
+            label={pendingRebuild.label}
+            busy={busySeq}
+            onRebuild={() => void sequenceAction({ action: 'rebuild' }).then(() => setPendingRebuild(null))}
+            onDismiss={() => setPendingRebuild(null)}
+          />
+        )}
         {regenTarget && (
           <RegeneratePanel run={run} node={regenTarget} onClose={() => setRegenTarget(null)} />
         )}
@@ -274,6 +320,12 @@ function Inspector({
    * navigated to a 401 JSON page. So the token is used here, once, to exchange
    * it for a short-lived R2 URL the element can actually load.
    */
+  /* Defaults to the length chosen on /studio before the run. The right length
+     is only really knowable once the frames exist, so it can be changed here —
+     but the earlier choice is the starting point, not a constant. */
+  const [lengthChoice, setLengthChoice] = useState<4 | 8 | 16 | 24 | 32>(
+    ([4, 8, 16, 24, 32] as const).includes(run.seconds as 4) ? (run.seconds as 4) : 8,
+  );
   const [playable, setPlayable] = useState<{ nodeId: string; url: string } | null>(null);
   const [clipError, setClipError] = useState<string | null>(null);
   const videoNodeId = node?.kind === 'video' && node.status === 'achieved' ? node.id : null;
@@ -367,10 +419,20 @@ function Inspector({
   const alreadyRendered = nodes.some(
     (n) => n.kind === 'video' && n.parentId === node?.id && n.status !== 'failed',
   );
+
+  /* The frames in the sequence: those something else was built on top of, plus
+     the last one. An alternate is a frame nothing continued from. */
+  const parents = new Set(nodes.filter((n) => n.kind === 'frame').map((n) => n.parentId).filter(Boolean) as string[]);
+  const sequence = nodes.filter(
+    (n) => n.kind === 'frame' && n.frameUrl && !n.discarded && !n.removedFromSequence && n.status !== 'rejected',
+  );
+  const sequenceLength = sequence.filter((n) => parents.has(n.id) || n.id === sequence[sequence.length - 1]?.id).length;
+  const staleInSequence = sequence.some((n) => n.stale);
+  const perShot = Math.max(4, Math.min(8, Math.round(lengthChoice / Math.max(1, sequenceLength))));
   const canRender =
     node.kind === 'frame' && !!node.frameUrl && !rendering && !alreadyRendered && run.status !== 'planning';
 
-  async function renderVideo() {
+  async function renderVideo(mode: 'frame' | 'sequence' = 'frame') {
     if (!user || !node) return;
     setBusy(true);
     setError(null);
@@ -379,7 +441,11 @@ function Inspector({
       const res = await fetch(`/api/runs/${run.id}/render`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({ nodeId: node.id }),
+        body: JSON.stringify(
+          mode === 'sequence'
+            ? { mode: 'sequence', seconds: lengthChoice }
+            : { mode: 'frame', nodeId: node.id, seconds: lengthChoice },
+        ),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'render failed to start');
@@ -518,6 +584,45 @@ function Inspector({
           </div>
         )}
 
+        {/* The sequence is the storyboard: every frame animated in order, which
+            is a multi-shot ad rather than one held moment. */}
+        {node.kind === 'frame' && sequenceLength > 1 && !rendering && !alreadyRendered && (
+          <div className="rounded-card border border-line bg-elevated p-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-[11px] font-bold tracking-[0.1em] text-ink-3">THE WHOLE SEQUENCE</p>
+              <span className="tnum text-[11px] text-ink-4">{sequenceLength} shots</span>
+            </div>
+            <p className="mt-1.5 text-[12.5px] leading-snug text-ink-2">
+              Animate every frame in order — {perShot}s each, about {sequenceLength * perShot}s in total.
+            </p>
+
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              {([8, 16, 24, 32] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setLengthChoice(n)}
+                  className={`rounded-chip px-2.5 py-1 text-[12px] font-medium ${
+                    lengthChoice === n ? 'bg-primary text-primary-ink' : 'border border-line-strong text-ink-2'
+                  }`}
+                >
+                  {n}s
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              disabled={busy || !user || staleInSequence}
+              onClick={() => renderVideo('sequence')}
+              title={staleInSequence ? 'Rebuild the out-of-date steps first' : undefined}
+              className="mt-3 w-full rounded-lg bg-accent-strong py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
+            >
+              {staleInSequence ? 'Rebuild the sequence first' : `Render all ${sequenceLength} shots`}
+            </button>
+          </div>
+        )}
+
         {node.kind === 'video' && node.status === 'achieved' ? (
           <button
             type="button"
@@ -531,7 +636,7 @@ function Inspector({
           <button
             type="button"
             disabled={!canRender || busy || !user}
-            onClick={renderVideo}
+            onClick={() => renderVideo('frame')}
             title={!user ? 'Sign in first' : undefined}
             className="flex items-center justify-center gap-2 rounded-lg bg-primary py-3 text-[13.5px] font-semibold text-primary-ink disabled:opacity-40"
           >
@@ -628,6 +733,58 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-[13.5px] font-semibold text-primary-ink disabled:opacity-40"
       >
         {busy ? 'Starting…' : 'Generate new attempt'}
+      </button>
+    </div>
+  );
+}
+
+
+/*
+ * What the change costs, before it is spent.
+ *
+ * Swapping a frame invalidates everything built on top of it, and rebuilding
+ * those steps is a paid generation each. Doing it automatically would be
+ * smoother and would spend somebody's money without asking, so the count and
+ * the time sit in front of the button.
+ */
+function RebuildBar({
+  steps,
+  label,
+  busy,
+  onRebuild,
+  onDismiss,
+}: {
+  steps: number[];
+  label: string;
+  busy: boolean;
+  onRebuild: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="rs-enter rs-tint-warn absolute inset-x-3 bottom-4 z-40 flex flex-wrap items-center gap-3 rounded-card border border-warn/45 p-3.5 shadow-[0_18px_40px_-18px_rgba(0,0,0,0.4)] sm:inset-x-auto sm:left-1/2 sm:w-[560px] sm:-translate-x-1/2">
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-bold tracking-[0.1em] text-warn-ink">
+          {steps.length} STEP{steps.length === 1 ? '' : 'S'} NOW OUT OF DATE
+        </p>
+        <p className="mt-1 text-[12.5px] leading-snug text-ink-2">
+          Step{steps.length === 1 ? '' : 's'} {steps.join(', ')} {steps.length === 1 ? 'was' : 'were'} built on the
+          frame you changed, so {steps.length === 1 ? 'it' : 'they'} no longer follow from it. Rebuilding takes {label}.
+        </p>
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onRebuild}
+        className="rounded-lg bg-primary px-3.5 py-2 text-[12.5px] font-semibold text-primary-ink disabled:opacity-50"
+      >
+        {busy ? 'Starting…' : 'Rebuild them'}
+      </button>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="rounded-lg border border-line-strong px-3.5 py-2 text-[12.5px] font-semibold text-ink-2"
+      >
+        Leave it
       </button>
     </div>
   );

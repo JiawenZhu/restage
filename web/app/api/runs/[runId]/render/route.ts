@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { adminDb, requireUid } from '@/lib/firebaseAdmin';
 import { downloadRendered, MAX_CLIP_SECONDS, MIN_CLIP_SECONDS, pollRender, submitRender } from '@/lib/gemini';
 import { lastFrameOf, segmentsFor, stitch } from '@/lib/stitch';
+import { lineageOf, shotPlan, type LineageNode } from '@/lib/lineage';
 import { motionDirection } from '@/lib/look';
 import { canFinish, finishAd } from '@/lib/finishAd';
 import { timeCaptions, wavDurationSeconds } from '@/lib/captions';
@@ -20,7 +21,23 @@ import { putVideo, signedVideoUrl, videoKey } from '@/lib/r2';
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-const Body = z.object({ nodeId: z.string().min(1) });
+/*
+ * Render one frame, or the whole sequence.
+ *
+ * A single frame animated for eight seconds is one shot. The SEQUENCE is the
+ * storyboard the agent reasoned about — six frames that each edit the one
+ * before, which is why they read as a continuous take — and animating each of
+ * them in order produces a multi-shot ad rather than a single held moment.
+ *
+ * `seconds` overrides the length chosen on /studio. The choice made before the
+ * run should carry through by default; being able to change it here matters
+ * because the right length is only really knowable once the frames exist.
+ */
+const Body = z.object({
+  nodeId: z.string().min(1).optional(),
+  mode: z.enum(['frame', 'sequence']).default('frame'),
+  seconds: z.union([z.literal(4), z.literal(8), z.literal(16), z.literal(24), z.literal(32)]).optional(),
+});
 
 async function resolveImage(u: string): Promise<{ mimeType: string; data: Buffer } | null> {
   if (u.startsWith('data:')) {
@@ -116,12 +133,47 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     return NextResponse.json({ error: 'the plan is still being written' }, { status: 409 });
   }
 
-  const frameSnap = await runRef.collection('nodes').doc(parsed.data.nodeId).get();
-  const frame = frameSnap.data();
-  if (!frameSnap.exists || frame?.kind !== 'frame' || !frame.frameUrl) {
-    return NextResponse.json({ error: 'that node is not a renderable frame' }, { status: 400 });
+  /*
+   * The shots to animate.
+   *
+   * Sequence mode walks the lineage — the chain of frames each edited from the
+   * last — so the shots arrive in the order the plan intended. Frame mode is
+   * the single approved still, which is what this route did before.
+   */
+  const allNodes = (await runRef.collection('nodes').orderBy('createdAt').get()).docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Record<string, unknown>),
+  })) as LineageNode[];
+
+  let shots: { id: string; frameUrl: string; label?: string; instruction?: string }[];
+
+  if (parsed.data.mode === 'sequence') {
+    const chain = lineageOf(allNodes).filter((n) => n.frameUrl && !n.stale);
+    if (!chain.length) {
+      return NextResponse.json({ error: 'this run has no finished sequence to render' }, { status: 400 });
+    }
+    if (chain.some((n) => (n as { stale?: boolean }).stale)) {
+      return NextResponse.json({ error: 'rebuild the stale steps before rendering the sequence' }, { status: 409 });
+    }
+    shots = chain.map((n) => ({
+      id: n.id,
+      frameUrl: n.frameUrl!,
+      label: (n as { label?: string }).label,
+      instruction: n.instruction,
+    }));
+  } else {
+    if (!parsed.data.nodeId) return NextResponse.json({ error: 'nodeId is required' }, { status: 400 });
+    const frameSnap = await runRef.collection('nodes').doc(parsed.data.nodeId).get();
+    const frame = frameSnap.data();
+    if (!frameSnap.exists || frame?.kind !== 'frame' || !frame.frameUrl) {
+      return NextResponse.json({ error: 'that node is not a renderable frame' }, { status: 400 });
+    }
+    shots = [{ id: frameSnap.id, frameUrl: frame.frameUrl, label: frame.label, instruction: frame.instruction }];
   }
-  const firstFrame = await resolveImage(frame.frameUrl);
+
+  const frame = { label: shots[0].label, stepNo: 0 };
+  const frameSnap = { id: shots[shots.length - 1].id };
+  const firstFrame = await resolveImage(shots[0].frameUrl);
   if (!firstFrame) return NextResponse.json({ error: 'frame is not readable' }, { status: 400 });
 
   /*
@@ -145,60 +197,93 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
   // Only now, with the run claimed: a node created before the claim would have
   // to be deleted again on a refusal, flickering onto the live tree first.
   const videoRef = runRef.collection('nodes').doc();
+  const isSequence = parsed.data.mode === 'sequence';
   await videoRef.set({
     parentId: frameSnap.id,
-    stepNo: (frame.stepNo ?? 0) + 1,
+    stepNo: 99,
     kind: 'video',
     status: 'generating',
-    instruction: 'Render the approved frame to video with cinematic UGC camera motion',
-    rationale: 'The approved frame becomes frame one; everything the run built survives into motion.',
-    frameUrl: frame.frameUrl, // poster while the clip cooks
+    instruction: isSequence
+      ? `Render all ${shots.length} shots into one ad`
+      : 'Render this frame to video',
+    rationale: isSequence
+      ? 'Each frame in the sequence becomes a shot, in the order the plan set.'
+      : 'The approved frame becomes frame one; everything the run built survives into motion.',
+    frameUrl: shots[0].frameUrl, // poster while the clip cooks
+    shotCount: shots.length,
     createdAt: Date.now(),
   });
 
   void (async () => {
     try {
       /*
-       * One segment per 8 seconds, each starting where the last one stopped.
+       * The shots to render, and how long each one runs.
        *
-       * Veo tops out at 8s, so a 15 or 30 second ad is several renders joined.
-       * The chain is the product's own trick used on itself: Veo takes a FIRST
-       * FRAME, and the last frame of segment N is a perfectly good first frame
-       * for segment N+1 — the person, the room and the light carry across
-       * because the next segment literally begins where the previous one
-       * stopped, rather than being generated independently and cut together.
+       * SEQUENCE: every frame in the storyboard becomes its own shot, seeded by
+       * that frame. This is the multi-shot ad — the plan the agent reasoned
+       * about, animated in order — rather than one held moment.
        *
-       * Every segment is a paid render, so the node says how many there are and
-       * which one is running.
+       * FRAME: a single still, extended past the model's eight-second ceiling by
+       * chaining, where each segment starts on the last frame of the one before
+       * so the take stays continuous.
+       *
+       * Either way the LENGTH is the one chosen on /studio unless this request
+       * overrode it. Six shots of a 24-second ad are four seconds each; three
+       * shots of the same ad are eight. The model's floor is 4s, so a sequence
+       * long enough to push below it gets 4s shots and a longer total than
+       * asked — stated on the node rather than quietly applied.
        */
-      const wanted = Math.max(MIN_CLIP_SECONDS, run.seconds || MAX_CLIP_SECONDS);
-      const totalSegments = segmentsFor(wanted, MAX_CLIP_SECONDS);
-      const segments: Buffer[] = [];
-      let seedFrame = firstFrame;
+      const wanted = Math.max(MIN_CLIP_SECONDS, parsed.data.seconds ?? run.seconds ?? MAX_CLIP_SECONDS);
+      const plan = shotPlan(wanted, shots.length, MIN_CLIP_SECONDS, MAX_CLIP_SECONDS);
 
-      for (let seg = 0; seg < totalSegments; seg++) {
-        const remaining = wanted - seg * MAX_CLIP_SECONDS;
-        const thisLength = Math.min(MAX_CLIP_SECONDS, Math.max(MIN_CLIP_SECONDS, remaining));
+      type Segment = { seconds: number; seed: { data: Buffer; mimeType: string } | undefined; label?: string; continues: boolean };
+      const queue: Segment[] = [];
 
-        if (totalSegments > 1) {
-          await videoRef.update({
-            segmentIndex: seg + 1,
-            segmentCount: totalSegments,
-            rationale: `Segment ${seg + 1} of ${totalSegments}. Each one begins on the last frame of the one before it.`,
+      if (isSequence) {
+        for (const shot of shots) {
+          const seed = await resolveImage(shot.frameUrl);
+          queue.push({ seconds: plan.perShot, seed: seed ?? undefined, label: shot.label, continues: false });
+        }
+      } else {
+        const count = segmentsFor(wanted, MAX_CLIP_SECONDS);
+        for (let i = 0; i < count; i++) {
+          const remaining = wanted - i * MAX_CLIP_SECONDS;
+          queue.push({
+            seconds: Math.min(MAX_CLIP_SECONDS, Math.max(MIN_CLIP_SECONDS, remaining)),
+            seed: i === 0 ? firstFrame : undefined,   // later ones are seeded by the previous tail
+            continues: i > 0,
           });
         }
+      }
+
+      const segments: Buffer[] = [];
+      let carried = firstFrame;
+
+      for (let i = 0; i < queue.length; i++) {
+        const seg = queue[i];
+        const seed = seg.seed ?? carried;
+
+        await videoRef.update({
+          segmentIndex: i + 1,
+          segmentCount: queue.length,
+          rationale: isSequence
+            ? `Shot ${i + 1} of ${queue.length}${seg.label ? ` — ${seg.label}` : ''}.`
+            : `Segment ${i + 1} of ${queue.length}. Each one begins on the last frame of the one before it.`,
+        });
 
         const prompt = buildCinematicUgcVideoPrompt(
           run.goal,
-          frame.label,
+          seg.label ?? frame.label,
           run.aspect,
-          seg === 0 ? undefined : `This continues the same unbroken shot from the frame given. Do not cut, restart, or reframe.`,
+          seg.continues
+            ? 'This continues the same unbroken shot from the frame given. Do not cut, restart, or reframe.'
+            : undefined,
         );
 
         const { operation } = await submitRender({
-          durationSeconds: thisLength,
+          durationSeconds: seg.seconds,
           prompt,
-          firstFrame: seedFrame,
+          firstFrame: seed,
           aspect: run.aspect,
         });
 
@@ -206,13 +291,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
          * A transient poll failure is not a failed render.
          *
          * One network blip threw straight out of the loop and abandoned a Veo
-         * job that had already been submitted and paid for — the clip finished
-         * on Google's side and the user was told it failed. Only a real
+         * job that had already been submitted and paid for. Only a real
          * terminal error, or several consecutive failures, ends it now.
          */
         let uri: string | null = null;
         let consecutiveErrors = 0;
-        for (let i = 0; i < 60; i++) {
+        for (let k = 0; k < 60; k++) {
           await new Promise((r) => setTimeout(r, 5000));
           try {
             const st = await pollRender(operation);
@@ -228,16 +312,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
             console.warn('[render] transient poll failure', consecutiveErrors, pollErr);
           }
         }
-        if (!uri) throw new Error(`segment ${seg + 1} did not finish in five minutes`);
+        if (!uri) throw new Error(`shot ${i + 1} did not finish in five minutes`);
 
-        const segmentBytes = await downloadRendered(uri);
-        segments.push(segmentBytes);
+        const bytes = await downloadRendered(uri);
+        segments.push(bytes);
 
-        // Seed the next segment from where this one ended.
-        if (seg + 1 < totalSegments) seedFrame = await lastFrameOf(segmentBytes);
+        // Only the chained case needs a tail; a sequence shot has its own seed.
+        if (!isSequence && i + 1 < queue.length) carried = await lastFrameOf(bytes);
       }
 
-      let finalVideoBytes = await stitch(segments, totalSegments > 1 ? wanted : undefined);
+      let finalVideoBytes = await stitch(segments, isSequence ? undefined : (queue.length > 1 ? wanted : undefined));
 
       // ── Audio Muxing Pipeline ──
       // If voiceover audio exists on the run, mux it into the video with ffmpeg

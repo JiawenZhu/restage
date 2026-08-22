@@ -55,6 +55,8 @@ export function VersionTree({
   selectedId,
   onSelect,
   onRegenerate,
+  onSwapIn,
+  onRemove,
   storageKey,
 }: {
   nodes: TreeNode[];
@@ -63,6 +65,10 @@ export function VersionTree({
   onSelect?: (id: string) => void;
   /** Opens the regenerate panel for a node. Wired by the workspace. */
   onRegenerate?: (id: string) => void;
+  /** Put this frame into the sequence in place of the one it is an alternate of. */
+  onSwapIn?: (id: string) => void;
+  /** Take this frame out of the sequence. */
+  onRemove?: (id: string) => void;
   storageKey?: string;
 }) {
   const w = NODE_W[aspect];
@@ -154,6 +160,14 @@ export function VersionTree({
   };
 
   const laid = useMemo(() => flatten(layoutTree(nodes)), [nodes]);
+
+  /* Frames that something was built on top of are the sequence; the rest are
+     alternates. Drawn differently, because "which of these is the actual ad"
+     is the question the canvas most needs to answer. */
+  const inSequence = useMemo(() => {
+    const parents = new Set(nodes.filter((n) => n.kind === 'frame').map((n) => n.parentId).filter(Boolean) as string[]);
+    return parents;
+  }, [nodes]);
 
   const pos = useMemo(() => {
     const m = new Map<string, { x: number; y: number; w: number; h: number }>();
@@ -366,7 +380,9 @@ export function VersionTree({
               <span
                 className={`relative block h-full w-full overflow-hidden rounded-node border-2 bg-elevated ${STATUS_RING[n.status] ?? 'border-line'} ${
                   n.status === 'rejected' ? 'opacity-35 saturate-[0.15]' : ''
-                } ${n.discarded ? 'opacity-50 saturate-[0.3]' : ''} ${selected ? 'shadow-[0_10px_30px_-10px_rgba(0,0,0,0.45)]' : ''}`}
+                } ${n.discarded ? 'opacity-50 saturate-[0.3]' : ''} ${
+                  n.stale && !n.discarded ? 'opacity-60 saturate-[0.4]' : ''
+                } ${selected ? 'shadow-[0_10px_30px_-10px_rgba(0,0,0,0.45)]' : ''}`}
               >
                 {n.frameUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -429,6 +445,20 @@ export function VersionTree({
                   clip. It has its own mark now. */}
               {n.kind === 'video' && n.status === 'failed' && (
                 <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-crit-ink">render failed</span>
+              )}
+
+              {/* Its source changed underneath it: this step is an answer to a
+                  question that was withdrawn. */}
+              {n.stale && !n.discarded && (
+                <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-warn-ink">
+                  needs rebuilding
+                </span>
+              )}
+
+              {n.removedFromSequence && (
+                <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-ink-3">
+                  taken out
+                </span>
               )}
 
               {n.discarded && (
@@ -517,6 +547,24 @@ export function VersionTree({
             <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-bold tracking-[0.1em] text-ink-4">
               {target.kind === 'avatar' ? 'AVATAR' : target.kind === 'video' ? 'CLIP' : `STEP ${target.stepNo}${target.label ? ` · ${target.label}` : ''}`}
             </p>
+            {/* An alternate can take the place of whatever is currently in the
+                sequence at its step — which is the whole point of generating
+                one. Everything after it then descends from a different image,
+                so the workspace asks before rebuilding. */}
+            {target.kind === 'frame' && target.frameUrl && onSwapIn && !inSequence.has(target.id) && (
+              <button type="button" className={item} onClick={() => { setMenu(null); onSwapIn(target.id); }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M17 2l4 4-4 4" /><path d="M3 6h18" /><path d="M7 22l-4-4 4-4" /><path d="M21 18H3" /></svg>
+                Use this one instead
+              </button>
+            )}
+
+            {target.kind === 'frame' && onRemove && inSequence.has(target.id) && target.id !== 'root' && (
+              <button type="button" className={item} onClick={() => { setMenu(null); onRemove(target.id); }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
+                Take out of the sequence
+              </button>
+            )}
+
             {target.kind === 'frame' && onRegenerate && (
               <button type="button" className={item} onClick={() => { setMenu(null); onRegenerate(target.id); }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M1 4v6h6" /><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10" /></svg>

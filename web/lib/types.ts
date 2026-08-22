@@ -60,6 +60,11 @@ export interface TreeNode {
 
   /** Set on a discarded attempt so it can be drawn stubbed off its parent's edge. */
   discarded?: boolean;
+  /** Its source frame changed under it — this step answers a question that was
+   *  withdrawn, and needs rebuilding before it means anything. */
+  stale?: boolean;
+  /** Taken out of the sequence by the user, but kept on the canvas. */
+  removedFromSequence?: boolean;
 
   createdAt: number;
 }

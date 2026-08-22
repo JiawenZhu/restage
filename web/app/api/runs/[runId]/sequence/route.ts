@@ -1,0 +1,67 @@
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { adminDb, requireUid } from '@/lib/firebaseAdmin';
+import { consume, tooMany } from '@/lib/rateLimit';
+import { promoteFrame, rebuildEstimate, removeFrame } from '@/lib/lineage';
+import { rebuildStaleSteps } from '@/lib/orchestrator';
+
+/*
+ * Editing the sequence: swap a frame, take one out, rebuild what that broke.
+ *
+ * Swapping and removing are free and instant — they rewire the tree and mark
+ * what is now stale. Rebuilding is the expensive one, so it is a separate call:
+ * the first two tell the client how many steps would need regenerating and how
+ * long that takes, and the person decides whether to spend it.
+ */
+export const runtime = 'nodejs';
+export const maxDuration = 300;
+
+const Body = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('swap'), targetId: z.string().min(1), replacementId: z.string().min(1) }),
+  z.object({ action: z.literal('remove'), nodeId: z.string().min(1) }),
+  z.object({ action: z.literal('rebuild') }),
+]);
+
+export async function POST(req: Request, ctx: { params: Promise<{ runId: string }> }) {
+  const { runId } = await ctx.params;
+
+  let uid: string;
+  try {
+    uid = await requireUid(req);
+  } catch {
+    return NextResponse.json({ error: 'sign in first' }, { status: 401 });
+  }
+
+  const runSnap = await adminDb().collection('runs').doc(runId).get();
+  if (!runSnap.exists || runSnap.data()!.uid !== uid) {
+    return NextResponse.json({ error: 'no such run' }, { status: 404 });
+  }
+
+  const parsed = Body.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: 'unknown sequence action' }, { status: 400 });
+
+  try {
+    if (parsed.data.action === 'rebuild') {
+      // The only branch that generates anything, so the only one that spends.
+      const rate = await consume(uid, 'run');
+      if (!rate.ok) return tooMany(rate);
+
+      const steps = await rebuildStaleSteps(runId, uid);
+      return NextResponse.json({ rebuilding: steps, ...rebuildEstimate(steps) });
+    }
+
+    const result =
+      parsed.data.action === 'swap'
+        ? await promoteFrame(runId, parsed.data.targetId, parsed.data.replacementId)
+        : await removeFrame(runId, parsed.data.nodeId);
+
+    return NextResponse.json({
+      staleSteps: result.staleSteps,
+      staleCount: result.staleIds.length,
+      ...rebuildEstimate(result.staleIds.length),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'that did not work';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+}

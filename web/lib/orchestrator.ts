@@ -768,3 +768,110 @@ export async function regenerateNode(args: {
 
   return nodeRef.id;
 }
+
+/**
+ * Rebuild the steps that a swap or a removal invalidated.
+ *
+ * Each stale step is regenerated in order, editing the frame that now precedes
+ * it — which is the same operation the original run performed, with a different
+ * source. The instruction and the reasoning are kept: the user changed which
+ * image step 3 is, not what step 4 was trying to do.
+ *
+ * Runs detached like executeRun, because it is minutes of work and the client
+ * is watching Firestore.
+ */
+export async function rebuildStaleSteps(runId: string, uid: string): Promise<number> {
+  const db = adminDb();
+  const runRef = db.collection('runs').doc(runId);
+  const runSnap = await runRef.get();
+  if (!runSnap.exists || runSnap.data()!.uid !== uid) throw new Error('no such run');
+  const run = runSnap.data()!;
+
+  const nodesRef = runRef.collection('nodes');
+  type StoredNode = Record<string, unknown> & { id: string };
+  const all: StoredNode[] = (await nodesRef.orderBy('createdAt').get()).docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Record<string, unknown>),
+  }));
+
+  const stale = all
+    .filter((n) => n.stale === true && n.kind === 'frame')
+    .sort((a, b) => (a.stepNo as number) - (b.stepNo as number));
+  if (!stale.length) return 0;
+
+  const rootUrl = all.find((n) => n.id === 'root')?.frameUrl as string | undefined;
+  if (!rootUrl) throw new Error('the source avatar is missing');
+  const avatar = await resolveImageInput(rootUrl);
+
+  await runRef.update({ status: 'running', updatedAt: Date.now() });
+
+  void (async () => {
+    try {
+      for (const node of stale) {
+        const parentId = (node.parentId as string) ?? 'root';
+        const parentSnap = await nodesRef.doc(parentId).get();
+        const parentUrl = parentSnap.data()?.frameUrl as string | undefined;
+        if (!parentUrl) throw new Error(`step ${node.stepNo} has no source frame to edit`);
+
+        await nodesRef.doc(node.id).update({ status: 'generating', stale: true });
+
+        const parentImage = await resolveImageInput(parentUrl);
+        const instruction = (node.instruction as string) ?? 'Continue the sequence.';
+        const isFirst = parentId === 'root';
+
+        const prompt = isFirst
+          ? `Build the opening frame of a UGC ad, ${run.aspect}.\n${instruction}\n\n${stillDirection()}`
+          : `The FIRST image is the current frame. Apply exactly one change to it:\n${instruction}\n\n` +
+            `Keep everything else in the frame unchanged. The OTHER images are the identity references.\n${stillDirection()}`;
+
+        const frame = await generateFrame({
+          prompt,
+          aspect: run.aspect,
+          refs: isFirst ? [avatar] : [parentImage, avatar],
+        });
+
+        const url = await uploadToStorage(
+          frame.bytes,
+          `users/${uid}/runs/${runId}/nodes/${node.id}-rebuild-${Date.now()}.jpg`,
+          frame.mimeType,
+        );
+        await nodesRef.doc(node.id).update({ frameUrl: url });
+
+        const [verdict, identity] = await Promise.all([
+          critique({
+            instruction,
+            rationale: (node.rationale as string) ?? 'Rebuilt after the sequence changed.',
+            avatar,
+            before: parentImage,
+            after: { data: frame.bytes, mimeType: frame.mimeType },
+          }),
+          verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType }),
+        ]);
+
+        const wrongFace = !identity.samePerson || !verdict.faceMatches;
+        await nodesRef.doc(node.id).update({
+          verdict: wrongFace ? 'failed' : verdict.verdict,
+          criticNotes: wrongFace
+            ? `The face no longer matches the enrolled person. ${identity.differences}`
+            : verdict.notes,
+          criticRubric: verdict.rubric,
+          status: wrongFace || verdict.verdict === 'failed' ? 'failed' : verdict.verdict === 'partial' ? 'partial' : 'achieved',
+          // Rebuilt against its real source, so it is current again whatever
+          // the critic thought of it.
+          stale: false,
+        });
+      }
+
+      await claimTerminalStatus(runRef, 'awaiting-approval');
+    } catch (err) {
+      console.error('[rebuild]', runId, err);
+      await claimTerminalStatus(
+        runRef,
+        'failed',
+        err instanceof Error ? err.message : 'the rebuild stopped unexpectedly',
+      ).catch(() => {});
+    }
+  })();
+
+  return stale.length;
+}

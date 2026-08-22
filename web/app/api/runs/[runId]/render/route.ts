@@ -375,7 +375,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         await videoRef.update({
           engine: 'omni',
           rationale:
-            `Gemini Omni Flash — one ${OMNI_FIXED_SECONDS}s take with native audio` +
+            `Gemini Omni Flash — one continuous ${OMNI_FIXED_SECONDS}s shot with native audio` +
             (isSequence && beats.length > 1 ? `, following all ${beats.length} shots` : '') +
             (references.length ? `, held to your face from ${references.length} enrolment view${references.length > 1 ? 's' : ''}` : '') +
             '.',

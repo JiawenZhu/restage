@@ -817,11 +817,40 @@ function Inspector({
             <button
               type="button"
               disabled={busy || !user}
-              title={!user ? 'Sign in to regenerate' : undefined}
               onClick={() => onRegenerate?.(node.id)}
+              title={
+                !user
+                  ? 'Sign in first'
+                  : 'Same shot, same base frame — you say what changes. The current one stays on the canvas.'
+              }
               className="rounded-lg border border-line-strong py-2.5 text-[12.5px] font-semibold text-ink-2 hover:border-accent hover:text-accent-ink disabled:opacity-40"
             >
-              Try again
+              {/*
+                "Try again" was wrong three times over: it implies no panel, no
+                direction, and a retry of something that failed. It also sat in
+                the same action bar as "Render failed — try again", where those
+                words ARE correct, so one phrase meant two things a few pixels
+                apart.
+
+                Not "Regenerate" either, which was the obvious fix and is the
+                wrong one. Across the tools people already use, "regenerate" is
+                the BLIND re-roll — Midjourney's reroll, Canva Magic Media,
+                Runway, ChatGPT — while the controls that take direction avoid
+                "re-" verbs entirely: Photoshop's generative fill stays
+                "Generate" on the second and third round, Firefly says "Generate
+                similar", Midjourney's directed one is "Vary (Region)". This
+                control REQUIRES an instruction (the route rejects anything
+                under four characters), so borrowing the blind-retry word would
+                teach exactly the model the complaint was about.
+
+                "Take" is the video industry's own word for this, and this is a
+                video product. DaVinci Resolve's Take Selector holds several
+                takes of one clip, switchable, nothing destroyed — which is this
+                data model precisely: siblings sharing a parentId and a stepNo.
+                The ellipsis is the codebase's existing signal that a panel opens
+                rather than something happening immediately.
+              */}
+              Another take…
             </button>
           </div>
         )}
@@ -911,7 +940,7 @@ function Inspector({
             <p className="mt-2 text-[11.5px] leading-snug text-ink-3">
               {engineChoice === 'veo'
                 ? 'Higher resolution, and it keeps the length you set — longer clips are chained shot by shot. About 40 seconds each.'
-                : 'One take of about 10 seconds at 720p, whatever length you set, with speech and sound generated together. Renders in about 20.'}
+                : 'One continuous shot of about 10 seconds at 720p, whatever length you set, with speech and sound generated together. Renders in about 20.'}
             </p>
           </div>
         )}
@@ -1001,7 +1030,7 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">
-            REGENERATE · STEP {node.stepNo}
+            ANOTHER TAKE · STEP {node.stepNo}
             {node.label ? ` — ${node.label.toUpperCase()}` : ''}
           </p>
           <p className="mt-1 text-[12.5px] leading-snug text-ink-2">
@@ -1049,7 +1078,7 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
         onClick={go}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-[13.5px] font-semibold text-primary-ink disabled:opacity-40"
       >
-        {busy ? 'Starting…' : 'Generate new attempt'}
+        {busy ? 'Starting…' : 'Make the take'}
       </button>
     </div>
   );

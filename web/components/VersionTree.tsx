@@ -705,7 +705,11 @@ export function VersionTree({
             {target.kind === 'frame' && onRegenerate && (
               <button type="button" className={item} onClick={() => { setMenu(null); onRegenerate(target.id); }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M1 4v6h6" /><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10" /></svg>
-                Regenerate from same base…
+                {/* The same handler and the same panel as the Inspector's
+                    button, so it gets the same name. Two names for one action
+                    is a defect; "from same base" is true but belongs in the
+                    tooltip and the panel, which both already say it. */}
+                Another take…
               </button>
             )}
             <button type="button" className={item} onClick={() => { setMenu(null); onSelect?.(target.id); }}>

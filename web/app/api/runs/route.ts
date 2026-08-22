@@ -14,6 +14,9 @@ const Body = z.object({
   // shown on library cards, while the renderer produced 8s regardless.
   seconds: z.union([z.literal(4), z.literal(6), z.literal(8)]),
   templateId: z.string().optional(),
+  /** Which enrolled avatar this run used, when it came from one. The Run type
+   *  declared this as required and nothing ever sent it. */
+  avatarId: z.string().max(64).nullable().optional(),
   // ~8MB of base64. Unbounded, this was a memory and cost amplifier: the string
   // is decoded, sent to the model, and echoed into Firestore.
   avatarDataUrl: z.string().min(1).max(11_000_000),

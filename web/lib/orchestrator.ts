@@ -33,6 +33,7 @@ export interface StartArgs {
   aspect: Aspect;
   seconds: 4 | 6 | 8;
   templateId?: string;
+  avatarId?: string | null;
   /** Enrolment capture as a data URL or HTTP URL. */
   avatarDataUrl: string;
   avatarMultiViews?: {
@@ -143,6 +144,7 @@ export async function createRun(args: StartArgs): Promise<string> {
     aspect: args.aspect,
     seconds: args.seconds,
     templateId: args.templateId ?? null,
+    avatarId: args.avatarId ?? null,
     status: 'planning',
     plan: [],
     avatarUrl: avatarStorageUrl,

@@ -56,7 +56,9 @@ export function AppShell({
           <Link href="/library" className="rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle">
             Library
           </Link>
-          <Link href="/enroll" className="rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle">
+          {/* Pointed at /enroll, so "Avatars" opened the capture wizard and the
+              only thing you could do with an enrolled face was enrol another. */}
+          <Link href="/avatars" className="rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle">
             Avatars
           </Link>
         </nav>

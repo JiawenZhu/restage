@@ -1,7 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { AuthButton, useUser } from '@/components/AuthGate';
 import type { Aspect } from '@/lib/types';
@@ -20,8 +21,33 @@ const DEFAULT_KEYWORDS = [
   'survives the first two seconds',
 ];
 
-export default function NewRun() {
+interface EnrolledAvatar {
+  id: string;
+  name: string;
+  createdAt: number;
+  hasVoice: boolean;
+  /** Signed, short-lived read URLs. The orchestrator accepts http(s) as well as
+   *  data URLs, so these pass straight through. */
+  urls: { front: string | null; left: string | null; right: string | null };
+}
+
+/*
+ * useSearchParams opts the subtree out of prerendering, so Next requires a
+ * Suspense boundary around it — the production build fails without one, while
+ * dev renders happily. The param is only the "which avatar" hint from
+ * /avatars, so the fallback is the same page minus a preselection.
+ */
+export default function NewRunPage() {
+  return (
+    <Suspense fallback={<AppShell><div className="flex flex-1 items-center justify-center"><p className="text-[13px] text-ink-4">Loading…</p></div></AppShell>}>
+      <NewRun />
+    </Suspense>
+  );
+}
+
+function NewRun() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, ready } = useUser();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -31,32 +57,66 @@ export default function NewRun() {
   const [avatar, setAvatar] = useState<string | null>(null);
   const [multiViews, setMultiViews] = useState<{ front?: string; left?: string; right?: string } | null>(null);
   const [avatarName, setAvatarName] = useState<string | null>(null);
+  const [avatarId, setAvatarId] = useState<string | null>(null);
+  const [enrolled, setEnrolled] = useState<EnrolledAvatar[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<CreativeTemplate | null>(null);
   const [pendingTemplate, setPendingTemplate] = useState<CreativeTemplate | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto load enrolled avatar from /enroll if available
+  /*
+   * Load the user's enrolled faces from their account.
+   *
+   * This read `restage_latest_avatar` from localStorage — a browser-global key,
+   * so signing out and into a second account on the same machine offered the
+   * first account's face, and the enrolled avatar was invisible on any other
+   * device. The face belongs to the account, so it comes from the server.
+   *
+   * The images arrive as signed URLs. The orchestrator accepts http(s) as well
+   * as data URLs, so they can be passed straight through without the client
+   * ever holding megabytes of base64.
+   */
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('restage_latest_avatar');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const frontImg = parsed?.rawImages?.front || parsed?.images?.front;
-        if (frontImg && !avatar) {
-          setAvatar(frontImg);
-          setAvatarName(parsed.name || 'Enrolled Avatar');
-          setMultiViews({
-            front: frontImg,
-            left: parsed?.rawImages?.left || parsed?.images?.left,
-            right: parsed?.rawImages?.right || parsed?.images?.right,
-          });
-        }
-      }
-    } catch (e) {
-      // ignore
+    if (!user) {
+      setEnrolled([]);
+      return;
     }
-  }, []);
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch('/api/avatars', { headers: { authorization: `Bearer ${token}` } });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        const list: EnrolledAvatar[] = json.avatars ?? [];
+        setEnrolled(list);
+
+        // Preselect: whichever /avatars sent us to, else the newest.
+        const wanted = searchParams.get('avatar');
+        const pick = (wanted && list.find((a) => a.id === wanted)) || list[0];
+        if (pick?.urls.front && !avatar) useEnrolled(pick);
+      } catch {
+        /* the upload path still works */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  function useEnrolled(a: EnrolledAvatar) {
+    if (!a.urls.front) return;
+    setAvatar(a.urls.front);
+    setAvatarId(a.id);
+    setAvatarName(a.name);
+    setMultiViews({
+      front: a.urls.front,
+      left: a.urls.left ?? undefined,
+      right: a.urls.right ?? undefined,
+    });
+  }
 
   /* Signing in belongs in the precondition, not in the 401 that comes back
      three clicks later. Without it the button was enabled while signed out and
@@ -69,6 +129,10 @@ export default function NewRun() {
       const dataUrl = String(reader.result);
       setAvatar(dataUrl);
       setAvatarName(file.name);
+      setAvatarId(null);
+      // A single upload really is one view. Dropping the enrolled left/right
+      // silently was the bug; saying so is the fix, and the enrolled avatar is
+      // one click away above.
       setMultiViews({ front: dataUrl });
     };
     reader.readAsDataURL(file);
@@ -121,6 +185,7 @@ export default function NewRun() {
           goal: goal.trim(),
           aspect,
           seconds,
+          avatarId,
           templateId: selectedTemplate?.id,
           avatarDataUrl: avatar,
           avatarMultiViews: multiViews || undefined,
@@ -151,27 +216,80 @@ export default function NewRun() {
           </div>
         )}
 
-        {/* 1. Who is in it */}
+        {/* 1. Who is in it — enrolled faces first, upload as the fallback.
+             There was only an upload button, so the photo a user gave at /enroll
+             was thrown away after one run and they were asked for it again every
+             time, which is the opposite of the one-time enrolment promised. */}
         <p className="mt-9 text-[10.5px] font-bold tracking-[0.12em] text-ink-3">WHO IS IN IT</p>
-        <div className="mt-2.5 flex items-center gap-3">
+
+        {enrolled.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-2.5">
+            {enrolled.map((a) => {
+              const active = avatarId === a.id;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => useEnrolled(a)}
+                  className={`flex items-center gap-2.5 rounded-card p-2 pr-3.5 text-left ${
+                    active ? 'border-2 border-accent bg-panel' : 'border border-line bg-panel hover:border-line-strong'
+                  }`}
+                >
+                  {a.urls.front ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={a.urls.front} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                  ) : (
+                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-subtle text-ink-4">?</span>
+                  )}
+                  <span>
+                    <span className="block text-[13px] font-semibold">{a.name}</span>
+                    <span className="block text-[11px] text-ink-3">
+                      {[a.urls.front, a.urls.left, a.urls.right].filter(Boolean).length} angles
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="mt-2.5 flex flex-wrap items-center gap-3">
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && pickFile(e.target.files[0])} />
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className={`flex items-center gap-3 rounded-card p-2.5 pr-4 text-left ${avatar ? 'border-2 border-accent bg-panel' : 'border-[1.5px] border-dashed border-line-strong'}`}
+            className={`flex items-center gap-3 rounded-card p-2.5 pr-4 text-left ${
+              avatar && !avatarId ? 'border-2 border-accent bg-panel' : 'border-[1.5px] border-dashed border-line-strong'
+            }`}
           >
-            {avatar ? (
+            {avatar && !avatarId ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatar} alt="" className="h-11 w-11 rounded-lg object-cover" />
             ) : (
               <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-subtle text-ink-4">+</span>
             )}
             <span>
-              <span className="block text-[13.5px] font-semibold">{avatar ? 'Change photo' : 'Upload a photo of yourself'}</span>
-              <span className="block text-[11.5px] text-ink-3">Face clearly visible, good light</span>
+              <span className="block text-[13.5px] font-semibold">
+                {enrolled.length ? 'Or upload a one-off photo' : 'Upload a photo of yourself'}
+              </span>
+              <span className="block text-[11.5px] text-ink-3">
+                {avatar && !avatarId ? 'One view only — a face stays steadier across scenes with three' : 'Face clearly visible, good light'}
+              </span>
             </span>
           </button>
+
+          {user && enrolled.length === 0 && (
+            <Link href="/enroll" className="text-[12.5px] font-semibold text-accent hover:underline">
+              Enrol a face once instead →
+            </Link>
+          )}
         </div>
+
+        {avatarId && avatarName && (
+          <p className="mt-2 text-[12px] text-ink-3">
+            Using <span className="font-semibold text-ink-2">{avatarName}</span> from your enrolled avatars.
+          </p>
+        )}
 
         {/* 2. Creative Thematic Scenario Templates */}
         <div className="mt-8">

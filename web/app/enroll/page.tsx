@@ -27,7 +27,7 @@ export default function Enroll() {
           <div className="flex-1">
             <p className="text-[13.5px] font-semibold">Privacy & Identity Vault</p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">
-              Captures and voice samples are securely encrypted in your private Firebase storage.
+              Captures are stored privately in your account. Only you can read them, and no link shares them.
               Deleting an avatar permanently purges all raw data.
             </p>
           </div>

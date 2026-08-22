@@ -2,9 +2,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, doc, setDoc } from 'firebase/firestore';
-import { storage, db } from '@/lib/firebase';
 import { AuthModal } from '@/components/AuthModal';
 
 type Mode = 'camera' | 'upload';
@@ -47,6 +44,8 @@ export function EnrollmentCamera() {
   const [headYaw, setHeadYaw] = useState<number>(0);
   const [angleLocked, setAngleLocked] = useState(false);
   const isTriggeringAutoRef = useRef(false);
+  /** The detector must see a near-centre pose before it will fire again. */
+  const armedRef = useRef(true);
 
   // Stored 3 keyframe representations for UI review and diffusion conditioning
   const [capturedFrames, setCapturedFrames] = useState<{
@@ -148,7 +147,14 @@ export function EnrollmentCamera() {
           const imgData = smallCtx.getImageData(20, 15, 80, 60);
           const d = imgData.data;
 
-          // Compute left vs right quadrant brightness and center of mass
+          /*
+           * A brightness-asymmetry heuristic, NOT a measured pose. Turning
+           * toward a lamp shifts this reading without moving the head, and a
+           * face-landmark model is what would actually measure yaw. It is good
+           * enough to trigger a capture the user is already performing, which
+           * is why the manual capture button stays the reliable path and the
+           * HUD calls this a guide rather than a measurement.
+           */
           let leftSum = 0;
           let rightSum = 0;
           const halfW = 40;
@@ -179,33 +185,49 @@ export function EnrollmentCamera() {
     animFrameRef.current = requestAnimationFrame(checkFrame);
   };
 
-  // Automatic Trigger Watcher for Head Turns
+  /*
+   * Automatic trigger for head turns — with two bugs removed.
+   *
+   * Both branches used to accept `>= 35 || <= -35`, so left and right had
+   * IDENTICAL triggers and neither actually tested a direction. Combined with
+   * the second bug that made the right capture wrong every time: the trigger
+   * lock cleared after 300ms while the burst runs for 2600ms, so when the step
+   * advanced the user was still turned left, the reading was still past the
+   * threshold, and the "right profile" was captured from the left-turned pose.
+   * Enrolment then conditioned the model on two left profiles.
+   *
+   * Each direction now tests its own sign, and the detector must be re-armed by
+   * returning near centre before it can fire again. Facing forward between
+   * angles is what a person naturally does, so the gate costs nothing and makes
+   * a stale pose impossible to capture.
+   */
   useEffect(() => {
     if (isCapturingBurst || isTriggeringAutoRef.current) return;
 
-    if (step === 'left') {
-      // User turned head LEFT: yaw <= -35° (mirrored/screen left)
-      if (headYaw <= -35 || headYaw >= 35) {
-        setAngleLocked(true);
-        isTriggeringAutoRef.current = true;
-        setTimeout(() => {
-          startBurstSweep('left', 2600);
-          setAngleLocked(false);
-          isTriggeringAutoRef.current = false;
-        }, 300);
-      }
-    } else if (step === 'right') {
-      // User turned head RIGHT: yaw >= 35° (or <= -35° depending on camera mirror)
-      if (headYaw >= 35 || headYaw <= -35) {
-        setAngleLocked(true);
-        isTriggeringAutoRef.current = true;
-        setTimeout(() => {
-          startBurstSweep('right', 2600);
-          setAngleLocked(false);
-          isTriggeringAutoRef.current = false;
-        }, 300);
-      }
+    // Re-arm only after the head comes back to roughly centre.
+    if (!armedRef.current) {
+      if (Math.abs(headYaw) < 12) armedRef.current = true;
+      return;
     }
+
+    const wantsLeft = step === 'left' && headYaw <= -35;
+    const wantsRight = step === 'right' && headYaw >= 35;
+    if (!wantsLeft && !wantsRight) return;
+
+    const which = wantsLeft ? 'left' : 'right';
+    setAngleLocked(true);
+    isTriggeringAutoRef.current = true;
+    armedRef.current = false;
+
+    setTimeout(() => {
+      startBurstSweep(which, 2600);
+      setAngleLocked(false);
+      // Held for the full burst, not 300ms, so the next step cannot inherit
+      // this pose.
+      setTimeout(() => {
+        isTriggeringAutoRef.current = false;
+      }, 2700);
+    }, 300);
   }, [headYaw, step, isCapturingBurst]);
 
   const stopMedia = () => {
@@ -363,19 +385,22 @@ export function EnrollmentCamera() {
       return;
     }
 
+    /*
+     * Sign-in is a precondition of saving a face, not a fallback.
+     *
+     * This used to mint a random `guest_xxxxx` uid and save under it, so the
+     * enrolment succeeded and then belonged to nobody: /studio could never
+     * offer it, the library could never show it, and the user could not delete
+     * it — while the screen promised a private vault they controlled. The
+     * modal is already mounted; it only needed to be opened.
+     */
+    if (!user) {
+      setAuthModalOpen(true);
+      return;
+    }
+
     setStep('saving');
     try {
-      const activeUid =
-        user?.uid ||
-        (typeof window !== 'undefined'
-          ? localStorage.getItem('restage_uid') ||
-            (() => {
-              const g = 'guest_' + Math.random().toString(36).slice(2, 9);
-              localStorage.setItem('restage_uid', g);
-              return g;
-            })()
-          : 'guest_creator');
-
       // Convert audioBlob to base64 if present
       let audioBase64 = null;
       if (audioBlob) {
@@ -386,14 +411,7 @@ export function EnrollmentCamera() {
         });
       }
 
-      let token = 'guest';
-      if (user) {
-        try {
-          token = await user.getIdToken();
-        } catch (e) {
-          // fallback
-        }
-      }
+      const token = await user.getIdToken();
 
       const res = await fetch('/api/avatars', {
         method: 'POST',
@@ -401,8 +419,9 @@ export function EnrollmentCamera() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
+        // No uid in the body: the server reads it from the token. Sending one
+        // was how any caller could write into another user's collection.
         body: JSON.stringify({
-          uid: activeUid,
           name: avatarName || 'My Personal Avatar',
           front: capturedFrames.front,
           left: capturedFrames.left,
@@ -416,16 +435,31 @@ export function EnrollmentCamera() {
         throw new Error(json.error || 'Failed to save avatar');
       }
 
-      // Persist in localStorage for instant Studio usage
-      if (typeof window !== 'undefined' && json.avatar) {
-        localStorage.setItem('restage_latest_avatar', JSON.stringify(json.avatar));
-      }
-
       stopMedia();
       setStep('done');
-    } catch (err: any) {
+
+      /*
+       * Cached AFTER the save is committed and in its own try, because this is
+       * a convenience and not part of the result. It used to sit inside the
+       * request's try block holding the full base64 payload — several MB — so
+       * a QuotaExceededError from a successful save was caught by the handler
+       * below and reported to the user as a failed enrolment. Only the light
+       * fields are stored now, and the key is namespaced by uid so one
+       * browser's two accounts cannot inherit each other's face.
+       */
+      try {
+        if (typeof window !== 'undefined' && json.avatar) {
+          localStorage.setItem(
+            `restage_latest_avatar:${user.uid}`,
+            JSON.stringify({ id: json.avatar.id, name: json.avatar.name, urls: json.avatar.urls }),
+          );
+        }
+      } catch {
+        /* the avatar is saved on the server; the cache is optional */
+      }
+    } catch (err: unknown) {
       console.error('Error saving avatar:', err);
-      setErrorMessage(err.message || 'Failed to save avatar. Please try again.');
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to save avatar. Please try again.');
       setStep('review');
     }
   };
@@ -505,7 +539,9 @@ export function EnrollmentCamera() {
           </div>
           <h2 className="mt-5 text-2xl font-bold tracking-tight">Auto-Detecting 10-Second Head Sweep</h2>
           <p className="mx-auto mt-2 max-w-lg text-sm text-ink-3">
-            Click start, look at the camera for the front baseline, then simply turn your head left and right. The AI will automatically detect your 60° angle and capture the shots seamlessly!
+            Start, face the camera for the front shot, then turn your head left, back to centre, and right.
+            Capture fires on its own when you turn far enough — and the button is always there if you would rather
+            take it yourself.
           </p>
           <button
             onClick={() => startMedia('front')}
@@ -570,7 +606,10 @@ export function EnrollmentCamera() {
             <label className="flex cursor-pointer items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-ink">Audio Sample (Optional WAV / MP3)</p>
-                <p className="text-xs text-ink-3">{audioUrl ? 'Audio loaded' : 'For voice timbre cloning'}</p>
+                {/* Said "For voice timbre cloning". The sample is stored but
+                    nothing reads it — clips use a stock voice — so the claim
+                    was for a feature that does not exist yet. */}
+                <p className="text-xs text-ink-3">{audioUrl ? 'Sample recorded' : 'Optional — saved for voice matching later'}</p>
               </div>
               <span className="rounded-lg bg-subtle px-3 py-1.5 text-xs font-semibold text-ink-2 border border-line">
                 {audioUrl ? 'Change File' : 'Choose Audio'}
@@ -813,7 +852,8 @@ export function EnrollmentCamera() {
               <p className="mt-1 text-xs text-ink-3">Hover any photo or audio below to retake or replace individually</p>
             </div>
             <span className="rounded-chip bg-good-soft px-3 py-1 text-xs font-bold text-good">
-              3 Angles & Voice Locked
+              {[capturedFrames.front, capturedFrames.left, capturedFrames.right].filter(Boolean).length} angles
+              captured{audioUrl ? ' · voice sample saved' : ''}
             </span>
           </div>
 
@@ -978,7 +1018,10 @@ export function EnrollmentCamera() {
         <div className="rounded-2xl border border-line bg-panel p-12 text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-3 border-accent border-t-transparent" />
           <h3 className="mt-5 text-lg font-bold">Uploading & Extracting Features…</h3>
-          <p className="mt-1 text-xs text-ink-3">Encrypting 3-angle frames and voice timbre to your private vault</p>
+          {/* "Encrypting … to your private vault" described an encryption step
+              that does not happen here. Storage is private and owner-only,
+              which is the true and still-reassuring version. */}
+          <p className="mt-1 text-xs text-ink-3">Uploading your captures to private storage only you can read</p>
         </div>
       )}
 
@@ -990,7 +1033,9 @@ export function EnrollmentCamera() {
             </svg>
           </div>
           <h3 className="mt-4 text-2xl font-bold">Avatar Enrolled Successfully!</h3>
-          <p className="mt-1.5 text-sm text-ink-3">Your 3-angle facial geometry and voice timbre are locked. You can now generate UGC ads with your likeness.</p>
+          <p className="mt-1.5 text-sm text-ink-3">
+            Your captures are saved to your account. Every run from now on can use this face — you only do this once.
+          </p>
           <div className="mt-7 flex justify-center gap-4">
             <a
               href="/studio"

@@ -1,0 +1,15 @@
+# Keep the design artboards out of GitHub's language statistics.
+#
+# design/restage-product-design.html is 2.5 MB — a published canvas with its
+# images embedded — and the seven .dc.html artboards add another 100 KB. Against
+# roughly 890 KB of TypeScript, that made the repository read as ~74% HTML on
+# the GitHub landing page, which is a fair summary of the byte count and a
+# misleading one about the project.
+#
+# `linguist-documentation` rather than `linguist-vendored`: this is our own
+# design documentation, not third-party code we happen to carry.
+design/** linguist-documentation
+
+# Same reasoning for the demo media the design references.
+design/**/*.mp4 binary
+design/**/*.jpg binary

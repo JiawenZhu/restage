@@ -20,8 +20,22 @@ for (const doc of runs.docs) {
     if (hasInline(v)) { patch[k] = FieldValue.delete(); }
   }
 
+  /*
+   * Un-corrupt fields that a JSON round-trip turned into serialized sentinels:
+   * frameCount became the map {operand: n} and previewFrames became
+   * {elements: [...]} instead of an array. Firestore stored them literally, so
+   * they have to be rewritten as the values they were meant to be.
+   */
+  if (d.frameCount && typeof d.frameCount === 'object' && 'operand' in d.frameCount) {
+    patch.frameCount = FieldValue.delete(); // recomputed from nodes below
+  }
+  if (d.previewFrames && !Array.isArray(d.previewFrames) && typeof d.previewFrames === 'object') {
+    const els = (d.previewFrames as { elements?: unknown[] }).elements;
+    patch.previewFrames = Array.isArray(els) ? els : FieldValue.delete();
+  }
+
   // Fill the summary the library reads.
-  if (typeof d.frameCount !== 'number' || !d.thumbUrl) {
+  if (typeof d.frameCount !== 'number' || !d.thumbUrl || 'frameCount' in patch) {
     const nodes = await doc.ref.collection('nodes').orderBy('createdAt', 'desc').get();
     const frames = nodes.docs.filter((n) => n.data().kind === 'frame' && n.data().frameUrl);
     if (frames.length) {

@@ -109,27 +109,51 @@ async function resolveImageInput(u: string): Promise<{ mimeType: string; data: B
 }
 
 /*
- * Firestore rejects any document over 1MB — and rejects it on WRITE, so a
- * document that has grown too large cannot even be updated to mark its run
- * failed. It stops responding entirely, which is the worst failure mode
- * available.
+ * Prepare a value for Firestore.
  *
- * A real run in this database reached 1,333,473 bytes, and 790KB of one
- * document was a base64 image sitting in `avatarMultiViews`. Images belong in
- * Storage with a URL here; this refuses to write the payload back in, whatever
- * path tries to. Losing an inline image is recoverable, a permanently
- * unwritable run document is not.
+ * Two jobs, and the previous one-liner — JSON.parse(JSON.stringify(...)) — got
+ * the second one catastrophically wrong.
+ *
+ *   1. undefined becomes null, because Firestore rejects undefined.
+ *
+ *   2. FieldValue sentinels must survive. A JSON round-trip turns
+ *      FieldValue.increment(1) into the plain object {operand: 1} and
+ *      FieldValue.arrayUnion(x) into {elements: [x]} — and Firestore stores
+ *      those literally. Verified in the live database: a run's frameCount was
+ *      the map {"operand":1} rather than a number, and previewFrames was
+ *      {"elements":[…]} rather than an array, which is why it never
+ *      accumulated across steps. Every step overwrote it with a one-element
+ *      object.
+ *
+ * Sentinels are class instances, so the test is simply "not a plain object".
+ *
+ * The size guard stays: Firestore rejects any document over 1MB, and rejects it
+ * on WRITE, so a document that grows too large cannot even be updated to mark
+ * its run failed — it stops responding entirely. A real run in this database
+ * reached 1,333,473 bytes because a base64 image was stored inline. Images
+ * belong in Storage with a URL here.
  */
-function stripInlineImages<T>(obj: T): T {
-  return JSON.parse(
-    JSON.stringify(obj, (_, v) =>
-      typeof v === 'string' && v.startsWith('data:') && v.length > 4096 ? null : v === undefined ? null : v,
-    ),
-  );
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  if (typeof v !== 'object' || v === null) return false;
+  const proto = Object.getPrototypeOf(v);
+  return proto === Object.prototype || proto === null;
 }
 
-function sanitizeFirestore<T>(obj: T): T {
-  return stripInlineImages(obj);
+export function sanitizeForFirestore<T>(value: T): T {
+  const walk = (v: unknown): unknown => {
+    if (v === undefined) return null;
+    // Strings that are inline images: keep them out of the document entirely.
+    if (typeof v === 'string') return v.startsWith('data:') && v.length > 4096 ? null : v;
+    if (Array.isArray(v)) return v.map(walk);
+    if (isPlainObject(v)) {
+      const out: Record<string, unknown> = {};
+      for (const [k, val] of Object.entries(v)) out[k] = walk(val);
+      return out;
+    }
+    // FieldValue sentinels, Timestamps, Buffers — pass through untouched.
+    return v;
+  };
+  return walk(value) as T;
 }
 
 export async function createRun(args: StartArgs): Promise<string> {
@@ -158,7 +182,7 @@ export async function createRun(args: StartArgs): Promise<string> {
     multiViewsUrls = { front: f, left: l, right: r };
   }
 
-  const runData = sanitizeFirestore({
+  const runData = sanitizeForFirestore({
     uid: args.uid,
     goal: args.goal,
     aspect: args.aspect,
@@ -183,7 +207,7 @@ export async function createRun(args: StartArgs): Promise<string> {
   await ref.set(runData);
 
   // The root of the tree is the avatar itself
-  const rootNodeData = sanitizeFirestore({
+  const rootNodeData = sanitizeForFirestore({
     parentId: null,
     stepNo: 0,
     kind: 'avatar',
@@ -209,7 +233,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
   const nodes = run.collection('nodes');
 
   const touch = (patch: Record<string, unknown>) =>
-    run.update(sanitizeFirestore({ ...patch, updatedAt: Date.now() }));
+    run.update(sanitizeForFirestore({ ...patch, updatedAt: Date.now() }));
 
   try {
     const avatar = await resolveImageInput(args.avatarDataUrl);

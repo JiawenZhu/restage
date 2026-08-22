@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb, adminStorage, requireUid } from '@/lib/firebaseAdmin';
-import { deleteVideo } from '@/lib/r2';
+import { deleteRunCompletely } from '@/lib/runDeletion';
 
 /*
  * Deleting an enrolled face, for real.
@@ -51,19 +51,11 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ avatarId: st
      * derived from the same face, so leaving them would defeat the point.
      */
     const runs = await db.collection('runs').where('uid', '==', uid).where('avatarId', '==', avatarId).get();
+    /* One definition of "delete a run", shared with the library card. These two
+       paths must never disagree about what gets removed — the difference would
+       be copies of somebody's face surviving a deletion they asked for. */
     for (const runDoc of runs.docs) {
-      await bucket.deleteFiles({ prefix: `users/${uid}/runs/${runDoc.id}/` }).catch(() => {});
-
-      const clipKey = runDoc.data().videoKey;
-      if (clipKey) await deleteVideo(clipKey).catch(() => {});
-
-      const nodes = await runDoc.ref.collection('nodes').get();
-      for (const n of nodes.docs) {
-        const nodeKey = n.data().videoKey;
-        if (nodeKey && nodeKey !== clipKey) await deleteVideo(nodeKey).catch(() => {});
-        await n.ref.delete();
-      }
-      await runDoc.ref.delete();
+      await deleteRunCompletely(uid, runDoc.id).catch(() => {});
     }
 
     await ref.delete();

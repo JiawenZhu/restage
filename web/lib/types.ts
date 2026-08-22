@@ -131,6 +131,11 @@ export interface Run {
   look?: LookBible | null;
   /** Video rendering engine used for the run. */
   videoEngine?: 'veo' | 'omni';
+  /* A label the user can change, separate from `goal`.
+     The goal is what the planner was actually given and what every shot was
+     generated from; letting a rename overwrite it would make the run claim it
+     was built from a brief it never saw. */
+  title?: string;
   goal: string;
   aspect: Aspect;
   seconds: 4 | 8 | 16 | 24;

@@ -18,6 +18,9 @@ import { ALL_TEMPLATES } from '@/lib/templates';
 
 interface RunCard {
   id: string;
+  /** A label the user chose. The goal is what the planner was given; this is
+   *  what they call it. Absent on every run made before renaming existed. */
+  title?: string | null;
   goal: string;
   templateId?: string | null;
   aspect: '9:16' | '16:9';
@@ -73,6 +76,14 @@ export default function Library() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
+  /* Which card is mid-edit, which is one click from being destroyed, and what
+     to say when one of those goes wrong. Held here rather than in the card so
+     that opening a second menu closes the first, and so a confirmation cannot
+     survive a re-render into a different card. */
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [cardBusy, setCardBusy] = useState<string | null>(null);
+  const [cardError, setCardError] = useState<string | null>(null);
 
   const load = useCallback(
     async (quiet = false) => {
@@ -95,6 +106,61 @@ export default function Library() {
     },
     [user],
   );
+
+  async function authed(path: string, init: RequestInit) {
+    if (!user) throw new Error('sign in first');
+    const token = await user.getIdToken();
+    const res = await fetch(path, {
+      ...init,
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error ?? 'that did not work');
+    return json;
+  }
+
+  async function saveTitle(id: string, title: string) {
+    const clean = title.trim();
+    setRenaming(null);
+    const current = runs.find((r) => r.id === id);
+    if (!current || (current.title ?? '') === clean) return;
+    setCardBusy(id);
+    setCardError(null);
+    /* Optimistic. The name is the user's own words being echoed back, so there
+       is nothing to wait for and a spinner on a text label reads as a fault. */
+    const prev = runs;
+    setRuns((rs) => rs.map((r) => (r.id === id ? { ...r, title: clean || null } : r)));
+    try {
+      // Emptying the box clears the name and the card goes back to its goal.
+      await authed(`/api/runs/${id}`, { method: 'PATCH', body: JSON.stringify({ title: clean || null }) });
+    } catch (e) {
+      setRuns(prev);
+      setCardError(e instanceof Error ? e.message : 'could not rename that run');
+    } finally {
+      setCardBusy(null);
+    }
+  }
+
+  async function destroy(id: string) {
+    setConfirming(null);
+    setCardBusy(id);
+    setCardError(null);
+    try {
+      const gone = await authed(`/api/runs/${id}`, { method: 'DELETE' });
+      /* Not optimistic, unlike a rename. This one cannot be put back, so the
+         card stays on screen until the server confirms it is really gone —
+         removing it first and restoring it on failure would flash a deletion
+         that did not happen. */
+      setRuns((rs) => rs.filter((r) => r.id !== id));
+      if (gone?.clips > 0) {
+        setCardError(`Deleted, along with ${gone.clips} rendered clip${gone.clips > 1 ? 's' : ''}.`);
+      }
+    } catch (e) {
+      setCardError(e instanceof Error ? e.message : 'could not delete that run');
+    } finally {
+      setCardBusy(null);
+    }
+  }
 
   useEffect(() => {
     if (authLoading) return;
@@ -202,6 +268,22 @@ export default function Library() {
             }
           />
         ) : (
+          <>
+          {/* Shown, not logged. A refused delete and a successful one look
+              identical from the outside otherwise: the menu closes, the card
+              stays, and nothing says why. */}
+          {cardError && (
+            <div className="mt-5 flex items-center justify-between gap-3 rounded-card border border-line bg-subtle px-4 py-2.5">
+              <p className="text-[12.5px] text-ink-2">{cardError}</p>
+              <button
+                type="button"
+                onClick={() => setCardError(null)}
+                className="shrink-0 text-[12px] font-semibold text-ink-3 underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           <div className="mt-7 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((r) => {
               const stalled = isStalled(r);
@@ -209,70 +291,149 @@ export default function Library() {
                 ? { text: 'Stopped', cls: 'border-warn/40 text-warn-ink' }
                 : (STATUS_LABEL[r.status] ?? { text: r.status, cls: 'border-line-strong text-ink-3' });
               return (
-                <Link
+                <div
                   key={r.id}
-                  href={`/studio/${r.id}`}
-                  className="rs-enter group flex flex-col overflow-hidden rounded-card border border-line bg-panel transition-colors hover:border-line-strong"
+                  className={`rs-enter group flex flex-col overflow-hidden rounded-card border bg-panel transition-colors ${
+                    confirming === r.id ? 'border-crit/50' : 'border-line hover:border-line-strong'
+                  } ${cardBusy === r.id ? 'opacity-60' : ''}`}
                 >
-                  <div className="relative flex aspect-[16/10] items-center justify-center overflow-hidden bg-subtle">
-                    {r.thumbUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={r.thumbUrl}
-                        alt=""
-                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                      />
-                    ) : (
-                      // text-ink-4 measured 4.32 on this tint against a 4.5
-                      // requirement — the faintest tier is for text on the
-                      // canvas, not on a filled placeholder.
-                      <span className="text-[12px] text-ink-3">no frames yet</span>
-                    )}
+                  {/*
+                    The link covers the picture and the name, and stops there.
+                    This whole card used to be one <Link>, which is why it had no
+                    actions: a button inside an anchor is invalid, and clicking
+                    one navigates instead of acting. The footer sits outside it.
+                  */}
+                  <Link href={`/studio/${r.id}`} className="flex flex-1 flex-col">
+                    <div className="relative flex aspect-[16/10] items-center justify-center overflow-hidden bg-subtle">
+                      {r.thumbUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={r.thumbUrl}
+                          alt=""
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                        />
+                      ) : (
+                        // text-ink-4 measured 4.32 on this tint against a 4.5
+                        // requirement — the faintest tier is for text on the
+                        // canvas, not on a filled placeholder.
+                        <span className="text-[12px] text-ink-3">no frames yet</span>
+                      )}
 
-                    {r.videoUrl && (
-                      <span className="absolute inset-0 flex items-center justify-center bg-black/25">
-                        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/65">
-                          <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff" className="ml-0.5" aria-hidden>
-                            <path d="M8 5v14l11-7z" />
-                          </svg>
-                        </span>
-                      </span>
-                    )}
-
-                    <span className="absolute left-2.5 top-2.5 flex gap-1.5">
-                      <span className="rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                        {r.aspect}
-                      </span>
-                      {/* Which template made this. The id was stored on every run
-                          from the start and shown nowhere. */}
-                      {r.templateId && (
-                        <span className="rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                          {ALL_TEMPLATES.find((t) => t.id === r.templateId)?.name ?? r.templateId}
+                      {r.videoUrl && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/65">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff" className="ml-0.5" aria-hidden>
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          </span>
                         </span>
                       )}
-                    </span>
-                  </div>
 
-                  <div className="flex flex-1 flex-col p-3.5">
-                    <p className="line-clamp-2 text-[14px] font-semibold leading-snug">{r.goal}</p>
-                    <div className="mt-auto flex items-center justify-between gap-2 pt-3">
-                      <span className={`flex items-center gap-1.5 rounded-chip border px-2 py-0.5 text-[10.5px] font-bold tracking-[0.04em] ${badge.cls}`}>
+                      <span className="absolute left-2.5 top-2.5 flex gap-1.5">
+                        <span className="rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                          {r.aspect}
+                        </span>
+                        {/* Which template made this. The id was stored on every run
+                            from the start and shown nowhere. */}
+                        {r.templateId && (
+                          <span className="rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                            {ALL_TEMPLATES.find((t) => t.id === r.templateId)?.name ?? r.templateId}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-1 flex-col px-3.5 pt-3.5">
+                      <p className="line-clamp-2 text-[14px] font-semibold leading-snug">{r.title || r.goal}</p>
+                      {/* Both, when they differ. A renamed card should still be
+                          able to tell you what it was actually made from. */}
+                      {r.title && (
+                        <p className="mt-1 line-clamp-1 text-[11.5px] text-ink-4">{r.goal}</p>
+                      )}
+                    </div>
+                  </Link>
+
+                  {renaming?.id === r.id ? (
+                    <form
+                      className="px-3.5 pb-3.5 pt-3"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void saveTitle(r.id, renaming.value);
+                      }}
+                    >
+                      <input
+                        autoFocus
+                        value={renaming.value}
+                        maxLength={120}
+                        onChange={(e) => setRenaming({ id: r.id, value: e.target.value })}
+                        onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)}
+                        onBlur={() => void saveTitle(r.id, renaming.value)}
+                        className="w-full rounded-lg border border-accent bg-canvas px-2.5 py-1.5 text-[13.5px] outline-none"
+                        aria-label="Name this run"
+                      />
+                      <p className="mt-1.5 text-[11px] text-ink-4">Enter to save, Esc to cancel</p>
+                    </form>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2 px-3.5 pb-3.5 pt-3">
+                      <span className={`flex shrink-0 items-center gap-1.5 rounded-chip border px-2 py-0.5 text-[10.5px] font-bold tracking-[0.04em] ${badge.cls}`}>
                         {IN_FLIGHT.has(r.status) && !stalled && (
                           <span className="rs-cursor block h-[5px] w-[5px] rounded-full bg-current" />
                         )}
                         {badge.text}
                       </span>
-                      <span className="tnum text-[11.5px] text-ink-4">
+
+                      <span className="tnum truncate text-[11.5px] text-ink-4">
                         {r.stepCount > 0 && `${r.stepCount} steps · `}
-                        {r.frameCount > 0 && `${r.frameCount} frames · `}
                         {whenever(r.updatedAt || r.createdAt)}
                       </span>
+
+                      {/*
+                        Always visible, not revealed on hover. A control that
+                        only exists under a cursor does not exist on a phone,
+                        and "I cannot delete this" is the report that follows.
+                      */}
+                      <span className="ml-auto flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          aria-label={`Rename ${r.title || r.goal}`}
+                          disabled={cardBusy === r.id}
+                          onClick={() => {
+                            setConfirming(null);
+                            setRenaming({ id: r.id, value: r.title || r.goal });
+                          }}
+                          className="rounded p-1.5 text-ink-4 hover:bg-subtle hover:text-ink-2 disabled:opacity-40"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={confirming === r.id ? `Confirm deleting ${r.title || r.goal}` : `Delete ${r.title || r.goal}`}
+                          disabled={cardBusy === r.id}
+                          onClick={() => (confirming === r.id ? void destroy(r.id) : setConfirming(r.id))}
+                          className={`rounded px-1.5 py-1.5 text-[11.5px] font-semibold disabled:opacity-40 ${
+                            confirming === r.id
+                              ? 'bg-crit-soft text-crit-ink'
+                              : 'text-ink-4 hover:bg-subtle hover:text-crit-ink'
+                          }`}
+                        >
+                          {confirming === r.id ? (
+                            'Really delete?'
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+                            </svg>
+                          )}
+                        </button>
+                      </span>
                     </div>
-                  </div>
-                </Link>
+                  )}
+                </div>
               );
             })}
           </div>
+          </>
         )}
       </div>
     </AppShell>

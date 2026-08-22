@@ -144,6 +144,7 @@ export async function GET(req: Request) {
         return {
           id: doc.id,
           goal: data.goal,
+          title: data.title ?? null,
           // Recorded on every run since the beginning and read by nothing, so a
           // run made from a template was indistinguishable from one that was not.
           templateId: data.templateId ?? null,

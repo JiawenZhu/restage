@@ -19,7 +19,7 @@ for (const line of readFileSync(new URL('../.env.local', import.meta.url), 'utf8
 }
 
 const { generateFrame, submitRender, pollRender, downloadRendered } = await import('../lib/gemini');
-const { CREATIVE_TEMPLATES } = await import('../lib/templates');
+const { ALL_TEMPLATES } = await import('../lib/templates');
 
 const OUT = new URL('../public/templates/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
@@ -40,7 +40,7 @@ process.on('SIGINT', () => { release(); process.exit(130); });
 process.on('SIGTERM', () => { release(); process.exit(143); });
 
 const only = process.argv.slice(2);
-const targets = only.length ? CREATIVE_TEMPLATES.filter((t) => only.includes(t.id)) : CREATIVE_TEMPLATES;
+const targets = only.length ? ALL_TEMPLATES.filter((t) => only.includes(t.id)) : ALL_TEMPLATES;
 
 const t0 = Date.now();
 const stamp = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;

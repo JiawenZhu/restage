@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CREATIVE_TEMPLATES, type CreativeTemplate } from '@/lib/templates';
-import { TEMPLATES_WITH_CLIP } from '@/lib/templatePreviews';
+import { ALL_TEMPLATES, type CreativeTemplate } from '@/lib/templates';
+import { TEMPLATES_WITH_CLIP, TEMPLATES_WITH_STILL } from '@/lib/templatePreviews';
 
 /*
  * Templates are shown as motion, not prose.
@@ -22,14 +22,16 @@ interface TemplateGalleryProps {
   onSelectTemplate: (template: CreativeTemplate) => void;
 }
 
-const CATEGORIES = ['All', 'Sci-Fi', 'Cinematic', 'Social UGC', 'Artistic', 'Retro', 'Gaming'] as const;
+/* Ad format leads because it is what this product is for. The rest are scenes —
+   the same idea in different costumes — and they sort themselves after it. */
+const CATEGORIES = ['All', 'Ad format', 'Social UGC', 'Cinematic', 'Sci-Fi', 'Artistic', 'Retro', 'Gaming'] as const;
 
 export function TemplateGallery({ selectedTemplateId, onSelectTemplate }: TemplateGalleryProps) {
   const [category, setCategory] = useState<string>('All');
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const filtered = CREATIVE_TEMPLATES.filter((t) => category === 'All' || t.category === category);
-  const counts = CREATIVE_TEMPLATES.reduce<Record<string, number>>((acc, t) => {
+  const filtered = ALL_TEMPLATES.filter((t) => category === 'All' || t.category === category);
+  const counts = ALL_TEMPLATES.reduce<Record<string, number>>((acc, t) => {
     acc[t.category] = (acc[t.category] ?? 0) + 1;
     return acc;
   }, {});
@@ -38,7 +40,7 @@ export function TemplateGallery({ selectedTemplateId, onSelectTemplate }: Templa
     <div className="w-full">
       <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
         {CATEGORIES.map((cat) => {
-          const n = cat === 'All' ? CREATIVE_TEMPLATES.length : (counts[cat] ?? 0);
+          const n = cat === 'All' ? ALL_TEMPLATES.length : (counts[cat] ?? 0);
           if (!n) return null;
           return (
             <button
@@ -91,6 +93,10 @@ function TemplateCard({
      Rendering a clip only where one exists also skips a guaranteed-404 request
      per still-only card. */
   const [hasClip, setHasClip] = useState(() => TEMPLATES_WITH_CLIP.has(tpl.id));
+  /* A template with no generated preview yet gets its gradient and icon rather
+     than a broken image. The manifest is written from what is on disk, so a
+     card never promises media that is not there. */
+  const hasStill = TEMPLATES_WITH_STILL.has(tpl.id);
   const [playing, setPlaying] = useState(false);
 
   const play = useCallback(() => {
@@ -152,7 +158,7 @@ function TemplateCard({
             onError={() => setHasClip(false)}
             className="h-full w-full object-cover"
           />
-        ) : (
+        ) : hasStill ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={`/templates/${tpl.id}.jpg`}
@@ -160,6 +166,10 @@ function TemplateCard({
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
           />
+        ) : (
+          <span className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${tpl.gradient} text-[34px]`}>
+            {tpl.icon}
+          </span>
         )}
 
         {/* A gradient, so white type stays legible over any frame. */}

@@ -9,7 +9,7 @@ import type { Aspect } from '@/lib/types';
 import { PromptComposer } from '@/components/PromptComposer';
 
 import { TemplateGallery } from '@/components/TemplateGallery';
-import { CREATIVE_TEMPLATES } from '@/lib/templates';
+import { ALL_TEMPLATES } from '@/lib/templates';
 import type { CreativeTemplate } from '@/lib/templates';
 
 const DEFAULT_KEYWORDS = [
@@ -152,7 +152,7 @@ function NewRun() {
   function handleSelectTemplate(tpl: CreativeTemplate) {
     const current = goal.trim();
     const isUserWriting =
-      current.length > 0 && !CREATIVE_TEMPLATES.some((t) => t.defaultPrompt.trim() === current);
+      current.length > 0 && !ALL_TEMPLATES.some((t) => t.defaultPrompt.trim() === current);
 
     if (isUserWriting) {
       setPendingTemplate(tpl);
@@ -218,7 +218,10 @@ function NewRun() {
       <div className="mx-auto w-full max-w-4xl px-6 py-14">
         <h1 className="text-[32px] font-bold tracking-[-0.025em]">What should this ad do?</h1>
         <p className="mt-2 text-base text-ink-3">
-          Choose a scenario template below or describe a custom outcome. The AI agent plans the cinematic shots.
+          {/* "scenario" was accurate when every template was a costume and a
+              location. Half of them are ad formats now — an unboxing is not a
+              scenario, it is a structure. */}
+          Pick a template below, or describe what you want in your own words. The agent writes the plan.
         </p>
 
         {ready && !user && (
@@ -305,7 +308,7 @@ function NewRun() {
         {/* 2. Creative Thematic Scenario Templates */}
         <div className="mt-8">
           <div className="flex items-center justify-between">
-            <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">SCENARIO TEMPLATES</p>
+            <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">TEMPLATES</p>
             {selectedTemplate && (
               <button
                 type="button"
@@ -361,7 +364,7 @@ function NewRun() {
               purpose="goal"
               seed={seedText}
               keywords={activeKeywords}
-              placeholder="Say or type the outcome you want — or choose a scenario template above."
+              placeholder="Say or type the outcome you want — or pick a template above."
               onPrompt={(finalPrompt) => setGoal(finalPrompt)}
             />
           </div>

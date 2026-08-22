@@ -2,4 +2,4 @@
  * Which templates have a playable clip and which have only a still, so the
  * gallery can offer a hover affordance only where hovering does something. */
 export const TEMPLATES_WITH_CLIP = new Set<string>(["comic-book","moon","noir"]);
-export const TEMPLATES_WITH_STILL = new Set<string>(["chaotic-vlog","comic-book","decades-fashion","indie-pastel","meme-me","moon","noir","science-concept","step-into-history","video-game"]);
+export const TEMPLATES_WITH_STILL = new Set<string>(["before-after","chaotic-vlog","comic-book","decades-fashion","demo","grwm","indie-pastel","meme-me","moon","noir","problem-solution","science-concept","step-into-history","testimonial","unboxing","video-game"]);

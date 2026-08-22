@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AppShell } from '@/components/AppShell';
 import { AuthButton } from '@/components/AuthGate';
 import { useAuth } from '@/lib/auth-context';
-import { CREATIVE_TEMPLATES } from '@/lib/templates';
+import { ALL_TEMPLATES } from '@/lib/templates';
 
 /*
  * Everything the user has made, newest first. Each card links to its own
@@ -247,7 +247,7 @@ export default function Library() {
                           from the start and shown nowhere. */}
                       {r.templateId && (
                         <span className="rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                          {CREATIVE_TEMPLATES.find((t) => t.id === r.templateId)?.name ?? r.templateId}
+                          {ALL_TEMPLATES.find((t) => t.id === r.templateId)?.name ?? r.templateId}
                         </span>
                       )}
                     </span>

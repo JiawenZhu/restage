@@ -1,7 +1,15 @@
 export interface CreativeTemplate {
   id: string;
   name: string;
-  category: 'Cinematic' | 'Sci-Fi' | 'Social UGC' | 'Retro' | 'Artistic' | 'Gaming';
+  /*
+   * Two axes, deliberately.
+   *
+   * 'Ad format' says what the ad DOES — unboxing, testimonial, before-and-after.
+   * The rest say where it is SET. The existing ten are all the second kind,
+   * which is why they read as one idea in ten costumes: their plans are the
+   * same shape and only their wardrobe differs.
+   */
+  category: 'Ad format' | 'Cinematic' | 'Sci-Fi' | 'Social UGC' | 'Retro' | 'Artistic' | 'Gaming';
   badge?: string;
   tagline: string;
   defaultPrompt: string;
@@ -471,6 +479,163 @@ export const CREATIVE_TEMPLATES: CreativeTemplate[] = [
   },
 ];
 
+
+
+/*
+ * Ad formats — what the ad DOES, not where it is set.
+ *
+ * The ten templates above are one idea in ten costumes: put the creator in an
+ * outfit, in a striking location. Astronaut, detective, cyberpunk, ancient
+ * Rome. They differ in wardrobe and set, and their plans are consequently the
+ * same shape — establish a place, dress the person, light it, crop it.
+ *
+ * None of them is an advert. This product exists to make UGC ads, and the
+ * thing that separates one UGC ad from another is not the costume, it is the
+ * STRUCTURE: an unboxing is paced differently from a before-and-after, which is
+ * framed differently from a testimonial. Those differences live in the
+ * choreography, which is exactly what presetSteps carries — so these templates
+ * differ where it matters instead of in their adjectives.
+ *
+ * Every one of them puts a real product in a real room, because that is the ad
+ * a creator is actually being paid to make.
+ */
+export const AD_FORMAT_TEMPLATES: CreativeTemplate[] = [
+  {
+    id: 'unboxing',
+    name: 'Unboxing',
+    category: 'Ad format',
+    badge: 'Popular',
+    tagline: 'Hands, packaging, and the first look at what is inside.',
+    defaultPrompt:
+      'A creator at a table opening the product packaging for the first time, hands and box in frame, reacting to what is inside.',
+    cameraMotion: 'Locked-off overhead-to-eye-level, close on the hands, the product held up to the lens at the end.',
+    lightingAndColor: 'Soft daylight from one side, clean neutral white balance, the product brighter than the background.',
+    secondaryPhysics: 'Packaging creases and flexes, tissue paper shifts, a slight wobble as the product is lifted.',
+    keywords: ['hands in frame', 'packaging', 'first look', 'product to camera', 'tabletop'],
+    gradient: 'from-amber-100 via-orange-50 to-white',
+    icon: '📦',
+    presetSteps: [
+      { label: 'Table and box', instruction: 'Place the person at a clean table with the sealed product box in front of them, hands resting near it.', rationale: 'The box has to be recognisable before it is opened or the reveal lands on nothing.' },
+      { label: 'Opening', instruction: 'Move to their hands lifting the lid, packaging visibly in motion.', rationale: 'Hands doing the work is what makes an unboxing feel like a person rather than a product shot.' },
+      { label: 'First look', instruction: 'Show their face reacting as they see the contents, product still in the box.', rationale: 'The reaction is the ad; the product is the reason for it.' },
+      { label: 'Product up', instruction: 'Have them lift the product out and hold it toward the lens at chest height.', rationale: 'One clear, legible look at the thing being sold.' },
+      { label: 'Label legible', instruction: 'Refine so the product label is sharp and readable, with the face still in frame behind it.', rationale: 'A viewer who cannot read the label cannot buy it.' },
+    ],
+  },
+  {
+    id: 'before-after',
+    name: 'Before and after',
+    category: 'Ad format',
+    tagline: 'The same person, the same framing, two different days.',
+    defaultPrompt:
+      'A creator showing the change the product made, using identical framing and lighting so only the result differs.',
+    cameraMotion: 'Static, identical framing across both states — the whole point is that nothing else moves.',
+    lightingAndColor: 'Flat, even, repeatable light. No mood, no flattering rim — a claim is only believable if nothing else changed.',
+    secondaryPhysics: 'Nothing incidental. Any change in background or clothing undermines what is being demonstrated.',
+    keywords: ['same framing', 'consistent light', 'visible change', 'held up to camera'],
+    gradient: 'from-sky-100 via-slate-50 to-white',
+    icon: '↔️',
+    presetSteps: [
+      { label: 'Before, framed', instruction: 'Place the person against a plain wall in flat even light, facing the camera squarely, showing the starting state.', rationale: 'The framing has to be reproducible, because the comparison depends on it.' },
+      { label: 'The product', instruction: 'Add the product held in one hand at chest height, without changing the framing or the light.', rationale: 'Naming what caused the change, without breaking the comparison.' },
+      { label: 'Using it', instruction: 'Show them actually applying or using the product, same position, same light.', rationale: 'The middle step is the proof that the two states are connected.' },
+      { label: 'After', instruction: 'Show the improved state in the identical framing and lighting as the first frame.', rationale: 'Any drift in angle or light reads as a trick.' },
+      { label: 'Hold the result', instruction: 'Refine the final frame so the change is clearly visible and the person looks relaxed and pleased.', rationale: 'The result has to be legible in the first second of a scroll.' },
+    ],
+  },
+  {
+    id: 'testimonial',
+    name: 'Talking to camera',
+    category: 'Ad format',
+    badge: 'Converts',
+    tagline: 'One person, one honest recommendation, straight down the lens.',
+    defaultPrompt:
+      'A creator talking directly to camera about the product, at home, holding it casually, like telling a friend.',
+    cameraMotion: 'Handheld at arm\'s length, tiny natural drift, holding a close medium shot the whole way.',
+    lightingAndColor: 'Window light on the face, warm and soft. A real room behind them, slightly out of focus.',
+    secondaryPhysics: 'Natural breathing movement, hair settling, small hand gestures around the product.',
+    keywords: ['direct eye contact', 'at home', 'handheld', 'casual', 'holding the product'],
+    gradient: 'from-rose-50 via-amber-50 to-white',
+    icon: '💬',
+    presetSteps: [
+      { label: 'Real room', instruction: 'Place the person in a lived-in room with soft window light, seated or standing close to camera.', rationale: 'A room someone actually lives in is what separates this from an advert shot in a studio.' },
+      { label: 'Eye contact', instruction: 'Bring their gaze directly into the lens with a relaxed, mid-sentence expression.', rationale: 'Direct address is the entire mechanism of a testimonial.' },
+      { label: 'Product in hand', instruction: 'Add the product held loosely in one hand, near chest height, not presented.', rationale: 'Held casually reads as ownership; held up reads as an advert.' },
+      { label: 'Closer', instruction: 'Tighten to a close medium shot so the face fills more of the frame.', rationale: 'Vertical feeds reward faces, and trust is carried in the face.' },
+      { label: 'Warmth', instruction: 'Warm the light slightly and soften the shadows so they look rested and approachable.', rationale: 'Somebody you would take a recommendation from.' },
+    ],
+  },
+  {
+    id: 'problem-solution',
+    name: 'Problem, then fix',
+    category: 'Ad format',
+    tagline: 'Show the annoyance first. That is what earns the two seconds.',
+    defaultPrompt:
+      'A creator visibly dealing with the everyday problem the product solves, then solving it with the product.',
+    cameraMotion: 'Handheld and slightly restless during the problem, settling to steady once it is solved.',
+    lightingAndColor: 'Duller and cooler at the start, warming as it resolves — the light does the argument.',
+    secondaryPhysics: 'Visible frustration in the hands and shoulders early; loosened posture at the end.',
+    keywords: ['relatable problem', 'frustration', 'the fix', 'relief', 'everyday'],
+    gradient: 'from-slate-200 via-slate-50 to-amber-50',
+    icon: '🔧',
+    presetSteps: [
+      { label: 'The annoyance', instruction: 'Show the person mid-problem, expression and posture conveying the everyday frustration, in cooler flatter light.', rationale: 'A scroll stops on a problem the viewer recognises, not on a product.' },
+      { label: 'Close on it', instruction: 'Move closer to the specific thing going wrong, so the problem is unmistakable.', rationale: 'Naming the problem visually beats saying it.' },
+      { label: 'Product arrives', instruction: 'Bring the product into frame in their hand as the solution.', rationale: 'The turn should be a moment, not a cut.' },
+      { label: 'It works', instruction: 'Show the problem resolved, posture loosened, light warmer.', rationale: 'Relief is the payoff the first frame promised.' },
+      { label: 'Look up', instruction: 'Finish with them looking to camera with an easy expression, product still in hand.', rationale: 'The look to camera is what converts a demonstration into a recommendation.' },
+    ],
+  },
+  {
+    id: 'grwm',
+    name: 'Get ready with me',
+    category: 'Ad format',
+    tagline: 'The product inside a routine, not interrupting one.',
+    defaultPrompt:
+      'A creator working the product into their morning routine at a mirror, talking as they go.',
+    cameraMotion: 'Phone propped at the mirror, mostly static, the person moving in and out of frame naturally.',
+    lightingAndColor: 'Bright bathroom or bedroom light, clean and slightly cool, no mood lighting.',
+    secondaryPhysics: 'Steam, running water, hair being moved, objects picked up and put back down.',
+    keywords: ['mirror', 'morning routine', 'in the middle of things', 'propped phone'],
+    gradient: 'from-cyan-50 via-white to-rose-50',
+    icon: '🪞',
+    presetSteps: [
+      { label: 'At the mirror', instruction: 'Place the person at a bathroom or bedroom mirror with the phone propped, mid-routine.', rationale: 'Propped-phone framing signals a routine being documented rather than performed.' },
+      { label: 'Routine in motion', instruction: 'Show them part-way through the routine with other products visible on the counter.', rationale: 'A product alone on a counter is an advert; a product among others is a life.' },
+      { label: 'Reach for it', instruction: 'Have them pick up the product as the natural next step.', rationale: 'Belonging in the sequence is the whole claim of this format.' },
+      { label: 'Using it', instruction: 'Show the product actually being applied or used, hands clearly in frame.', rationale: 'Use is more persuasive than display.' },
+      { label: 'Carry on', instruction: 'Return them to the routine, product set back down among the others.', rationale: 'Ending mid-routine implies it was always there.' },
+    ],
+  },
+  {
+    id: 'demo',
+    name: 'How it works',
+    category: 'Ad format',
+    tagline: 'The mechanism, shown close enough to believe.',
+    defaultPrompt:
+      'A creator demonstrating exactly how the product works, close on the hands and the mechanism.',
+    cameraMotion: 'Alternating between the hands and the face — close for the mechanism, back for the reaction.',
+    lightingAndColor: 'Bright and even with a clean key on the product itself; nothing dramatic competing with the detail.',
+    secondaryPhysics: 'Moving parts, texture, pouring or spreading — whatever the product actually does.',
+    keywords: ['close on hands', 'mechanism', 'texture', 'demonstration', 'detail'],
+    gradient: 'from-emerald-50 via-white to-slate-50',
+    icon: '🔍',
+    presetSteps: [
+      { label: 'Set it up', instruction: 'Place the person at a clear surface with the product in front of them, ready to demonstrate.', rationale: 'A demonstration needs a stage that does not compete with it.' },
+      { label: 'Close on hands', instruction: 'Move in close on their hands operating the product, face out of frame or soft behind.', rationale: 'The mechanism is the argument, and it has to be seen to be believed.' },
+      { label: 'The moment', instruction: 'Capture the specific moment the product does the thing it is for, in sharp detail.', rationale: 'One frame carries the proof.' },
+      { label: 'Back to the face', instruction: 'Pull back to include their face reacting to the result.', rationale: 'A mechanism without a person is a manual, not an ad.' },
+      { label: 'Both in frame', instruction: 'Finish with the product and their face both clearly readable in one frame.', rationale: 'The last frame is the one a scroller sees longest.' },
+    ],
+  },
+];
+
+/** Ad formats first: they are what this product is for. */
+export const ALL_TEMPLATES: CreativeTemplate[] = [...AD_FORMAT_TEMPLATES, ...CREATIVE_TEMPLATES];
+
 export function getTemplateById(id: string): CreativeTemplate | undefined {
-  return CREATIVE_TEMPLATES.find((t) => t.id === id);
+  /* ALL_TEMPLATES, not CREATIVE_TEMPLATES. Searching only the scene templates
+     would have let a user pick an ad format and the planner silently receive
+     nothing — a template that changes the gallery and not the run. */
+  return ALL_TEMPLATES.find((t) => t.id === id);
 }

@@ -105,9 +105,23 @@ check(
   'start 抛异常时按钮不会卡在「正在听」',
 );
 check(
-  /return \(\) => \{[\s\S]{0,260}recRef\.current\?\.stop\(\)/.test(SRC),
-  '组件卸载时释放麦克风',
-  '（否则录音指示灯会一直亮着）',
+  /return \(\) => \{[\s\S]{0,320}recRef\.current\?\.abort\(\)/.test(SRC),
+  '组件卸载时释放麦克风，而且用的是 abort()',
+  '（stop() 会等一个最终结果，再把它交给已经不存在的组件）',
+);
+check(
+  !/recRef\.current\?\.stop\(\);\s*\} catch \{\s*\/\* already stopped/.test(SRC),
+  '卸载时不再用 stop()',
+);
+check(
+  /previous\.onresult = null;[\s\S]{0,160}previous\.abort\(\)/.test(SRC),
+  '换新的识别器之前，先把旧的处理函数摘掉',
+  '（否则旧的 onend 会把新一轮的按钮关掉）',
+);
+check(
+  /IT IS NOT ON-DEVICE/.test(SRC) && !/the audio never leaves the machine\)/.test(SRC),
+  '不再声称语音不出本机',
+  '（Chrome 会把音频传给 Google 的语音服务）',
 );
 check(
   /cannot dictate/.test(SRC),

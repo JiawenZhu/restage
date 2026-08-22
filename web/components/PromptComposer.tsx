@@ -10,9 +10,22 @@ import { useUser } from './AuthGate';
  * both is the point: the user keeps ownership of what they meant, and can see
  * exactly what the machine understood before anything is spent on it.
  *
- * Voice is the browser's own SpeechRecognition (Chrome ships it; no server, no
- * upload — the audio never leaves the machine). Where the API is missing the
- * mic button simply is not rendered; typing and keywords lose nothing.
+ * Voice is the browser's own SpeechRecognition (Chrome and Edge ship it).
+ *
+ * IT IS NOT ON-DEVICE, and this comment used to say it was: "no server, no
+ * upload — the audio never leaves the machine". That is false. Chrome streams
+ * microphone audio to a Google speech service and receives transcripts back,
+ * which is exactly why the spec has a 'network' error code — and why the
+ * handler below tells the user it "could not reach the speech service". The
+ * file contradicted itself two hundred lines apart, and on a product whose
+ * premise is careful handling of somebody's likeness, a false claim about where
+ * their voice goes is not a small inaccuracy.
+ *
+ * Nothing is sent to OUR servers, and no recording is stored anywhere. That is
+ * the true and narrower claim.
+ *
+ * Where the API is missing the mic button is not rendered at all; typing and
+ * keywords lose nothing.
  */
 
 /**
@@ -102,9 +115,12 @@ export function PromptComposer({
     return () => {
       stoppingRef.current = true;
       try {
-        recRef.current?.stop();
+        /* abort(), not stop(). stop() asks for a final result and then delivers
+           it — to handlers belonging to a component that no longer exists.
+           abort() discards immediately, which is what unmounting means. */
+        recRef.current?.abort();
       } catch {
-        /* already stopped */
+        /* already gone */
       }
       recRef.current = null;
     };
@@ -147,9 +163,27 @@ export function PromptComposer({
       return;
     }
     const rec = getRecognizer();
+    /* Defensive only: the mic button is not rendered unless speechSupported, so
+       this is unreachable in practice. It stays because the two checks could
+       drift, and a silent no-op button is the worse failure. */
     if (!rec) {
       setError('This browser cannot dictate — Chrome and Edge can. Type instead.');
       return;
+    }
+
+    /* Detach the previous session before adopting a new one. Each toggle builds
+       a fresh recognizer, and an old one still winding down would otherwise
+       fire onend into the new session and switch the button off underneath it. */
+    const previous = recRef.current;
+    if (previous) {
+      previous.onresult = null;
+      previous.onend = null;
+      previous.onerror = null;
+      try {
+        previous.abort();
+      } catch {
+        /* already gone */
+      }
     }
     recRef.current = rec;
     setError(null);

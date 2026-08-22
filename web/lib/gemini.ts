@@ -278,6 +278,15 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
         parameters: {
           aspectRatio: req.aspect,
           durationSeconds: seconds,
+          /*
+           * Ask for the resolution. This was added once, and the Vertex
+           * migration dropped it — veoResolution() sat in this file defined and
+           * called by nothing, so every clip since has come back at Veo's 720p
+           * default while the code still carried the reasoning for asking for
+           * more. Exactly the regression the original comment warns about:
+           * prompt text does not change the output size, the parameter does.
+           */
+          resolution: veoResolution(seconds),
           negativePrompt: VIDEO_NEGATIVE_PROMPT,
         },
       },

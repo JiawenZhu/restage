@@ -15,6 +15,18 @@ import type { Run, TreeNode } from '@/lib/types';
  * are two views of the same thing — hoisting it any higher would make the whole
  * route a client component for no gain.
  */
+/*
+ * The shot length the video model requires before it will give you 1080p.
+ *
+ * Mirrors MAX_CLIP_SECONDS in lib/gemini, which cannot be imported here — that
+ * module is server-only and throws on import from a client component, because
+ * it holds the API key. Measured against the live API: 1080p is refused during
+ * request validation at 4s and at 6s, and accepted at 8.
+ */
+const FULL_SHOT_SECONDS = 8;
+/** The lengths the picker below actually offers. */
+const FOR_1080P = [8, 16, 24, 32];
+
 const EDIT_KEYWORDS = [
   'warmer light',
   'cooler light',
@@ -961,6 +973,29 @@ function Inspector({
             {!plan.honoursRequest && (
               <p className="mt-1 text-[12px] leading-snug text-warn-ink">
                 {sequenceLength} shots will not fit in {lengthChoice}s — 4s is the shortest shot the model makes.
+              </p>
+            )}
+            {/*
+              How to actually get 1080p, said where the decision is made.
+
+              The model only accepts the higher resolution on a full-length
+              eight-second shot; anything shorter is refused during request
+              validation and comes back at 720p. That is not discoverable from
+              anywhere — it is a property of the video model — so a person
+              choosing 8s for a six-shot ad quietly gets six 720p shots and no
+              way to find out why. The arithmetic that fixes it is one line.
+            */}
+            {perShot < FULL_SHOT_SECONDS && FOR_1080P.includes(sequenceLength * FULL_SHOT_SECONDS) && (
+              <p className="mt-1 text-[12px] leading-snug text-ink-3">
+                At {perShot}s a shot this renders at 720p. Choose{' '}
+                <button
+                  type="button"
+                  onClick={() => setLengthChoice((sequenceLength * FULL_SHOT_SECONDS) as 8 | 16 | 24 | 32)}
+                  className="font-semibold text-accent-ink underline"
+                >
+                  {sequenceLength * FULL_SHOT_SECONDS}s
+                </button>{' '}
+                to give every shot the full {FULL_SHOT_SECONDS}s the model needs for 1080p.
               </p>
             )}
 

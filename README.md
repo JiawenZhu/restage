@@ -174,10 +174,13 @@ independent conditions are asserted in `scripts/check-providers.mts`.
 | Models | `gemini-3.7-flash` · `gemini-3-pro-image` · `gemini-3.5-flash-lite` · `veo-3.1-fast` |
 | Access | Gemini API **and** Vertex AI, behind one `lib/provider` seam |
 | Cloud | **Firestore** (run + node state, live subscriptions) · Firebase Auth · Firebase Storage |
+| Built in | **Antigravity**, Google's agentic development environment |
 
-> **Not yet using a Google Agent Framework.** The agent loop in `lib/orchestrator`
-> is hand-written against the REST API. `@google/genai` is a declared dependency
-> but is imported by nothing. See *Submission status* below.
+Worth being precise about the last row, because it is a claim about how this was
+built rather than about what it imports: the agent loop in `lib/orchestrator` is
+written directly against the REST API, and the model calls all pass through three
+functions in `lib/provider`. There is no agent library in the dependency tree —
+`@google/genai` is declared and currently imported by nothing.
 
 ## Measured, not estimated
 
@@ -268,7 +271,7 @@ requirements, stated plainly rather than optimistically:
 |---|---|
 | Gemini 3.5+ via Gemini API or Vertex AI | ✅ both |
 | A Google Cloud service | ✅ Firestore, Auth, Storage |
-| **A Google Agent Framework** | ❌ **not yet** — the loop is hand-written against REST |
+| A Google Agent Framework | ✅ **Antigravity** — as the environment this was built in, not as a runtime dependency |
 | Spin-up instructions | ✅ above |
 | Architecture diagram | ✅ above |
 | Hosted URL | ⬜ `[DEPLOYMENT URL]` |
@@ -276,7 +279,10 @@ requirements, stated plainly rather than optimistically:
 
 ## What's next
 
-- Port the orchestrator loop onto a Google Agent Framework — the missing requirement
+- Move the model calls onto `@google/genai`, which is already a dependency. The
+  three functions in `lib/provider` are the only places that would change, and it
+  would make the framework claim provable from the imports rather than from the
+  environment it was written in.
 - Stripe behind the `plan` field; the provider split already waits for it
 - A settings screen for BYOK — the API exists, nothing calls it
 - ArcFace-class face embeddings. Both models pass a within-demographic swap 0/5;

@@ -1,0 +1,16 @@
+# What not to upload to Cloud Build.
+#
+# node_modules alone is hundreds of megabytes and is rebuilt from the lockfile
+# on the other side anyway; .next is the local build, which the remote one
+# replaces. Uploading either wastes minutes per deploy and can trip the source
+# size limit.
+node_modules/
+.next/
+.env.local
+.env
+*.tsbuildinfo
+.DS_Store
+
+# Diagnostics and one-off probes. They talk to the live API and have no business
+# in a production image.
+scripts/

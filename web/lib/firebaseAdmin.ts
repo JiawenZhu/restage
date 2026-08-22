@@ -9,7 +9,7 @@ if (typeof window !== 'undefined') {
   throw new Error('lib/firebaseAdmin is server-only — it bypasses every security rule.');
 }
 
-import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
+import { applicationDefault, cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
@@ -21,7 +21,43 @@ function admin(): App {
   if (getApps().length) return (cached = getApps()[0]);
 
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set');
+
+  /*
+   * On Google infrastructure there is already an identity. Use it.
+   *
+   * This threw outright when the variable was absent, which is correct on a
+   * laptop and wrong everywhere this actually deploys. Cloud Run — which is
+   * what Firebase App Hosting runs on — attaches a service account to the
+   * instance, and the Admin SDK can pick it up through Application Default
+   * Credentials without a key existing anywhere.
+   *
+   * Without this branch the deployment fails in the worst possible shape: the
+   * build succeeds, the site serves, and then every single API route throws on
+   * its first line. A green deploy and a dead product.
+   *
+   * It is also the better posture. Shipping a private key as a secret when the
+   * runtime already has an identity adds a thing to rotate and a place to leak
+   * it, in exchange for nothing.
+   */
+  if (!raw) {
+    const projectId =
+      process.env.GOOGLE_CLOUD_PROJECT ||
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+      process.env.GCLOUD_PROJECT;
+    if (!projectId) {
+      throw new Error(
+        'No Firebase credentials. Set FIREBASE_SERVICE_ACCOUNT_JSON for local development, ' +
+          'or deploy somewhere that provides Application Default Credentials.',
+      );
+    }
+    cached = initializeApp({
+      credential: applicationDefault(),
+      projectId,
+      storageBucket:
+        process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${projectId}.firebasestorage.app`,
+    });
+    return cached;
+  }
 
   // The value may be the JSON itself or a JSON-encoded string of it, depending
   // on how it was written into .env — accept both rather than making the shape

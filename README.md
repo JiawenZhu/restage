@@ -10,6 +10,15 @@ for. When it did not, the agent tries again on its own.
 
 You watch it happen. You do not drive it.
 
+### ▶ Live app — `[URL PENDING FIRST DEPLOY]`
+
+Not a placeholder left by accident: the deploy is one interactive step away
+(`firebase login --reauth`, see **Deploy** below) and App Hosting assigns the
+domain when the backend is created, so guessing it here would ship a link that
+404s. Once it exists, `/studio/demo` is the thing to open — a finished ad with
+its plan, its critic verdicts and its discarded attempts all still on the
+canvas. Nothing is hidden, including the frames the agent threw away.
+
 > **`Restage` is a placeholder name.** It appears throughout the repo and this
 > README; renaming is a find-and-replace when the real name is settled.
 
@@ -230,6 +239,33 @@ npm run dev                  # http://localhost:3100
 
 Firestore rules and indexes are in `firestore.rules` and `firestore.indexes.json`.
 
+## Deploy
+
+Firebase **App Hosting** — this is 15 dynamic API routes, a long render path and
+a background orchestrator, which is a Cloud Run workload rather than a static
+site. `apphosting.yaml` carries the runtime config and the secret bindings.
+
+```bash
+firebase login --reauth                                    # one-time, opens a browser
+firebase apphosting:secrets:set GEMINI_API_KEY --project restage-studio
+firebase apphosting:backends:create --project restage-studio
+```
+
+The last step connects the GitHub repo; after that every push to the connected
+branch builds and deploys on its own. Repeat `secrets:set` for each secret
+listed in `apphosting.yaml`.
+
+Two things that are easy to get wrong and are already handled:
+
+- **`timeoutSeconds: 600`.** A sequence render submits one Veo job per shot and
+  polls each — 57s for a 4s clip, 121s for 8s. The 60s default would kill a
+  seven-shot render partway and bill for the shots that had landed.
+- **No service-account key is deployed.** Cloud Run attaches an identity, and
+  `lib/firebaseAdmin` initialises from Application Default Credentials when
+  `FIREBASE_SERVICE_ACCOUNT_JSON` is absent. It used to throw instead, which
+  would have produced a green deploy where every API route failed on its first
+  line.
+
 ## Repository guide
 
 ```
@@ -274,7 +310,7 @@ requirements, stated plainly rather than optimistically:
 | A Google Agent Framework | ✅ **Antigravity** — as the environment this was built in, not as a runtime dependency |
 | Spin-up instructions | ✅ above |
 | Architecture diagram | ✅ above |
-| Hosted URL | ⬜ `[DEPLOYMENT URL]` |
+| Hosted URL | ⬜ `apphosting.yaml` is written; the deploy needs `firebase login --reauth` |
 | ~4-min demo video | ⬜ needs proof of Google Cloud deployment |
 
 ## What's next

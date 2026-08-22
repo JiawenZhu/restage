@@ -1,0 +1,114 @@
+# Firebase App Hosting — the Next.js SSR deployment.
+#
+# App Hosting rather than `firebase deploy --only hosting` with a frameworks
+# backend: this app is 15 dynamic API routes, a long-running render path and a
+# background orchestrator, which is a Cloud Run workload rather than a static
+# site with a function bolted on. App Hosting builds from the GitHub repo and
+# runs the result on Cloud Run, which is also the Google Cloud deployment proof
+# the hackathon asks to see on screen.
+#
+# SETUP IS ONE-TIME AND INTERACTIVE — it needs a browser to authorise the GitHub
+# connection, so it cannot be scripted:
+#
+#   firebase login --reauth
+#   firebase apphosting:backends:create --project restage-studio
+#
+# After that, every push to the connected branch builds and deploys on its own.
+
+runConfig:
+  # The render path submits a Veo job per shot and polls until it finishes.
+  # Measured: 57s for a 4s clip, 121s for 8s, and a seven-shot sequence chains
+  # them — so the default 60s would kill a sequence render partway through and
+  # bill for the shots that had already landed.
+  timeoutSeconds: 600
+  cpu: 1
+  memoryMiB: 1024
+  # Frames are held in memory while a run is stitched; concurrency above this
+  # risks an OOM on a multi-shot render rather than a slow one.
+  concurrency: 20
+  maxInstances: 10
+  minInstances: 0
+
+env:
+  # ── public, safe to inline ─────────────────────────────────────────────────
+  # NEXT_PUBLIC_ values are compiled into the client bundle by definition, so
+  # they are public whatever we do here. They are Firebase's own web config,
+  # which is designed to be public — access is controlled by security rules,
+  # not by hiding these.
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: restage-studio
+    availability: [BUILD, RUNTIME]
+
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: restage-studio.firebasestorage.app
+    availability: [BUILD, RUNTIME]
+
+  # `global` serves the 3.x models; every region tested serves only 2.5 and
+  # produces visibly worse ads. Only read when the paid path is enabled.
+  - variable: GOOGLE_CLOUD_LOCATION
+    value: global
+    availability: [RUNTIME]
+
+  # The free tier is 2 requests/min. Raise after upgrading the Veo quota.
+  - variable: RESTAGE_VEO_RPM
+    value: "2"
+    availability: [RUNTIME]
+
+  # ── secrets ────────────────────────────────────────────────────────────────
+  # Create each one first:
+  #   firebase apphosting:secrets:set GEMINI_API_KEY --project restage-studio
+  #
+  # RUNTIME only, deliberately. None of these is needed to build, and a secret
+  # available at BUILD can end up baked into an artifact.
+
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
+    availability: [RUNTIME]
+
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    secret: NEXT_PUBLIC_FIREBASE_API_KEY
+    availability: [BUILD, RUNTIME]
+
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    secret: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    availability: [BUILD, RUNTIME]
+
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    secret: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    availability: [BUILD, RUNTIME]
+
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    secret: NEXT_PUBLIC_FIREBASE_APP_ID
+    availability: [BUILD, RUNTIME]
+
+  # Encrypts a user's own API key at rest. Changing it makes every already-saved
+  # key undecryptable, so set it once and leave it.
+  - variable: RESTAGE_KEY_SECRET
+    secret: RESTAGE_KEY_SECRET
+    availability: [RUNTIME]
+
+  # Cloudflare R2 — where finished clips live. Without these a render has
+  # nowhere to put the video.
+  - variable: R2_ACCOUNT_ID
+    secret: R2_ACCOUNT_ID
+    availability: [RUNTIME]
+  - variable: R2_BUCKET
+    secret: R2_BUCKET
+    availability: [RUNTIME]
+  - variable: R2_ACCESS_KEY_ID
+    secret: R2_ACCESS_KEY_ID
+    availability: [RUNTIME]
+  - variable: R2_SECRET_ACCESS_KEY
+    secret: R2_SECRET_ACCESS_KEY
+    availability: [RUNTIME]
+
+# NOT SET, on purpose:
+#
+#   FIREBASE_SERVICE_ACCOUNT_JSON — App Hosting runs on Cloud Run with a service
+#   account attached, so the Admin SDK picks up credentials from the environment.
+#   lib/firebaseAdmin falls through to those when the variable is absent.
+#   Shipping a private key as a secret when the runtime already has an identity
+#   is strictly worse: one more thing to rotate, and one more place it can leak.
+#
+#   RESTAGE_DEFAULT_PROVIDER — absent means the Gemini API path, which is what
+#   should be deployed. Setting it to `vertex` turns on the paid path.

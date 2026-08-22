@@ -24,8 +24,25 @@ import type { Run, TreeNode } from '@/lib/types';
  * request validation at 4s and at 6s, and accepted at 8.
  */
 const FULL_SHOT_SECONDS = 8;
-/** The lengths the picker below actually offers. */
-const FOR_1080P = [8, 16, 24, 32];
+
+/**
+ * The lengths on offer, plus whatever this many shots needs for 1080p.
+ *
+ * The fixed list was 8/16/24/32, and against a plan of 5-7 shots — which is
+ * what the planner is told to produce — NONE of them divides into 8s a shot:
+ *
+ *   5 shots  best 6s   6 shots  best 5s   7 shots  best 5s
+ *
+ * So every multi-shot ad this product made was 720p, and no choice on the
+ * screen could change that. Only a 3-4 shot sequence could reach 1080p at all.
+ * Adding shots x 8 puts the full-quality length back within reach at any shot
+ * count; it is a longer ad, and that is a trade the person paying should get to
+ * make rather than one the picker makes for them by omission.
+ */
+function lengthOptions(shots: number): number[] {
+  const full = Math.max(FULL_SHOT_SECONDS, shots * FULL_SHOT_SECONDS);
+  return [...new Set([8, 16, 24, 32, full])].sort((a, b) => a - b);
+}
 
 const EDIT_KEYWORDS = [
   'warmer light',
@@ -588,8 +605,8 @@ function Inspector({
   /* Defaults to the length chosen on /studio before the run. The right length
      is only really knowable once the frames exist, so it can be changed here —
      but the earlier choice is the starting point, not a constant. */
-  const [lengthChoice, setLengthChoice] = useState<4 | 8 | 16 | 24 | 32>(
-    ([4, 8, 16, 24, 32] as const).includes(run.seconds as 4) ? (run.seconds as 4) : 8,
+  const [lengthChoice, setLengthChoice] = useState<number>(
+    ([4, 8, 16, 24, 32] as const).includes(run.seconds as 4) ? (run.seconds as number) : 8,
   );
   const [playable, setPlayable] = useState<{ nodeId: string; url: string } | null>(null);
   const [clipError, setClipError] = useState<string | null>(null);
@@ -985,22 +1002,23 @@ function Inspector({
               choosing 8s for a six-shot ad quietly gets six 720p shots and no
               way to find out why. The arithmetic that fixes it is one line.
             */}
-            {perShot < FULL_SHOT_SECONDS && FOR_1080P.includes(sequenceLength * FULL_SHOT_SECONDS) && (
+            {perShot < FULL_SHOT_SECONDS && (
               <p className="mt-1 text-[12px] leading-snug text-ink-3">
-                At {perShot}s a shot this renders at 720p. Choose{' '}
+                At {perShot}s a shot this renders at 720p — the model only gives 1080p a full{' '}
+                {FULL_SHOT_SECONDS}s shot. Choose{' '}
                 <button
                   type="button"
-                  onClick={() => setLengthChoice((sequenceLength * FULL_SHOT_SECONDS) as 8 | 16 | 24 | 32)}
+                  onClick={() => setLengthChoice(sequenceLength * FULL_SHOT_SECONDS)}
                   className="font-semibold text-accent-ink underline"
                 >
                   {sequenceLength * FULL_SHOT_SECONDS}s
                 </button>{' '}
-                to give every shot the full {FULL_SHOT_SECONDS}s the model needs for 1080p.
+                for 1080p, at {sequenceLength * FULL_SHOT_SECONDS}s of ad.
               </p>
             )}
 
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              {([8, 16, 24, 32] as const).map((n) => (
+              {lengthOptions(sequenceLength).map((n) => (
                 <button
                   key={n}
                   type="button"

@@ -54,7 +54,20 @@ const Body = z.object({
   nodeId: z.string().min(1).optional(),
   mode: z.enum(['frame', 'sequence']).default('frame'),
   engine: z.enum(['veo', 'omni']).default('veo').optional(),
-  seconds: z.union([z.literal(4), z.literal(8), z.literal(16), z.literal(24), z.literal(32)]).optional(),
+  /*
+   * A bounded number, not a fixed set of five.
+   *
+   * The enum was 4/8/16/24/32, which matched a picker that offered exactly
+   * those. The picker now also offers `shots x 8` — the only length that gives
+   * every shot the full eight seconds the model needs for 1080p — and against a
+   * five-to-seven shot plan that is 40, 48 or 56. All three would have been
+   * refused here with "nodeId is required", which is not what went wrong.
+   *
+   * The ceiling is what a sequence can legitimately ask for: eight seconds per
+   * shot across the largest plan the planner produces, with headroom. The floor
+   * is the model's own minimum.
+   */
+  seconds: z.number().int().min(4).max(120).optional(),
 });
 
 async function resolveImage(u: string): Promise<{ mimeType: string; data: Buffer } | null> {

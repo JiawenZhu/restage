@@ -76,6 +76,49 @@ check(
 check(!/\bplan\b/.test(KEYROUTE.split('export async function POST')[1] ?? ''), 'key 路由不写 plan 字段');
 check(/THE PLAN IS NOT SETTABLE HERE/.test(KEYROUTE), '这条规则写在代码里，不只在脑子里');
 
+/* ── shipped but dormant ──────────────────────────────────────────────────── */
+console.log('\n════ Vertex 随代码发布，但默认跑不起来 ════\n');
+
+/*
+ * The paid path ships in the repository and must not execute in a default
+ * deployment. Three independent conditions have to hold, and all three are
+ * asserted here rather than remembered: a route added later that writes `plan`
+ * would open the door quietly, and this is what notices.
+ */
+const GEMINI_SRC = readFileSync(new URL('../lib/gemini.ts', import.meta.url), 'utf8');
+check(
+  /RESTAGE_DEFAULT_PROVIDER === 'vertex' \? 'vertex' : 'api-key'/.test(GEMINI_SRC),
+  '没设环境变量时，默认走用户自己的 key',
+  '（要走付费那边必须显式打开）',
+);
+check(/return 'byok';/.test(SRC) && /plan === 'paid' \? 'paid' : 'byok'/.test(SRC),
+  '账号没有 plan 字段时算自带 key');
+check(/provider: args\.provider \?\? 'api-key'/.test(ORCH), 'run 没记 provider 时也走自带 key');
+
+/*
+ * No route may write the plan. The only `plan:` assignments in the codebase are
+ * the run's SHOT LIST — an unrelated field that happens to share the word — and
+ * this check is written to tell them apart rather than to count occurrences.
+ */
+const ROUTE_FILES = [
+  '../app/api/account/key/route.ts',
+  '../app/api/runs/route.ts',
+  '../app/api/runs/[runId]/render/route.ts',
+  '../app/api/runs/[runId]/look/route.ts',
+];
+/* Comments stripped first. Without that, the key route's own comment — the one
+   that says THE PLAN IS NOT SETTABLE HERE and quotes `plan: 'paid'` to explain
+   why — matched, and the file documenting the rule was reported as breaking it.
+   Fifth false positive of the day from matching text without reading context. */
+const stripComments = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+
+const writesPlan = ROUTE_FILES.filter((f) => {
+  const src = stripComments(readFileSync(new URL(f, import.meta.url), 'utf8'));
+  return /\bplan:\s*['"`](?:paid|byok)['"`]/.test(src);
+});
+check(writesPlan.length === 0, '没有任何路由能把账号改成付费', writesPlan.join(', ') || '（改 plan 只能靠服务端/Stripe）');
+
 /* ── the user's key ───────────────────────────────────────────────────────── */
 console.log('\n════ 用户的 key ════\n');
 

@@ -127,3 +127,79 @@ there with a redirect error that looks like a code bug and is not.
 
 `lib/gemini.ts` and `lib/r2.ts` throw on import in a browser rather than trusting
 this table to be followed.
+
+---
+
+# Deploying
+
+Everything below has been exercised against the live `restage-studio` project.
+
+## Before every deploy
+
+```bash
+cd web && npx tsc --noEmit && npm run build && npx tsx scripts/check-health.mts
+```
+
+`check-health.mts` asserts six invariants that have each broken during
+development, and each failure was silent when it happened:
+
+| Check | The failure it guards |
+|---|---|
+| Firestore writable | credentials expired or wrong project |
+| FieldValue sentinels survive | a JSON round-trip turned `increment(1)` into the map `{operand: 1}`, so a counter silently stopped counting |
+| Storage private, tokened URLs read | locking the bucket blanked every image in the app; a bare `?alt=media` URL only worked because the bucket was world-readable |
+| Spend ceiling holds under concurrency | a read-then-write counter lets parallel requests past the limit |
+| Composite index deployed | without it the library query throws — and the old handler answered that throw by returning *every user's* runs |
+| No run document near 1MB | one reached 1,333,473 bytes and became permanently unwritable, unable even to mark itself failed |
+
+## Rules and indexes
+
+Rules and indexes are **not** part of `next build` and are easy to forget:
+
+```bash
+npx firebase deploy --only firestore:rules,firestore:indexes,storage --project restage-studio
+```
+
+The Firestore index backs `where('uid','==',…).orderBy('createdAt','desc')` — the
+library's only query. Deploy it *before* the code that depends on it.
+
+## Environment
+
+`web/.env.local` is git-ignored and never committed. The server-only values
+(`GEMINI_API_KEY`, the R2 keys, `FIREBASE_SERVICE_ACCOUNT`) must not gain a
+`NEXT_PUBLIC_` prefix — that would bundle them into page source, which rotating
+the key afterwards does not undo.
+
+`RESTAGE_DEV_UID` is a development convenience that skips token verification. It
+is unreachable in a production build: `NODE_ENV === 'development'` is a compile
+-time constant there, so the branch is eliminated entirely — verified by grepping
+the build output, where only an inert `process.env.RESTAGE_DEV_UID` expression
+remains.
+
+## Regenerating template previews
+
+```bash
+cd web && npx tsx scripts/make-template-previews.mts [templateId …]
+```
+
+Each template costs one image plus one Veo render (~75s). Existing files are
+skipped so an interrupted run resumes, a lock file prevents two generators
+double-spending, and the script rewrites `lib/templatePreviews.ts` from what is
+actually on disk — so a partial run leaves the gallery telling the truth about
+which cards can be hovered.
+
+## Repairing data
+
+```bash
+cd web && npx tsx scripts/repair-runs.mts
+```
+
+Strips inline payloads that push a run document over the 1MB limit, un-corrupts
+`frameCount`/`previewFrames` values that were written as serialized sentinels,
+and backfills the summary the library reads.
+
+## Known limits
+
+- **Clips are 4–8 seconds.** The model's own words: *"Please provide a value between 4 and 8, inclusive."* Longer output needs several renders stitched together — the Python worker's first job, not built.
+- **Identity drift is only partly caught.** The critic reliably rejects a different person; subtle drift needs face-embedding comparison (ArcFace-class). Until then the human Reject is the last line, which is why it is a first-class control.
+- **The enrolled voice sample is stored and unused.** Clips use a synthetic voice reading a written line, which is shown to the user before rendering. `/likeness` says so.

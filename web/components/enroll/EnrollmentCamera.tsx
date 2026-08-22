@@ -20,6 +20,11 @@ export function EnrollmentCamera() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  /* The unmount cleanup below cannot read `stream` state — see the comment
+     there — so the live stream is mirrored here. */
+  const streamRef = useRef<MediaStream | null>(null);
+  /** Set when Save was pressed while signed out, so it can resume after login. */
+  const wantsSaveRef = useRef(false);
 
   // Hidden File input refs for single-item replace
   const fileInputFrontRef = useRef<HTMLInputElement>(null);
@@ -73,20 +78,43 @@ export function EnrollmentCamera() {
     }
   }, [stream, step]);
 
-  // Clean up media stream and audio context on unmount
+  /*
+   * Release the camera and microphone on unmount.
+   *
+   * This closed over `stream` from the FIRST render with an empty dependency
+   * array, and `stream` is null on the first render — so `if (stream)` was
+   * always false and the tracks were never stopped. Clicking any nav link left
+   * the webcam and microphone live for the rest of the session, recording
+   * indicator and all, with the vision loop still reading frames. On the page
+   * that promises a privacy vault, that is the worst possible thing to get
+   * wrong.
+   *
+   * A ref is used rather than adding `stream` to the deps, because that would
+   * tear the stream down on every state change instead of on unmount.
+   */
   useEffect(() => {
     return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
       if (audioContextRef.current) {
         audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
       }
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (user && wantsSaveRef.current) {
+      wantsSaveRef.current = false;
+      setAuthModalOpen(false);
+      void handleSaveAvatar();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Initialize WebRTC and Real-time Vision/Audio Analysis Loop
   const startMedia = async (targetStep: Step = 'front') => {
@@ -99,6 +127,7 @@ export function EnrollmentCamera() {
           audio: true,
         });
         setStream(mediaStream);
+        streamRef.current = mediaStream;
 
         // Setup Web Audio Analyser
         const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -231,9 +260,19 @@ export function EnrollmentCamera() {
   }, [headYaw, step, isCapturingBurst]);
 
   const stopMedia = () => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      setStream(null);
+    // Stop from the ref, which is always current, and tear down the analysis
+    // loop with it — a running requestAnimationFrame on a dead stream is just
+    // battery.
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setStream(null);
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
     }
   };
 
@@ -395,6 +434,9 @@ export function EnrollmentCamera() {
      * modal is already mounted; it only needed to be opened.
      */
     if (!user) {
+      // Remember that a save was wanted, so it resumes when auth arrives rather
+      // than silently doing nothing and requiring a second press.
+      wantsSaveRef.current = true;
       setAuthModalOpen(true);
       return;
     }

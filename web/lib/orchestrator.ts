@@ -53,7 +53,28 @@ export async function uploadToStorage(
 
   let dataBuffer: Buffer;
   if (typeof input === 'string') {
-    if (input.startsWith('http://') || input.startsWith('https://')) return input;
+    /*
+     * Pass through only URLs that already live in this bucket and carry a
+     * download token — those are permanent.
+     *
+     * Any http(s) input used to be returned unchanged, and /studio now sends
+     * the enrolled avatar as a ONE-HOUR signed URL. That URL was then stored as
+     * the run's avatarUrl, its root node's frameUrl and previewFrames[0]: an
+     * hour later the SOURCE AVATAR was a broken image and Regenerate — the
+     * product's core revise action — failed permanently with "failed to fetch
+     * image from url (403)".
+     *
+     * Anything else is fetched once and re-saved here, so what the run holds is
+     * a copy it owns.
+     */
+    if (input.startsWith('http://') || input.startsWith('https://')) {
+      if (input.includes('firebasestorage.googleapis.com') && input.includes('token=')) return input;
+      const res = await fetch(input);
+      if (!res.ok) throw new Error(`could not read the source image (${res.status})`);
+      const buf = Buffer.from(await res.arrayBuffer());
+      contentType = res.headers.get('content-type') ?? contentType;
+      return uploadToStorage(buf, path, contentType);
+    }
     const match = input.match(/^data:([^;]+);base64,(.+)$/);
     dataBuffer = match ? Buffer.from(match[2], 'base64') : Buffer.from(input, 'base64');
     if (match) contentType = match[1];
@@ -154,6 +175,28 @@ export function sanitizeForFirestore<T>(value: T): T {
     return v;
   };
   return walk(value) as T;
+}
+
+/**
+ * Write a terminal status only if the run is still in a state the orchestrator
+ * owns. A transaction, because the render route writes the same field from
+ * another request at the same time.
+ */
+async function claimTerminalStatus(
+  run: FirebaseFirestore.DocumentReference,
+  status: 'awaiting-approval' | 'failed',
+  failureReason?: string,
+): Promise<void> {
+  const db = adminDb();
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(run);
+    const current = snap.data()?.status;
+    if (current !== 'planning' && current !== 'running') return;
+    tx.update(
+      run,
+      sanitizeForFirestore({ status, updatedAt: Date.now(), ...(failureReason ? { failureReason } : {}) }),
+    );
+  });
 }
 
 export async function createRun(args: StartArgs): Promise<string> {
@@ -466,7 +509,17 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
       }
     }
 
-    await touch({ status: 'awaiting-approval' });
+    /*
+     * Only claim the terminal status if the orchestrator still owns it.
+     *
+     * Rendering an early frame mid-run is supported, which sets the run to
+     * 'rendering'. An unconditional write here stamped 'awaiting-approval' over
+     * it: the Render button re-armed while Veo was still working, a second
+     * click bought a second clip, and two video nodes raced to write videoUrl.
+     * In the other order the clip finished first and this write flipped a
+     * complete run back to un-approved.
+     */
+    await claimTerminalStatus(run, 'awaiting-approval');
   } catch (err) {
     console.error('[orchestrator]', runId, err);
     // The run is marked failed rather than left "running" forever, so the UI can
@@ -474,10 +527,12 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
     // The comment above says the UI can say what happened — it could not,
     // because nothing recorded what happened. An empty plan panel that never
     // fills is indistinguishable from a slow one.
-    await touch({
-      status: 'failed',
-      failureReason: err instanceof Error ? err.message : 'the run stopped unexpectedly',
-    }).catch(() => {});
+    // Same guard: a run whose clip already rendered must not be stamped failed
+    // by a later orchestrator error — the library would show "Failed" beside a
+    // finished, playable video.
+    await claimTerminalStatus(run, 'failed', err instanceof Error ? err.message : 'the run stopped unexpectedly').catch(
+      () => {},
+    );
   }
 }
 

@@ -44,9 +44,23 @@ export async function GET(req: Request, ctx: { params: Promise<{ runId: string }
   }
   if (!key) return NextResponse.json({ error: 'no such clip' }, { status: 404 });
 
-  // Short-lived on purpose: the redirect target is handed to the browser, and a
-  // link that leaks should stop working quickly. The stable URL above is what
+  // Short-lived on purpose: the target is handed to the browser, and a link
+  // that leaks should stop working quickly. The stable URL above is what
   // survives.
-  const url = await signedVideoUrl(key, 3600);
-  return NextResponse.redirect(url, { status: 302, headers: { 'cache-control': 'no-store' } });
+  const url = await signedVideoUrl(key, 3600, searchParams.get('download') === '1');
+
+  /*
+   * JSON, not a redirect, because the caller cannot be a <video src>.
+   *
+   * This route requires a bearer token, and a browser never sends one on a
+   * media or anchor request — it sends cookies. So handing this path to
+   * <video src> or <a download> produced a black player and a download link
+   * that navigated to {"error":"sign in to watch this"}. Local development hid
+   * it completely, because requireUid falls back to RESTAGE_DEV_UID there.
+   *
+   * The client fetches this with its token and uses the returned URL directly.
+   * A redirect would not help: same-origin fetch with redirect:'manual' yields
+   * an opaque response whose Location cannot be read.
+   */
+  return NextResponse.json({ url }, { headers: { 'cache-control': 'no-store' } });
 }

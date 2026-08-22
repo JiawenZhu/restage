@@ -62,10 +62,26 @@ export async function putVideo(key: string, bytes: Buffer): Promise<void> {
  * rather than a public object. An hour is long enough to watch a 15-second clip
  * and short enough that a URL pasted into a group chat stops working.
  */
-export async function signedVideoUrl(key: string, expiresInSeconds = 3600): Promise<string> {
-  return getSignedUrl(s3(), new GetObjectCommand({ Bucket: BUCKET, Key: key }), {
-    expiresIn: expiresInSeconds,
-  });
+export async function signedVideoUrl(
+  key: string,
+  expiresInSeconds = 3600,
+  asDownload = false,
+): Promise<string> {
+  return getSignedUrl(
+    s3(),
+    new GetObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      /*
+       * The <a download> attribute is ignored cross-origin, and R2 is a
+       * different origin — so a "download" link would have opened the video in
+       * a tab instead. Content-Disposition is signed into the URL, which the
+       * browser does honour.
+       */
+      ...(asDownload ? { ResponseContentDisposition: 'attachment; filename="restage-clip.mp4"' } : {}),
+    }),
+    { expiresIn: expiresInSeconds },
+  );
 }
 
 /** Deleting an avatar has to delete what was generated from it. */

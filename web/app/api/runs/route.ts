@@ -7,6 +7,18 @@ import type { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firesto
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
+/** An inline image, or a file in our own buckets. Nothing the caller chooses. */
+function isOwnImageSource(v: string): boolean {
+  if (v.startsWith('data:image/')) return true;
+  try {
+    const u = new URL(v);
+    if (u.protocol !== 'https:') return false;
+    return u.hostname === 'firebasestorage.googleapis.com' || u.hostname === 'storage.googleapis.com';
+  } catch {
+    return false;
+  }
+}
+
 const Body = z.object({
   goal: z.string().min(8).max(600),
   aspect: z.enum(['9:16', '16:9']),
@@ -17,16 +29,29 @@ const Body = z.object({
   /** Which enrolled avatar this run used, when it came from one. The Run type
    *  declared this as required and nothing ever sent it. */
   avatarId: z.string().max(64).nullable().optional(),
-  // ~8MB of base64. Unbounded, this was a memory and cost amplifier: the string
-  // is decoded, sent to the model, and echoed into Firestore.
-  avatarDataUrl: z.string().min(1).max(11_000_000),
+  /*
+   * A data: URL, or a URL inside our own storage — never an arbitrary one.
+   *
+   * The server fetches this value (orchestrator resolveImageInput /
+   * uploadToStorage), so accepting any http(s) string is the same request
+   * forgery primitive that was removed from /api/frame: a caller could point it
+   * at cloud metadata or anything else reachable from inside the deployment.
+   * The enrolled-avatar flow only ever sends our own signed Storage URLs, so
+   * nothing legitimate needs more than this.
+   *
+   * ~8MB of base64. Unbounded, this was also a memory and cost amplifier: the
+   * string is decoded, sent to the model, and echoed into Firestore.
+   */
+  avatarDataUrl: z.string().min(1).max(11_000_000).refine(isOwnImageSource, {
+    message: 'must be an image data URL or a Restage storage URL',
+  }),
   // The same bound as avatarDataUrl: three unbounded images was three times the
   // amplifier one was.
   avatarMultiViews: z
     .object({
-      front: z.string().max(11_000_000).optional(),
-      left: z.string().max(11_000_000).optional(),
-      right: z.string().max(11_000_000).optional(),
+      front: z.string().max(11_000_000).refine(isOwnImageSource).optional(),
+      left: z.string().max(11_000_000).refine(isOwnImageSource).optional(),
+      right: z.string().max(11_000_000).refine(isOwnImageSource).optional(),
     })
     .optional(),
 });

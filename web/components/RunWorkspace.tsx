@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { VersionTree } from './VersionTree';
 import { useUser } from './AuthGate';
 import { PromptComposer } from './PromptComposer';
@@ -64,7 +64,7 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
         )}
       </section>
 
-      <Inspector node={selected} run={run} />
+      <Inspector node={selected} run={run} nodes={nodes} />
     </div>
   );
 }
@@ -160,10 +160,61 @@ const VERDICT_STYLE = {
   failed: { border: 'border-crit/35', text: 'text-crit', label: 'CRITIC · REJECTED' },
 } as const;
 
-function Inspector({ node, run }: { node: TreeNode | null; run: Run }) {
+function Inspector({ node, run, nodes }: { node: TreeNode | null; run: Run; nodes: TreeNode[] }) {
   const { user } = useUser();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /*
+   * The clip's stored URL is an API path that requires a bearer token, and a
+   * browser never sends one on a media request — it sends cookies. Handing it
+   * straight to <video src> produced a black player and a download link that
+   * navigated to a 401 JSON page. So the token is used here, once, to exchange
+   * it for a short-lived R2 URL the element can actually load.
+   */
+  const [playable, setPlayable] = useState<{ nodeId: string; url: string } | null>(null);
+  const [clipError, setClipError] = useState<string | null>(null);
+  const videoNodeId = node?.kind === 'video' && node.status === 'achieved' ? node.id : null;
+
+  useEffect(() => {
+    if (!videoNodeId || !user) return;
+    if (playable?.nodeId === videoNodeId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch(`/api/runs/${run.id}/video?nodeId=${videoNodeId}`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? 'could not load the clip');
+        if (!cancelled) {
+          setPlayable({ nodeId: videoNodeId, url: json.url });
+          setClipError(null);
+        }
+      } catch (e) {
+        if (!cancelled) setClipError(e instanceof Error ? e.message : 'could not load the clip');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [videoNodeId, user, run.id, playable?.nodeId]);
+
+  async function downloadClip() {
+    if (!user || !videoNodeId) return;
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/runs/${run.id}/video?nodeId=${videoNodeId}&download=1`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'could not prepare the download');
+      window.location.href = json.url;
+    } catch (e) {
+      setClipError(e instanceof Error ? e.message : 'could not prepare the download');
+    }
+  }
 
   if (!node) {
     return (
@@ -175,7 +226,11 @@ function Inspector({ node, run }: { node: TreeNode | null; run: Run }) {
 
   const v = node.verdict ? VERDICT_STYLE[node.verdict] : null;
   const rendering = run.status === 'rendering';
-  const canRender = node.kind === 'frame' && !!node.frameUrl && !rendering && run.status !== 'planning';
+  // Rendering the same frame twice buys a second clip for nothing, so a frame
+  // that already has a video child says so instead of offering again.
+  const alreadyRendered = nodes.some((n) => n.kind === 'video' && n.parentId === node?.id);
+  const canRender =
+    node.kind === 'frame' && !!node.frameUrl && !rendering && !alreadyRendered && run.status !== 'planning';
 
   async function renderVideo() {
     if (!user || !node) return;
@@ -205,17 +260,33 @@ function Inspector({ node, run }: { node: TreeNode | null; run: Run }) {
       </p>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-[18px] pb-4">
-        {node.kind === 'video' && node.videoUrl ? (
-          <video
-            src={node.videoUrl}
-            poster={node.frameUrl}
-            controls
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full rounded-card border border-line bg-black"
-          />
+        {node.kind === 'video' && node.status === 'failed' ? (
+          /* A failed render used to render as a finished clip: the poster frame
+             with a play badge, labelled "RENDERED CLIP", while the reason sat
+             unread in criticNotes. */
+          <div className="rounded-card border border-crit/40 bg-crit-soft/40 p-3.5">
+            <p className="text-[11px] font-bold tracking-[0.08em] text-crit">RENDER FAILED</p>
+            <p className="mt-2 text-[13px] leading-relaxed">
+              {node.criticNotes || 'The clip could not be rendered.'}
+            </p>
+          </div>
+        ) : node.kind === 'video' && node.status === 'achieved' ? (
+          playable?.nodeId === node.id ? (
+            <video
+              src={playable.url}
+              poster={node.frameUrl}
+              controls
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full rounded-card border border-line bg-black"
+            />
+          ) : (
+            <div className="flex h-40 items-center justify-center rounded-card border border-line bg-subtle">
+              <span className="text-[12px] text-ink-3">{clipError ?? 'Loading the clip…'}</span>
+            </div>
+          )
         ) : node.frameUrl ? (
           /* object-contain, never object-cover: a 9:16 frame in a smaller box
              was being cropped, and the crop took the face — the one thing the
@@ -268,17 +339,17 @@ function Inspector({ node, run }: { node: TreeNode | null; run: Run }) {
       </div>
 
       <div className="flex flex-col gap-2 border-t border-line px-[18px] py-3.5">
-        {error && <p className="text-[12.5px] text-crit">{error}</p>}
+        {(error || clipError) && <p className="text-[12.5px] text-crit">{error ?? clipError}</p>}
 
-        {node.kind === 'video' && node.videoUrl ? (
-          <a
-            href={node.videoUrl}
-            download
+        {node.kind === 'video' && node.status === 'achieved' ? (
+          <button
+            type="button"
+            onClick={downloadClip}
             className="flex items-center justify-center gap-2 rounded-lg bg-accent py-3 text-[13.5px] font-semibold text-white"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
             Download clip
-          </a>
+          </button>
         ) : (
           <button
             type="button"
@@ -288,7 +359,13 @@ function Inspector({ node, run }: { node: TreeNode | null; run: Run }) {
             className="flex items-center justify-center gap-2 rounded-lg bg-accent py-3 text-[13.5px] font-semibold text-white disabled:opacity-40"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
-            {rendering ? 'Rendering…' : busy ? 'Starting…' : 'Render this frame to video'}
+            {rendering
+              ? 'Rendering…'
+              : alreadyRendered
+                ? 'Already rendered — the clip is on the tree'
+                : busy
+                  ? 'Starting…'
+                  : 'Render this frame to video'}
           </button>
         )}
       </div>

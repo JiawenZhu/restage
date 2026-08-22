@@ -30,6 +30,11 @@ import { putVideo, signedVideoUrl, videoKey } from '@/lib/r2';
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
+/* Matches STALL_AFTER_MS in RunWorkspace. The client and the server have to
+   agree on when a render has died, or one of them offers a retry the other
+   refuses. */
+const STALL_AFTER_MS = 10 * 60 * 1000;
+
 /*
  * Render one frame, or the whole sequence.
  *
@@ -215,7 +220,23 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
   const priorStatus: string = run.status ?? 'awaiting-approval';
   const claimed = await adminDb().runTransaction(async (tx) => {
     const snap = await tx.get(runRef);
-    if (snap.data()?.status === 'rendering') return false;
+    const d = snap.data();
+    if (d?.status === 'rendering') {
+      /*
+       * Unless the render that claimed it is dead.
+       *
+       * This background task is detached: if the process restarts or the
+       * request is torn down mid-render, nothing ever moves the run off
+       * 'rendering'. The claim then refuses every future render with a 409 and
+       * the run is bricked — permanently, with no control anywhere in the
+       * product that can clear it. The workspace already treats ten minutes of
+       * silence as a stall and re-arms its buttons; the server has to agree
+       * with it, or those buttons lead somewhere that always says no.
+       */
+      const silentFor = Date.now() - (d.updatedAt ?? d.createdAt ?? 0);
+      if (silentFor < STALL_AFTER_MS) return false;
+      console.warn(`[render] ${runId} taking over a render stalled for ${Math.round(silentFor / 1000)}s`);
+    }
     tx.update(runRef, { status: 'rendering', updatedAt: Date.now() });
     return true;
   });
@@ -590,7 +611,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
           : `Render failed: ${raw}`;
 
       await videoRef.update({ status: 'failed', criticNotes: friendly });
-      await runRef.update({ status: 'awaiting-approval', updatedAt: Date.now() }).catch(() => {});
+      /*
+       * The same conditional shape as the success path, for the same reason.
+       *
+       * This wrote unconditionally, which is precisely the bug the success path
+       * above documents and guards against — a second render failing stamped
+       * its status over a run that was already 'complete' with a downloadable
+       * clip, and the library then read "Ready to render" next to a finished
+       * video. And it hardcoded 'awaiting-approval' while `priorStatus` sat
+       * captured at the top of this function, unread, holding the answer.
+       */
+      await adminDb()
+        .runTransaction(async (tx) => {
+          const snap = await tx.get(runRef);
+          if (snap.data()?.status !== 'rendering') return;
+          tx.update(runRef, {
+            status: priorStatus === 'rendering' ? 'awaiting-approval' : priorStatus,
+            updatedAt: Date.now(),
+          });
+        })
+        .catch(() => {});
     }
   })();
 

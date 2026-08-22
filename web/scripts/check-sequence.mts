@@ -12,7 +12,7 @@ for (const l of readFileSync(new URL('../.env.local', import.meta.url),'utf8').s
   const m=l.match(/^([A-Z0-9_]+)=(.*)$/); if(m&&m[2].trim()) process.env[m[1]] ??= m[2].trim().replace(/^["']|["']$/g,'');
 }
 const { adminDb } = await import('../lib/firebaseAdmin');
-const { promoteFrame, removeFrame, lineageOf, shotPlan } = await import('../lib/lineage');
+const { promoteFrame, removeFrame, restoreFrame, lineageOf, shotPlan } = await import('../lib/lineage');
 
 const uid = `_seqtest_${Date.now()}`;
 const db = adminDb();
@@ -91,11 +91,33 @@ await nodes.doc('s5').set({
   parentId: 's4', stepNo: 5, kind: 'frame', status: 'achieved', frameUrl: 'https://x/s5.jpg', createdAt: Date.now() + 60,
 });
 const rm2 = await removeFrame(runRef.id, 's4');
+all = await read();
 console.log(`\n  取出 s4（下面挂着一个 video + 一个 frame）`);
 console.log(`  报给用户的步骤: ${rm2.staleSteps.join(', ')}   计价节点数: ${rm2.rebuildableIds.length}`);
-const okNoSentinel = !rm2.staleSteps.includes(99) && rm2.rebuildableIds.length === 1 && rm2.staleIds.length === 2;
-console.log(`  ${okNoSentinel ? '✅' : '❌'} 过时清单：video 仍标记为过时，但不报成「第 99 步」也不计入重建价格`);
+/* 渲染好的片子留在它自己那一帧下面。之前连 video 一起往上挂，结果祖父节点凭空
+   多出一个「已渲染」的孩子，Render 按钮被永久禁用，而画布上那支片子拍的其实是
+   另外一帧。 */
+const vid = all.find((n) => n.id === 'vid');
+const okNoSentinel =
+  !rm2.staleSteps.includes(99) && rm2.rebuildableIds.length === 1 && vid?.parentId === 's4';
+console.log(`  ${okNoSentinel ? '✅' : '❌'} 过时清单不含哨兵步号；渲染好的片子仍挂在它自己那一帧下`);
+
+/*
+ * 把取出去的帧再放回来。
+ *
+ * 之前 removedFromSequence 只有写、没有清，所以「取出」是一扇单向门：点错一次
+ * 就只能花钱重新生成一张画布上明明还在的图。放回来要把当初被抬走的子节点还给
+ * 它，所以取出的时候要记下抬走了谁。
+ */
+const back = await restoreFrame(runRef.id, 's4');
+all = await read();
+const s4 = all.find((n) => n.id === 's4');
+const s5 = all.find((n) => n.id === 's5');
+console.log(`\n  放回 s4 之后: ${lineageOf(all).map((n) => n.id).join(' -> ')}`);
+const okRestore =
+  s4?.removedFromSequence === undefined && s5?.parentId === 's4' && back.staleSteps.includes(5);
+console.log(`  ${okRestore ? '✅' : '❌'} 放回：标记清除，子节点归位，并标记为需要重建`);
 
 for (const d of (await nodes.get()).docs) await d.ref.delete();
 await runRef.delete();
-process.exit(okSwap && okRemove && okReject && okNoSentinel ? 0 : 1);
+process.exit(okSwap && okRemove && okReject && okNoSentinel && okRestore ? 0 : 1);

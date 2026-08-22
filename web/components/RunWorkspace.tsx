@@ -32,11 +32,31 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
      generation and the decision to spend belongs to the person. */
   const [pendingRebuild, setPendingRebuild] = useState<{ steps: number[]; label: string } | null>(null);
   const [busySeq, setBusySeq] = useState(false);
+  const [seqError, setSeqError] = useState<string | null>(null);
+
+  /*
+   * Re-evaluate "has this stalled?" while the page sits open.
+   *
+   * isStalled() compares run.updatedAt against Date.now() AT RENDER TIME, and
+   * a run whose background task has died produces no snapshot updates — so
+   * nothing re-renders, the comparison is never made again, and the stall
+   * banner never appears. The one state where the product most needs to speak
+   * up was the one state that guaranteed its silence: you saw it only if you
+   * happened to reload. A slow tick is enough, since the threshold is ten
+   * minutes and the check is arithmetic on two numbers already in memory.
+   */
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!isLive(run)) return;
+    const t = setInterval(() => tick((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, [run.status, run.updatedAt]);
   const { user } = useUser();
 
   async function sequenceAction(body: Record<string, unknown>) {
     if (!user) return;
     setBusySeq(true);
+    setSeqError(null);
     try {
       const token = await user.getIdToken();
       const res = await fetch(`/api/runs/${run.id}/sequence`, {
@@ -49,7 +69,12 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
       if (json.staleCount > 0) setPendingRebuild({ steps: json.staleSteps, label: json.label });
       else setPendingRebuild(null);
     } catch (e) {
-      console.error('[sequence]', e);
+      /* Shown, not logged.
+         Every failure here went to console.error and nowhere else, so a refused
+         delete and a successful one looked identical from the user's side: the
+         menu closed, the frame stayed where it was, and nothing said why. That
+         is most of what "I cannot delete images" feels like from the outside. */
+      setSeqError(e instanceof Error ? e.message : 'that did not work');
     } finally {
       setBusySeq(false);
     }
@@ -94,8 +119,22 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
             if (alt && target) void sequenceAction({ action: 'swap', targetId: target.id, replacementId: id });
           }}
           onRemove={(id) => void sequenceAction({ action: 'remove', nodeId: id })}
+          onRestore={(id) => void sequenceAction({ action: 'restore', nodeId: id })}
           storageKey={run.id}
         />
+
+        {seqError && (
+          <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-crit/40 bg-crit-soft px-4 py-2.5">
+            <p className="text-[12.5px] text-crit-ink">{seqError}</p>
+            <button
+              type="button"
+              onClick={() => setSeqError(null)}
+              className="shrink-0 text-[12px] font-semibold text-crit-ink underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {pendingRebuild && (
           <RebuildBar
@@ -329,6 +368,21 @@ function Inspector({
   );
   const [playable, setPlayable] = useState<{ nodeId: string; url: string } | null>(null);
   const [clipError, setClipError] = useState<string | null>(null);
+  /*
+   * Above the early return, with every other hook.
+   *
+   * This was declared further down, past `if (!node) return …`. Hooks must run
+   * in the same order on every render, and that ordering made the count depend
+   * on whether anything was selected: an Inspector with no node ran five hooks,
+   * and the render immediately after a node appeared ran six. React throws
+   * "rendered more hooks than during the previous render" and takes the
+   * workspace down with it.
+   *
+   * That is not an edge case, it is the opening seconds of every run — the tree
+   * is empty until the first node arrives over the snapshot listener, so the
+   * transition it crashes on is the one that happens every single time.
+   */
+  const [engineChoice, setEngineChoice] = useState<'veo' | 'omni'>((run.videoEngine as 'veo' | 'omni') || 'veo');
   const videoNodeId = node?.kind === 'video' && node.status === 'achieved' ? node.id : null;
 
   useEffect(() => {
@@ -446,7 +500,6 @@ function Inspector({
    */
   const canRender = node.kind === 'frame' && !!node.frameUrl && !rendering && run.status !== 'planning';
 
-  const [engineChoice, setEngineChoice] = useState<'veo' | 'omni'>((run.videoEngine as 'veo' | 'omni') || 'veo');
 
   async function renderVideo(mode: 'frame' | 'sequence' = 'frame') {
     if (!user || !node) return;

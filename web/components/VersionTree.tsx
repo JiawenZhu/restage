@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Aspect, TreeNode } from '@/lib/types';
 import { flatten, layoutTree } from '@/lib/types';
+import { lineageOf, type LineageNode } from '@/lib/sequence';
 
 /*
  * The hero component. Nodes are the images themselves, not boxes with labels —
@@ -57,6 +58,7 @@ export function VersionTree({
   onRegenerate,
   onSwapIn,
   onRemove,
+  onRestore,
   storageKey,
 }: {
   nodes: TreeNode[];
@@ -69,6 +71,7 @@ export function VersionTree({
   onSwapIn?: (id: string) => void;
   /** Take this frame out of the sequence. */
   onRemove?: (id: string) => void;
+  onRestore?: (id: string) => void;
   storageKey?: string;
 }) {
   const w = NODE_W[aspect];
@@ -164,10 +167,20 @@ export function VersionTree({
   /* Frames that something was built on top of are the sequence; the rest are
      alternates. Drawn differently, because "which of these is the actual ad"
      is the question the canvas most needs to answer. */
-  const inSequence = useMemo(() => {
-    const parents = new Set(nodes.filter((n) => n.kind === 'frame').map((n) => n.parentId).filter(Boolean) as string[]);
-    return parents;
-  }, [nodes]);
+  /*
+   * The frames actually in the cut — the same walk the renderer runs.
+   *
+   * This was "every id that is somebody's parent", which is a third definition
+   * of the sequence living alongside the server's and the workspace's. It gets
+   * the tip of the chain wrong by construction: the last frame has no children,
+   * so it was never "in the sequence", and the menu therefore refused to offer
+   * "Take out of the sequence" on it while offering "Use this one instead" —
+   * a swap against a frame that is not an alternate of anything.
+   */
+  const inSequence = useMemo(
+    () => new Set(lineageOf(nodes as unknown as LineageNode[]).map((x) => x.id)),
+    [nodes],
+  );
 
   const pos = useMemo(() => {
     const m = new Map<string, { x: number; y: number; w: number; h: number }>();
@@ -551,7 +564,13 @@ export function VersionTree({
                 sequence at its step — which is the whole point of generating
                 one. Everything after it then descends from a different image,
                 so the workspace asks before rebuilding. */}
-            {target.kind === 'frame' && target.frameUrl && onSwapIn && !inSequence.has(target.id) && (
+            {/* Only when there IS something to swap it in for. The item was
+                shown for every frame outside the cut, including ones with no
+                sibling at their step, where the handler finds no target and
+                silently does nothing. */}
+            {target.kind === 'frame' && target.frameUrl && onSwapIn && !inSequence.has(target.id) &&
+              !target.removedFromSequence &&
+              nodes.some((o) => o.id !== target.id && o.kind === 'frame' && o.parentId === target.parentId && !o.discarded) && (
               <button type="button" className={item} onClick={() => { setMenu(null); onSwapIn(target.id); }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M17 2l4 4-4 4" /><path d="M3 6h18" /><path d="M7 22l-4-4 4-4" /><path d="M21 18H3" /></svg>
                 Use this one instead
@@ -562,6 +581,16 @@ export function VersionTree({
               <button type="button" className={item} onClick={() => { setMenu(null); onRemove(target.id); }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
                 Take out of the sequence
+              </button>
+            )}
+
+            {/* The way back. Taking a frame out used to be permanent — the flag
+                was written in one place and cleared in none — so a mis-click
+                cost a paid regeneration of a frame sitting right there. */}
+            {target.kind === 'frame' && onRestore && target.removedFromSequence && (
+              <button type="button" className={item} onClick={() => { setMenu(null); onRestore(target.id); }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M1 4v6h6" /><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10" /></svg>
+                Put back in the sequence
               </button>
             )}
 

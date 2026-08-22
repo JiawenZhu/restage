@@ -21,6 +21,7 @@
  * Nothing is deleted either. A replaced frame stays on the canvas as an
  * alternate, because the tree's whole claim is that it shows what happened.
  */
+import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from './firebaseAdmin';
 
 import {
@@ -104,7 +105,18 @@ export async function removeFrame(runId: string, nodeId: string): Promise<Rewire
   if (!node) throw new Error('no such frame');
   if (node.id === 'root') throw new Error('the source avatar cannot be removed');
 
-  const children = nodes.filter((n) => n.parentId === nodeId);
+  if (node.removedFromSequence) throw new Error('that frame is already out of the sequence');
+
+  /*
+   * Only the FRAMES move up.
+   *
+   * This reattached every child, including rendered clips. A clip belongs to
+   * the frame it was made from, not to the sequence, and moving one onto the
+   * grandparent made that grandparent read as "already rendered" — its Render
+   * button disabled, pointing at a clip generated from a completely different
+   * frame. The clip stays with its source, which is also where it is true.
+   */
+  const children = nodes.filter((n) => n.parentId === nodeId && n.kind === 'frame');
   const newParent = node.parentId ?? 'root';
 
   const batch = db.batch();
@@ -118,7 +130,15 @@ export async function removeFrame(runId: string, nodeId: string): Promise<Rewire
      at the same offset, so they rendered on top of each other. Taking a frame
      out is not a verdict on it; it is often removed BECAUSE it was fine
      somewhere else. */
-  batch.update(nodesRef.doc(nodeId), { removedFromSequence: true });
+  batch.update(nodesRef.doc(nodeId), {
+    removedFromSequence: true,
+    /* What to hand back if this is undone. Nothing cleared this flag anywhere
+       in the codebase, so taking a frame out was a one-way door — and without
+       a record of which children were lifted off it, putting it back would be
+       guesswork: they now point at its parent, and nothing else says they ever
+       pointed here. */
+    reattachedOnRemoval: children.map((c) => c.id),
+  });
   await batch.commit();
 
   const result = summarise(children.flatMap((c) => [c, ...descendantsOf(nodes, c.id)]));
@@ -130,3 +150,50 @@ export async function removeFrame(runId: string, nodeId: string): Promise<Rewire
   return result;
 }
 
+
+/**
+ * Put a frame back into the sequence.
+ *
+ * The counterpart that did not exist. `removedFromSequence` was written in
+ * exactly one place and cleared in none, so "Take out of the sequence" was a
+ * one-way door: a frame taken out by mistake stayed out for the life of the
+ * run, and the only way forward was to pay to regenerate a frame that was
+ * sitting right there on the canvas.
+ *
+ * Undoing a removal means handing back the children the removal lifted off it,
+ * which is why removeFrame records them. Those children are stale afterwards
+ * for the same reason they were stale when they left: their source changed.
+ * The restored frame itself is not — its own parent never moved.
+ */
+export async function restoreFrame(runId: string, nodeId: string): Promise<RewireResult> {
+  const db = adminDb();
+  const nodesRef = db.collection('runs').doc(runId).collection('nodes');
+  const nodes = await loadNodes(runId);
+
+  const node = nodes.find((n) => n.id === nodeId);
+  if (!node) throw new Error('no such frame');
+  if (!node.removedFromSequence) throw new Error('that frame is already in the sequence');
+
+  // Only children that still exist, and only ones that have not since been
+  // built on somewhere else.
+  const returning = (node.reattachedOnRemoval ?? []).filter((id) =>
+    nodes.some((n) => n.id === id && n.parentId === (node.parentId ?? 'root')),
+  );
+
+  const batch = db.batch();
+  batch.update(nodesRef.doc(nodeId), {
+    removedFromSequence: FieldValue.delete(),
+    reattachedOnRemoval: FieldValue.delete(),
+  });
+  for (const id of returning) batch.update(nodesRef.doc(id), { parentId: nodeId, stale: true });
+  await batch.commit();
+
+  const moved = returning.map((id) => nodes.find((n) => n.id === id)!).filter(Boolean);
+  const result = summarise(moved.flatMap((c) => [c, ...descendantsOf(nodes, c.id)]));
+  if (result.staleIds.length) {
+    const b2 = db.batch();
+    for (const id of result.staleIds) b2.update(nodesRef.doc(id), { stale: true });
+    await b2.commit();
+  }
+  return result;
+}

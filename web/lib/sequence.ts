@@ -29,6 +29,9 @@ export interface LineageNode {
   discarded?: boolean;
   /** Taken out of the sequence by the user. Kept on the canvas. */
   removedFromSequence?: boolean;
+  /** Frame children lifted off this node when it was taken out, so putting it
+   *  back can hand them over again rather than guess. */
+  reattachedOnRemoval?: string[];
   frameUrl?: string;
   instruction?: string;
 }

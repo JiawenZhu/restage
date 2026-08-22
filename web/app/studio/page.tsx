@@ -52,6 +52,10 @@ function NewRun() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [goal, setGoal] = useState('');
+  /* What templates push into the composer. Separate from `goal`, which is what
+     the composer hands back — binding them together made refining overwrite the
+     user's own words with the model's rewrite. */
+  const [seedText, setSeedText] = useState<string | undefined>(undefined);
   const [aspect, setAspect] = useState<Aspect>('9:16');
   const [seconds, setSeconds] = useState<4 | 6 | 8>(8);
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -159,6 +163,7 @@ function NewRun() {
 
   function applyTemplate(tpl: CreativeTemplate) {
     setSelectedTemplate(tpl);
+    setSeedText(tpl.defaultPrompt);
     setGoal(tpl.defaultPrompt);
     setPendingTemplate(null);
   }
@@ -167,7 +172,10 @@ function NewRun() {
      said "no template applied" while the goal still read like one. Clearing now
      removes what applying put there — and only that. */
   function clearTemplate() {
-    if (selectedTemplate && goal.trim() === selectedTemplate.defaultPrompt.trim()) setGoal('');
+    if (selectedTemplate && goal.trim() === selectedTemplate.defaultPrompt.trim()) {
+      setSeedText('');
+      setGoal('');
+    }
     setSelectedTemplate(null);
   }
 
@@ -348,7 +356,7 @@ function NewRun() {
           <div className="mt-2.5">
             <PromptComposer
               purpose="goal"
-              value={goal}
+              seed={seedText}
               keywords={activeKeywords}
               placeholder="Say or type the outcome you want — or choose a scenario template above."
               onPrompt={(finalPrompt) => setGoal(finalPrompt)}

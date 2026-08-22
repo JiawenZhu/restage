@@ -37,19 +37,30 @@ export function PromptComposer({
   purpose,
   keywords,
   placeholder,
-  value,
+  seed,
   onPrompt,
 }: {
   purpose: 'goal' | 'edit';
   keywords: string[];
   placeholder: string;
-  value?: string;
+  /*
+   * Text pushed IN from outside — applying or clearing a template. Deliberately
+   * not the same value the parent receives from onPrompt.
+   *
+   * It used to be bound to the parent's `goal`, which onPrompt also sets. So
+   * refining wrote the rewrite back in as if the user had typed it: their own
+   * words were replaced by the model's, the AI card disappeared because its
+   * source had "changed", and the two-card design destroyed itself on use.
+   * Reproduced before this fix — "me using my coffee grinder in the morning"
+   * became "A creator in cozy morning loungewear grinds fresh coffee bea…".
+   */
+  seed?: string;
   /** Called with the prompt that should actually be used: refined when it
    *  exists, the user's own words otherwise. */
   onPrompt: (finalPrompt: string, raw: string) => void;
 }) {
   const { user } = useUser();
-  const [raw, setRaw] = useState(value || '');
+  const [raw, setRaw] = useState(seed || '');
   const [interim, setInterim] = useState('');
   const [refined, setRefined] = useState<string | null>(null);
   const [refining, setRefining] = useState(false);
@@ -60,12 +71,17 @@ export function PromptComposer({
   const rawRef = useRef(raw);
   rawRef.current = raw;
 
+  // Applies only when the seed itself changes, so nothing the user or the
+  // refiner does can feed back in here.
+  const lastSeed = useRef(seed);
   useEffect(() => {
-    if (value !== undefined && value !== rawRef.current) {
-      setRaw(value);
-      setRefined(null);
-    }
-  }, [value]);
+    if (seed === undefined || seed === lastSeed.current) return;
+    lastSeed.current = seed;
+    setRaw(seed);
+    setRefined(null);
+    onPrompt(seed, seed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed]);
 
   useEffect(() => {
     setSpeechSupported(!!getRecognizer());

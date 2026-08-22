@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { consume, tooMany } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { requireUid } from '@/lib/firebaseAdmin';
 import { regenerateNode } from '@/lib/orchestrator';
@@ -19,6 +20,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
   } catch {
     return NextResponse.json({ error: 'sign in first' }, { status: 401 });
   }
+
+  // Every call below spends money; nothing capped how many a single account
+  // could make.
+  const rate = await consume(uid, 'render');
+  if (!rate.ok) return tooMany(rate);
+
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'nodeId and instruction are required' }, { status: 400 });
 

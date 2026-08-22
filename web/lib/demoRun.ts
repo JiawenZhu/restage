@@ -10,7 +10,8 @@ export const demoRun: Run = {
   id: 'demo',
   uid: 'demo',
   avatarId: 'maya',
-  goal: 'A 15-second ad where I actually use the serum, in my kitchen. Should feel filmed, not shot.',
+  // The clip model tops out at 8 seconds, so the demo does not advertise 15.
+  goal: 'An ad where I actually use the serum, in my kitchen. Should feel filmed, not shot.',
   aspect: '9:16',
   seconds: 8,
   // The landing page's "Watch it work" points here, so the demo has to show
@@ -23,7 +24,7 @@ export const demoRun: Run = {
     { stepNo: 3, instruction: 'Light it from the window', rationale: 'Retried once — the first pass went full studio and lost the room.', status: 'retried' },
     { stepNo: 4, instruction: 'Get the product to the lens', rationale: 'The bottle has to be legible in the first two seconds or the scroll wins.', status: 'running' },
     { stepNo: 5, instruction: 'Loosen the expression', rationale: 'Mid-sentence beats posed. A closed mouth reads as a photograph.', status: 'pending' },
-    { stepNo: 6, instruction: 'Render the 15 seconds', rationale: 'The approved frame becomes the first frame of the clip.', status: 'pending' },
+    { stepNo: 6, instruction: 'Render the clip', rationale: 'The approved frame becomes the first frame of the clip.', status: 'pending' },
   ],
   createdAt: 0,
   updatedAt: 0,

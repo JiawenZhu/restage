@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { consume, tooMany } from '@/lib/rateLimit';
 import { requireUid } from '@/lib/firebaseAdmin';
 import { z } from 'zod';
 import { generateFrame } from '@/lib/gemini';
@@ -38,11 +39,18 @@ export async function POST(req: Request) {
   // This call costs money on every invocation. The catch here used to swallow
   // the failure with "allow dev / guest execution", which made the check
   // decorative — an unauthenticated caller could spend the project's quota.
+  let uid: string;
   try {
-    await requireUid(req);
+    uid = await requireUid(req);
   } catch {
     return NextResponse.json({ error: 'sign in first' }, { status: 401 });
   }
+
+  // Every call below spends money; nothing capped how many a single account
+  // could make.
+  const rate = await consume(uid, 'run');
+  if (!rate.ok) return tooMany(rate);
+
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'prompt and aspect are required' }, { status: 400 });

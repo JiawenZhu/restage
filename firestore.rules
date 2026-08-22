@@ -46,6 +46,15 @@ service cloud.firestore {
       }
     }
 
+    /*
+     * Spend ceilings. Server-only in both directions: a client that could read
+     * its own counter learns nothing useful, and one that could write it would
+     * simply reset the limit — which is the whole point of the limit.
+     */
+    match /rateLimits/{docId} {
+      allow read, write: if false;
+    }
+
     // A run and its tree.
     match /runs/{runId} {
       allow read: if signedIn() && resource.data.uid == request.auth.uid;

@@ -117,7 +117,11 @@ export async function POST(req: Request) {
       put(buffers.left, 'left.jpg', 'image/jpeg'),
       put(buffers.right, 'right.jpg', 'image/jpeg'),
     ]);
-    const voicePath = buffers.audio ? await put(buffers.audio, 'voice_sample.wav', 'audio/wav') : null;
+    /* Named and typed from what actually arrived. MediaRecorder gives WebM or
+       MP4 depending on the browser; hardcoding .wav wrote a mislabelled file. */
+    const audioMime = audio?.match(/^data:([^;]+);/)?.[1] ?? 'audio/webm';
+    const audioExt = audioMime.includes('mp4') ? 'mp4' : audioMime.includes('ogg') ? 'ogg' : 'webm';
+    const voicePath = buffers.audio ? await put(buffers.audio, `voice_sample.${audioExt}`, audioMime) : null;
 
     const db = adminDb();
     const record = {

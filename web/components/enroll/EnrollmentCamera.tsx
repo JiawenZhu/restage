@@ -373,7 +373,14 @@ export function EnrollmentCamera() {
     };
 
     recorder.onstop = () => {
-      const blob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+      /*
+       * Whatever the browser actually recorded. MediaRecorder produces WebM
+       * (or MP4 on Safari) — never WAV — so labelling the blob 'audio/wav' put
+       * WebM bytes in a file called voice_sample.wav. Anything that later reads
+       * it by extension gets a file that is not what it claims to be.
+       */
+      const type = recorder.mimeType || audioChunksRef.current[0]?.type || 'audio/webm';
+      const blob = new Blob(audioChunksRef.current, { type });
       setAudioBlob(blob);
       setAudioUrl(URL.createObjectURL(blob));
       setRetakeTarget(null);
@@ -384,7 +391,10 @@ export function EnrollmentCamera() {
     setIsCapturingBurst(true);
     setBurstProgress(0);
 
-    const duration = 6000;
+    /* The label said 5s, this ran 6s, and the prompter script needs about 9s to
+       read — so every sample was cut off mid-sentence. Ten seconds fits the
+       script with room to breathe, and the label below says the same number. */
+    const duration = 10000;
     const interval = 100;
     let elapsed = 0;
 
@@ -819,7 +829,7 @@ export function EnrollmentCamera() {
                   <span className="h-2 w-2 rounded-full bg-accent animate-ping" />
                   TELEPROMPTER • READ OUT LOUD
                 </span>
-                <span className="text-xs text-ink-3">5s Speech Verification</span>
+                <span className="text-xs text-ink-3">10s voice sample</span>
               </div>
               <p className="mt-4 text-base font-semibold leading-relaxed tracking-tight text-ink">
                 &ldquo;{TELEPROMPTER_TEXT}&rdquo;

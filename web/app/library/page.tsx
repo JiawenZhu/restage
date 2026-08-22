@@ -39,6 +39,12 @@ type Filter = 'all' | 'video' | 'running';
    also what decides whether the page keeps polling. */
 const IN_FLIGHT = new Set(['planning', 'running', 'rendering']);
 
+/* A detached background task can die without ever writing a terminal status, so
+   a card would pulse "Running" forever. updatedAt makes the silence visible. */
+const STALL_AFTER_MS = 10 * 60 * 1000;
+const isStalled = (r: RunCard) =>
+  IN_FLIGHT.has(r.status) && Date.now() - (r.updatedAt || r.createdAt || 0) > STALL_AFTER_MS;
+
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   planning: { text: 'Planning', cls: 'border-accent/40 text-accent' },
   running: { text: 'Running', cls: 'border-accent/40 text-accent' },
@@ -106,7 +112,8 @@ export default function Library() {
    * Poll only while something is actually in flight, and stop as soon as
    * nothing is: an idle library should cost nothing.
    */
-  const anyInFlight = runs.some((r) => IN_FLIGHT.has(r.status));
+  // Only poll for runs that are actually moving — a stalled one will not change.
+  const anyInFlight = runs.some((r) => IN_FLIGHT.has(r.status) && !isStalled(r));
   useEffect(() => {
     if (!anyInFlight || !user) return;
     const t = setInterval(() => void load(true), 8000);
@@ -197,7 +204,10 @@ export default function Library() {
         ) : (
           <div className="mt-7 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((r) => {
-              const badge = STATUS_LABEL[r.status] ?? { text: r.status, cls: 'border-line-strong text-ink-3' };
+              const stalled = isStalled(r);
+              const badge = stalled
+                ? { text: 'Stopped', cls: 'border-warn/40 text-warn' }
+                : (STATUS_LABEL[r.status] ?? { text: r.status, cls: 'border-line-strong text-ink-3' });
               return (
                 <Link
                   key={r.id}
@@ -244,7 +254,9 @@ export default function Library() {
                     <p className="line-clamp-2 text-[14px] font-semibold leading-snug">{r.goal}</p>
                     <div className="mt-auto flex items-center justify-between gap-2 pt-3">
                       <span className={`flex items-center gap-1.5 rounded-chip border px-2 py-0.5 text-[10.5px] font-bold tracking-[0.04em] ${badge.cls}`}>
-                        {IN_FLIGHT.has(r.status) && <span className="rs-cursor block h-[5px] w-[5px] rounded-full bg-current" />}
+                        {IN_FLIGHT.has(r.status) && !stalled && (
+                          <span className="rs-cursor block h-[5px] w-[5px] rounded-full bg-current" />
+                        )}
                         {badge.text}
                       </span>
                       <span className="tnum text-[11.5px] text-ink-4">

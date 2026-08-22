@@ -93,15 +93,43 @@ const STEP_GLYPH: Record<string, { cls: string; icon: React.ReactNode }> = {
   },
 };
 
+/*
+ * A run whose detached background task dies — the process restarts, the request
+ * is torn down — keeps whatever status it had, forever. The workspace then
+ * pulses "Decomposing the goal…" at somebody indefinitely with nothing to click
+ * and nothing to explain it.
+ *
+ * touch() stamps updatedAt on every write, so silence is measurable without any
+ * new infrastructure. Ten minutes is comfortably longer than the slowest step
+ * observed (a frame plus two judges, about 40s) and short enough to notice.
+ */
+const STALL_AFTER_MS = 10 * 60 * 1000;
+
+function isStalled(run: Run): boolean {
+  const live = run.status === 'planning' || run.status === 'running' || run.status === 'rendering';
+  return live && Date.now() - (run.updatedAt || run.createdAt || 0) > STALL_AFTER_MS;
+}
+
 function PlanPanel({ run }: { run: Run }) {
+  const stalled = isStalled(run);
   return (
     <aside className="flex w-full shrink-0 flex-col border-b border-line bg-panel lg:max-h-none lg:w-[300px] lg:border-b-0 lg:border-r">
       <p className="px-[18px] pb-3 pt-[18px] text-[11px] font-bold tracking-[0.12em] text-ink-3">PLAN</p>
 
-      {run.status === 'planning' && (
+      {run.status === 'planning' && !stalled && (
         <div className="flex items-center gap-2.5 px-[18px] pb-3">
           <span className="rs-cursor block h-[7px] w-[7px] rounded-full bg-accent" />
           <span className="text-[13px] text-ink-2">Decomposing the goal…</span>
+        </div>
+      )}
+
+      {stalled && (
+        <div className="rs-tint-warn mx-3.5 mb-3 rounded-card border border-warn/40 p-3">
+          <p className="text-[11px] font-bold tracking-[0.1em] text-warn">NO PROGRESS</p>
+          <p className="mt-1.5 text-[12.5px] leading-snug text-ink-2">
+            Nothing has changed here for over ten minutes, so this run has most likely stopped. The frames it did
+            produce are on the canvas and can still be rendered.
+          </p>
         </div>
       )}
 

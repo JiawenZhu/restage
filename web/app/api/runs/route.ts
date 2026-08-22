@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { consume, tooMany } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { requireUid, adminDb } from '@/lib/firebaseAdmin';
 import { createRun, executeRun } from '@/lib/orchestrator';
@@ -85,6 +86,12 @@ export async function GET(req: Request) {
   }
 
   try {
+
+  // Every call below spends money; nothing capped how many a single account
+  // could make.
+  const rate = await consume(uid, 'run');
+  if (!rate.ok) return tooMany(rate);
+
     const db = adminDb();
     const { searchParams } = new URL(req.url);
     const limitParam = Number.parseInt(searchParams.get('limit') || '60', 10);

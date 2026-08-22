@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { consume, tooMany } from '@/lib/rateLimit';
 import { requireUid } from '@/lib/firebaseAdmin';
 import { z } from 'zod';
 import { planRun } from '@/lib/gemini';
@@ -20,11 +21,18 @@ const Body = z.object({
 
 export async function POST(req: Request) {
   // These calls cost real money; they were anonymous before auth existed.
+  let uid: string;
   try {
-    await requireUid(req);
+    uid = await requireUid(req);
   } catch {
     return NextResponse.json({ error: 'sign in first' }, { status: 401 });
   }
+
+  // Every call below spends money; nothing capped how many a single account
+  // could make.
+  const rate = await consume(uid, 'text');
+  if (!rate.ok) return tooMany(rate);
+
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {

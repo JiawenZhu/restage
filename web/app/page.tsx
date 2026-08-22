@@ -156,7 +156,7 @@ export default function Landing() {
               <div className="absolute bottom-6 right-0 max-w-[250px] translate-x-3 rounded-card bg-panel/95 p-3.5 shadow-[0_14px_34px_-12px_rgba(20,20,26,0.4)] backdrop-blur">
                 <p className="text-[10px] font-extrabold tracking-[0.14em] text-ink-3">THE GOAL</p>
                 <p className="mt-1.5 text-[13.5px] font-medium leading-snug">
-                  &ldquo;A 15-second ad where I actually use it, in my kitchen.&rdquo;
+                  &ldquo;An ad where I actually use it, in my kitchen.&rdquo;
                 </p>
               </div>
             </div>
@@ -180,7 +180,11 @@ export default function Landing() {
               </p>
               <ul className="mt-5 flex flex-col gap-2.5">
                 {[
-                  'A frame costs ~14 seconds. A clip costs ~41.',
+                  /* Was "~14 seconds … ~41", while the proof section below said
+                     ~20s and ~50s for the same two operations. One page, two
+                     sets of timings, both presented as fact. These are the
+                     measured pair. */
+                  'A frame costs about 20 seconds. A clip costs about 50.',
                   'Discarded attempts stay on the canvas — you see it change its mind',
                   'What you rejected changes how the next session opens',
                 ].map((t) => (
@@ -389,7 +393,7 @@ export default function Landing() {
       <footer className="mx-auto mt-14 flex max-w-[1440px] flex-wrap items-center justify-between gap-4 border-t border-line px-6 py-8 sm:px-14">
         <span className="text-sm font-bold text-ink-3">Restage</span>
         <div className="flex items-center gap-6 text-[13px] text-ink-3">
-          <Link href="/enroll" className="hover:text-ink">Your likeness, your control</Link>
+          <Link href="/likeness" className="hover:text-ink">Your likeness, your control</Link>
           <span>Likeness policy</span>
           {/* A placeholder in the footer where an address belongs. Until there
               is one, the link that does exist is better than a fake. */}

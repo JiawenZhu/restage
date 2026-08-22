@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { consume, tooMany } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { adminDb, requireUid } from '@/lib/firebaseAdmin';
 import { downloadRendered, pollRender, submitRender } from '@/lib/gemini';
@@ -74,6 +75,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     // write into, a run they had merely guessed the id of.
     return NextResponse.json({ error: 'sign in to render' }, { status: 401 });
   }
+
+  // Every call below spends money; nothing capped how many a single account
+  // could make.
+  const rate = await consume(uid, 'render');
+  if (!rate.ok) return tooMany(rate);
+
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'nodeId is required' }, { status: 400 });

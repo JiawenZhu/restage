@@ -138,6 +138,7 @@ Everything below has been exercised against the live `restage-studio` project.
 
 ```bash
 cd web && npx tsc --noEmit && npm run build && npx tsx scripts/check-health.mts
+npx tsx scripts/check-contrast.mjs      # needs the dev server on :3100
 ```
 
 `check-health.mts` asserts six invariants that have each broken during
@@ -151,6 +152,13 @@ development, and each failure was silent when it happened:
 | Spend ceiling holds under concurrency | a read-then-write counter lets parallel requests past the limit |
 | Composite index deployed | without it the library query throws — and the old handler answered that throw by returning *every user's* runs |
 | No run document near 1MB | one reached 1,333,473 bytes and became permanently unwritable, unable even to mark itself failed |
+
+`check-contrast.mjs` measures every page in both themes and reports two numbers:
+failures **and skips**. Both matter. A run that reaches zero by skipping
+everything is not a pass — an early version skipped 500 elements to claim all
+clear, which is a worse answer than a wrong one. Skips should be text over
+images (the hero and the template gallery) and nowhere else. Current baseline:
+0 failures, ~179 skips.
 
 ## Rules and indexes
 

@@ -223,7 +223,10 @@ export default function Library() {
                         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                       />
                     ) : (
-                      <span className="text-[12px] text-ink-4">no frames yet</span>
+                      // text-ink-4 measured 4.32 on this tint against a 4.5
+                      // requirement — the faintest tier is for text on the
+                      // canvas, not on a filled placeholder.
+                      <span className="text-[12px] text-ink-3">no frames yet</span>
                     )}
 
                     {r.videoUrl && (

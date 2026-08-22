@@ -48,10 +48,29 @@ const Body = z.object({
   front: dataUrl,
   left: dataUrl,
   right: dataUrl,
-  // nullish, not optional: the upload path sends `audio: null` explicitly, and
-  // .optional() accepts only undefined — so an enrolment without a voice sample
-  // failed in every browser.
-  audio: dataUrl.nullish(),
+  /*
+   * The voice sample DEGRADES. It must never fail the enrolment.
+   *
+   * This is the third distinct bug in which an optional field rejected a whole
+   * enrolment — first the regex could not cross a ';' so every real recording
+   * was refused, then `.optional()` rejected an explicit null, and then a
+   * microphone that produced no data encoded to "data:audio/webm;base64," with
+   * an empty payload and failed `.+`. Each time the cost was the same and it is
+   * wildly out of proportion: three good photographs and four capture steps
+   * thrown away over a sample the screen calls optional and which nothing reads
+   * yet. The last variant hit exactly the people who cannot supply one — users
+   * with no working microphone.
+   *
+   * Validating it at all was the mistake. A field that is allowed to be absent
+   * should treat unusable and absent as the same thing, so anything that is not
+   * a well-formed data URL simply becomes "no voice sample" and the three
+   * photographs — which ARE required, and ARE still strictly validated above —
+   * are saved.
+   */
+  audio: z
+    .string()
+    .nullish()
+    .transform((v) => (v && dataUrl.safeParse(v).success ? v : null)),
 });
 
 function decode(b64: string): Buffer {

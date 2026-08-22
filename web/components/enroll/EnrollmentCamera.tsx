@@ -600,8 +600,28 @@ export function EnrollmentCamera() {
        */
       const type = recorder.mimeType || audioChunksRef.current[0]?.type || 'audio/webm';
       const blob = new Blob(audioChunksRef.current, { type });
-      setAudioBlob(blob);
-      setAudioUrl(URL.createObjectURL(blob));
+      /*
+       * A recording that captured nothing is NOT a voice sample.
+       *
+       * `ondataavailable` only pushes chunks with size > 0, so a muted input, a
+       * microphone that grants permission and then yields silence, or a device
+       * that produces no data at all leaves this array empty — and `new Blob([])`
+       * is a perfectly real 0-byte Blob. It is also truthy, so the save path took
+       * it, FileReader turned it into the string "data:audio/webm;base64," with
+       * nothing after the comma, and the server's data-URL check rejected it.
+       * The result was a 400 that threw away three good photographs over an
+       * OPTIONAL field the screen itself labels optional — for the one group of
+       * users who cannot supply it: people with no working microphone.
+       *
+       * Absent and empty are the same thing here, so treat them the same.
+       */
+      if (blob.size > 0) {
+        setAudioBlob(blob);
+        setAudioUrl(URL.createObjectURL(blob));
+      } else {
+        setAudioBlob(null);
+        setAudioUrl(null);
+      }
       setRetakeTarget(null);
       setStep('review');
     };
@@ -672,9 +692,11 @@ export function EnrollmentCamera() {
 
     setStep('saving');
     try {
-      // Convert audioBlob to base64 if present
+      // Convert audioBlob to base64 if present. `.size > 0` and not merely
+      // truthy: an empty Blob is an object, and encodes to a data URL with no
+      // payload, which is not a sample and is rejected downstream.
       let audioBase64 = null;
-      if (audioBlob) {
+      if (audioBlob && audioBlob.size > 0) {
         audioBase64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);

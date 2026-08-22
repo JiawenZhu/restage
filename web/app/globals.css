@@ -151,3 +151,17 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .rs-enter { animation: none; }
 }
+
+
+/*
+ * dark-soft-note
+ * The *-soft tokens are solid tints in light and ALREADY alpha in dark, so a
+ * utility like bg-warn-soft/40 halves an alpha that was low to begin with and
+ * the fill disappears — status blocks and the AI-prompt card lost their
+ * backgrounds entirely. These classes carry the tint at full strength and let
+ * the token decide how strong that is.
+ */
+.rs-tint-warn { background: var(--warn-soft); }
+.rs-tint-crit { background: var(--crit-soft); }
+.rs-tint-good { background: var(--good-soft); }
+.rs-tint-accent { background: var(--accent-soft); }

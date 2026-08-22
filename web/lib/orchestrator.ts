@@ -19,7 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { adminDb, adminStorage } from './firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { critique, generateFrame, planRun, verifyIdentity, writeScript } from './gemini';
-import type { Aspect } from './types';
+import type { Aspect, PlanStep } from './types';
 
 /** One retry. A second failure keeps both attempts visible and moves on, because
  *  a loop that retries forever is a bill, not a feature. */
@@ -328,7 +328,9 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
     let parentImage: { data: Uint8Array; mimeType: string } = avatar;
 
     for (const step of steps) {
-      const markStep = async (status: string) => {
+      // Typed rather than `string`: an unhandled status would otherwise render
+      // as a blank glyph with nothing to say it went wrong.
+      const markStep = async (status: PlanStep['status']) => {
         const snap = await run.get();
         const plan = (snap.data()?.plan ?? []) as Record<string, unknown>[];
         plan[step.stepNo - 1] = { ...plan[step.stepNo - 1], status };
@@ -359,6 +361,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
           createdAt: Date.now(),
         });
 
+        let nodeSettled = false;
         try {
           const retryNote =
             attempt > 0 && lastCritique
@@ -400,7 +403,24 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
              all judged "partial" had produced three real images and the library
              reported it as having none. What the run made is what it made.
           */
-          await touch({ frameCount: FieldValue.increment(1), thumbUrl: url });
+          // Counting every frame produced is deliberate — an all-partial run
+          // reporting zero frames was a real bug. The THUMBNAIL is different:
+          // it represents the run, so a wrong-face or discarded attempt must
+          // not become the library's picture of it. It is set where a frame is
+          // adopted, below.
+          await touch({ frameCount: FieldValue.increment(1) });
+
+          /*
+           * Attach the image to its node before the judges run.
+           *
+           * frameUrl was written only after critique and identity had both
+           * returned, so a failure in either — a quota error, a timeout —
+           * threw past it and the node kept no image at all. A generated frame
+           * that already exists in Storage was thrown away because the opinion
+           * about it could not be obtained. A judging failure should downgrade
+           * a node's verdict, never erase its output.
+           */
+          await nodeRef.update({ frameUrl: url });
 
           // Critique and identity run in parallel — the identity check is a
           // separate call because the combined one was measured to wave through
@@ -440,7 +460,20 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
           const wrongFace = !identity.samePerson || !verdict.faceMatches;
           const unsatisfactory =
             wrongFace || verdict.verdict === 'failed' || (verdict.verdict === 'partial' && verdict.worthRetry);
-          const canRetry = unsatisfactory && (wrongFace || verdict.worthRetry) && attempt < MAX_RETRIES_PER_STEP;
+          /*
+           * A `failed` verdict earns a retry on its own.
+           *
+           * Gating on worthRetry alone meant a critic saying "failed,
+           * worthRetry: false" spent no attempt — and the give-up branch then
+           * ADOPTED that frame as the base for every later step, while the plan
+           * panel reported the step as "retried". The worst frame in the run
+           * became its lineage, and the UI said the opposite. Still bounded at
+           * one extra attempt, so the cost is capped.
+           */
+          const canRetry =
+            unsatisfactory &&
+            (wrongFace || verdict.worthRetry || verdict.verdict === 'failed') &&
+            attempt < MAX_RETRIES_PER_STEP;
 
           await nodeRef.update({
             frameUrl: url,
@@ -452,6 +485,8 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             status: wrongFace || verdict.verdict === 'failed' ? 'failed' : verdict.verdict === 'partial' ? 'partial' : 'achieved',
             discarded: canRetry,
           });
+          // From here the node has a verdict; a later throw must not rewrite it.
+          nodeSettled = true;
 
           lastCritique = {
             verdict: wrongFace ? 'failed' : verdict.verdict,
@@ -483,25 +518,43 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
                 label: step.label || `Step ${step.stepNo}`,
                 frameUrl: url,
               }),
+              thumbUrl: url,
             });
           } else if (!canRetry) {
             // Out of retries. An imperfect frame with the RIGHT face still
             // advances — it is a usable base. A frame with the WRONG face does
             // not: the node stays on the tree as a visible dead end, and the
             // next step continues from the last good parent.
-            if (!wrongFace) {
+            // An imperfect frame with the right face is a usable base. A frame
+            // the critic called FAILED is not — advancing on it is how a run
+            // degrades step by step.
+            const usable = !wrongFace && verdict.verdict !== 'failed';
+            if (usable) {
               parentId = nodeRef.id;
               parentImage = { data: frame.bytes, mimeType: frame.mimeType };
+              await touch({ thumbUrl: url });
             }
             landed = true;
-            await markStep('retried');
+            // Say which happened. Reporting a step as "retried" when it was
+            // abandoned is the plan panel describing a run that did not occur.
+            await markStep(usable ? 'retried' : 'abandoned');
           }
         } catch (err) {
-          await nodeRef.update({
-            status: 'failed',
-            criticNotes: `Generation failed: ${err instanceof Error ? err.message : 'unknown'}`,
-            discarded: attempt < MAX_RETRIES_PER_STEP,
-          });
+          /*
+           * Only claim the node if it has not already settled. The accept path
+           * writes a verdict and then does bookkeeping; a throw from that
+           * bookkeeping used to land here and rewrite a node the critic had
+           * just APPROVED into a failed, discarded one — and swallow the error
+           * silently, so nothing said why.
+           */
+          console.error('[orchestrator]', runId, `step ${step.stepNo}`, err);
+          if (!nodeSettled) {
+            await nodeRef.update({
+              status: 'failed',
+              criticNotes: `Generation failed: ${err instanceof Error ? err.message : 'unknown'}`,
+              discarded: attempt < MAX_RETRIES_PER_STEP,
+            });
+          }
           if (attempt >= MAX_RETRIES_PER_STEP) throw err;
         }
 

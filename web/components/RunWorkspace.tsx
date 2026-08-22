@@ -82,6 +82,15 @@ const STEP_GLYPH: Record<string, { cls: string; icon: React.ReactNode }> = {
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--primary-ink)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6" /><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10" /></svg>
     ),
   },
+  // A step that produced nothing usable. It used to be reported as 'retried',
+  // which claimed a second attempt had landed when the run had moved on without
+  // one.
+  abandoned: {
+    cls: 'bg-crit',
+    icon: (
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--primary-ink)" strokeWidth="3.2" strokeLinecap="round" aria-hidden><path d="M18 6L6 18M6 6l12 12" /></svg>
+    ),
+  },
 };
 
 function PlanPanel({ run }: { run: Run }) {
@@ -99,7 +108,7 @@ function PlanPanel({ run }: { run: Run }) {
       {/* A failed run used to render as an empty plan, forever — the same screen
           as a slow one. */}
       {run.status === 'failed' && (
-        <div className="mx-3.5 mb-3 rounded-card border border-crit/40 bg-crit-soft/40 p-3">
+        <div className="mx-3.5 mb-3 rounded-card border border-crit/40 rs-tint-crit p-3">
           <p className="text-[11px] font-bold tracking-[0.1em] text-crit">RUN STOPPED</p>
           <p className="mt-1.5 text-[12.5px] leading-snug text-ink-2">
             {run.failureReason || 'Something went wrong and the run could not continue.'}
@@ -264,7 +273,7 @@ function Inspector({ node, run, nodes }: { node: TreeNode | null; run: Run; node
           /* A failed render used to render as a finished clip: the poster frame
              with a play badge, labelled "RENDERED CLIP", while the reason sat
              unread in criticNotes. */
-          <div className="rounded-card border border-crit/40 bg-crit-soft/40 p-3.5">
+          <div className="rounded-card border border-crit/40 rs-tint-crit p-3.5">
             <p className="text-[11px] font-bold tracking-[0.08em] text-crit">RENDER FAILED</p>
             <p className="mt-2 text-[13px] leading-relaxed">
               {node.criticNotes || 'The clip could not be rendered.'}
@@ -345,7 +354,7 @@ function Inspector({ node, run, nodes }: { node: TreeNode | null; run: Run; node
           <button
             type="button"
             onClick={downloadClip}
-            className="flex items-center justify-center gap-2 rounded-lg bg-accent py-3 text-[13.5px] font-semibold text-white"
+            className="flex items-center justify-center gap-2 rounded-lg bg-primary py-3 text-[13.5px] font-semibold text-primary-ink"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
             Download clip
@@ -356,7 +365,7 @@ function Inspector({ node, run, nodes }: { node: TreeNode | null; run: Run; node
             disabled={!canRender || busy || !user}
             onClick={renderVideo}
             title={!user ? 'Sign in first' : undefined}
-            className="flex items-center justify-center gap-2 rounded-lg bg-accent py-3 text-[13.5px] font-semibold text-white disabled:opacity-40"
+            className="flex items-center justify-center gap-2 rounded-lg bg-primary py-3 text-[13.5px] font-semibold text-primary-ink disabled:opacity-40"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
             {rendering
@@ -376,6 +385,14 @@ function Inspector({ node, run, nodes }: { node: TreeNode | null; run: Run; node
 
 function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onClose: () => void }) {
   const { user } = useUser();
+
+  // The tree's own context menu closes on Escape one layer away; a panel that
+  // does not is the kind of inconsistency people feel without naming.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -402,7 +419,12 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
   }
 
   return (
-    <div className="rs-enter absolute inset-x-3 top-4 z-40 rounded-card border border-line bg-panel p-4 shadow-[0_22px_50px_-16px_rgba(0,0,0,0.45)] sm:inset-x-auto sm:right-4 sm:w-[420px]">
+    <div
+      role="dialog"
+      aria-modal="false"
+      aria-label={`Regenerate step ${node.stepNo}`}
+      className="rs-enter absolute inset-x-3 top-4 z-40 rounded-card border border-line bg-panel p-4 shadow-[0_22px_50px_-16px_rgba(0,0,0,0.45)] sm:inset-x-auto sm:right-4 sm:w-[420px]"
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">
@@ -433,7 +455,7 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
         type="button"
         disabled={prompt.trim().length < 4 || busy}
         onClick={go}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-accent py-2.5 text-[13.5px] font-semibold text-white disabled:opacity-40"
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-[13.5px] font-semibold text-primary-ink disabled:opacity-40"
       >
         {busy ? 'Starting…' : 'Generate new attempt'}
       </button>

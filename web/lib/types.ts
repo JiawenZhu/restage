@@ -23,7 +23,11 @@ export interface PlanStep {
   instruction: string;
   /** Never truncated to nothing in the UI: it is what proves the agent reasoned. */
   rationale: string;
-  status: 'pending' | 'running' | 'done' | 'retried';
+  /** 'abandoned' means the step produced nothing usable and the run continued
+   *  from the previous frame — distinct from 'retried', which succeeded on a
+   *  second attempt. Reporting one as the other described a run that did not
+   *  happen. */
+  status: 'pending' | 'running' | 'done' | 'retried' | 'abandoned';
 }
 
 export interface TreeNode {

@@ -126,9 +126,20 @@ export function PromptComposer({
       setListening(false);
       setInterim('');
     };
-    rec.onerror = () => {
+    rec.onerror = (e?: { error?: string }) => {
       setListening(false);
       setInterim('');
+      /* The mic button used to just switch itself off with no explanation —
+         indistinguishable from a bug — most often because permission was
+         denied or the page is not on a secure origin. */
+      const why = e?.error;
+      setError(
+        why === 'not-allowed' || why === 'service-not-allowed'
+          ? 'Microphone access was blocked. Allow it in your browser, or type instead.'
+          : why === 'no-speech'
+            ? 'Nothing was heard. Try again, or type instead.'
+            : 'Dictation stopped unexpectedly. You can type instead.',
+      );
     };
     setListening(true);
     rec.start();
@@ -185,7 +196,11 @@ export function PromptComposer({
           value={raw}
           onChange={(e) => setRawInvalidating(e.target.value)}
           placeholder={listening ? 'Listening…' : placeholder}
-          className="mt-2 w-full resize-none bg-transparent text-[16px] leading-snug outline-none placeholder:text-ink-4"
+          aria-label="Your prompt, in your own words"
+          /* outline-none with nothing put back left keyboard users with no
+             visible focus at all. The ring is drawn on the card instead, so the
+             borderless look survives. */
+          className="mt-2 w-full resize-none rounded bg-transparent text-[16px] leading-snug outline-none ring-offset-2 ring-offset-panel focus-visible:ring-2 focus-visible:ring-accent placeholder:text-ink-4"
         />
         {interim && <p className="text-[13px] italic text-ink-3">{interim}…</p>}
 
@@ -213,7 +228,7 @@ export function PromptComposer({
 
       {/* card 2 — what the model will actually receive */}
       {(refined || refining) && (
-        <div className="rs-enter rounded-card border border-accent/35 bg-accent-soft/40 p-4">
+        <div className="rs-enter rounded-card border border-accent/35 rs-tint-accent p-4">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-bold tracking-[0.12em] text-accent">AI PROMPT — WHAT THE MODEL RECEIVES</p>
             {refined && (
@@ -230,7 +245,8 @@ export function PromptComposer({
                 setRefined(e.target.value);
                 onPrompt(e.target.value, raw);
               }}
-              className="mt-2 w-full resize-none bg-transparent text-[14px] leading-relaxed outline-none"
+              aria-label="The prompt the model will receive"
+              className="mt-2 w-full resize-none rounded bg-transparent text-[14px] leading-relaxed outline-none ring-offset-2 ring-offset-panel focus-visible:ring-2 focus-visible:ring-accent"
             />
           ) : (
             <p className="mt-2 flex items-center gap-2 text-[13px] text-ink-2">

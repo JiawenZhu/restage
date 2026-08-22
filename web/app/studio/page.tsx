@@ -314,7 +314,7 @@ function NewRun() {
             )}
           </div>
           {pendingTemplate && (
-            <div className="rs-enter mt-2.5 flex flex-wrap items-center gap-3 rounded-card border border-warn/40 bg-warn-soft/40 px-3.5 py-3">
+            <div className="rs-enter mt-2.5 flex flex-wrap items-center gap-3 rounded-card border border-warn/40 rs-tint-warn px-3.5 py-3">
               <p className="min-w-0 flex-1 text-[13px] leading-snug">
                 Applying <span className="font-semibold">{pendingTemplate.name}</span> will replace the goal you wrote.
               </p>

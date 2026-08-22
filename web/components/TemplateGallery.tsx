@@ -132,7 +132,13 @@ function TemplateCard({
         type="button"
         onClick={onSelect}
         aria-label={`Use the ${tpl.name} template`}
-        className="relative block aspect-[9/13] w-full overflow-hidden bg-subtle text-left"
+        aria-pressed={selected}
+        /* Focus plays the clip too, so keyboard users get the preview that
+           hovering gives everyone else — and selection is announced rather than
+           conveyed only by a coloured overlay. */
+        onFocus={allowMotion ? play : undefined}
+        onBlur={stop}
+        className="relative block aspect-[9/13] w-full overflow-hidden bg-subtle text-left outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel"
       >
         {hasClip ? (
           <video
@@ -159,10 +165,13 @@ function TemplateCard({
         {/* A gradient, so white type stays legible over any frame. */}
         <span className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/80 to-transparent" />
 
+        {/* On touch there is no hover, so the badge says what to do instead of
+            promising motion that never arrives. */}
         {!playing && hasClip && allowMotion && (
           <span className="pointer-events-none absolute right-2 top-2 flex items-center gap-1 rounded-chip bg-black/55 px-1.5 py-1 text-[9px] font-bold tracking-[0.06em] text-white backdrop-blur-sm">
             <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
-            HOVER
+            <span className="hidden sm:inline">HOVER</span>
+            <span className="sm:hidden">CLIP</span>
           </span>
         )}
 
@@ -187,7 +196,7 @@ function TemplateCard({
 
         {selected && (
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-accent/25">
-            <span className="flex items-center gap-1.5 rounded-chip bg-accent px-2.5 py-1.5 text-[11px] font-bold text-white">
+            <span className="flex items-center gap-1.5 rounded-chip bg-primary px-2.5 py-1.5 text-[11px] font-bold text-primary-ink">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6L9 17l-5-5" /></svg>
               SELECTED
             </span>

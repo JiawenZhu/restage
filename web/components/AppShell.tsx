@@ -15,6 +15,7 @@ export function AppShell({
 }) {
   const { user, loading, logout } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
 
   const openSignIn = () => {
@@ -29,8 +30,11 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-ink">
-      <header className="flex h-[68px] shrink-0 items-center gap-5 border-b border-line bg-panel px-6">
-        <Link href="/" className="flex items-center gap-2">
+      {/* The workspace now stacks down to phone widths, so the header has to
+          go with it: at 420px the wordmark, three nav items and the account
+          cluster collided. Nav moves into a sheet below md. */}
+      <header className="flex h-[68px] shrink-0 items-center gap-3 border-b border-line bg-panel px-4 md:gap-5 md:px-6">
+        <Link href="/" className="flex shrink-0 items-center gap-2">
           <svg
             width="20"
             height="20"
@@ -49,7 +53,7 @@ export function AppShell({
           <span className="text-[15px] font-bold tracking-tight">Restage</span>
         </Link>
 
-        <nav className="flex items-center gap-1 text-[13.5px]">
+        <nav className="hidden items-center gap-1 text-[13.5px] md:flex">
           <Link href="/studio" className="rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle">
             New run
           </Link>
@@ -63,7 +67,19 @@ export function AppShell({
           </Link>
         </nav>
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
+          <button
+            type="button"
+            onClick={() => setNavOpen((v) => !v)}
+            aria-expanded={navOpen}
+            aria-label="Menu"
+            className="rounded-md p-2 text-ink-2 hover:bg-subtle md:hidden"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+              <path d="M3 6h18M3 12h18M3 18h18" />
+            </svg>
+          </button>
+
           {right}
           <ThemeToggle />
 
@@ -114,6 +130,25 @@ export function AppShell({
           )}
         </div>
       </header>
+
+      {navOpen && (
+        <nav className="rs-enter flex flex-col border-b border-line bg-panel px-4 py-2 md:hidden">
+          {[
+            ['/studio', 'New run'],
+            ['/library', 'Library'],
+            ['/avatars', 'Avatars'],
+          ].map(([href, label]) => (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setNavOpen(false)}
+              className="rounded-md px-2 py-2.5 text-[14px] font-medium text-ink-2 hover:bg-subtle"
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+      )}
 
       <main className="flex min-h-0 flex-1 flex-col">{children}</main>
 

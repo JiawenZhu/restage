@@ -77,6 +77,15 @@ export function VersionTree({
   // edited from what is history, and history is not editable.
   const [cutIds, setCutIds] = useState<Set<string>>(new Set());
   const [edgeHover, setEdgeHover] = useState<{ id: string; x: number; y: number } | null>(null);
+  /*
+   * The scissors sits ON the edge it belongs to, so moving the pointer from the
+   * path to the button crosses a gap and fires pointerleave. The button
+   * re-asserted the hover on enter, which fixed the gap and created a worse
+   * bug: nothing ever cleared it again, so once shown the scissors followed the
+   * canvas forever, over unrelated nodes. A short shared dismiss timer bridges
+   * the gap without stranding anything.
+   */
+  const dismissEdge = useRef<number | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
 
   // Load saved positions once per run. localStorage throws in some privacy
@@ -100,6 +109,21 @@ export function VersionTree({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [menu]);
+
+  const holdEdge = (v: { id: string; x: number; y: number } | null) => {
+    if (dismissEdge.current) window.clearTimeout(dismissEdge.current);
+    dismissEdge.current = null;
+    setEdgeHover(v);
+  };
+
+  const releaseEdge = () => {
+    if (dismissEdge.current) window.clearTimeout(dismissEdge.current);
+    dismissEdge.current = window.setTimeout(() => setEdgeHover(null), 220);
+  };
+
+  useEffect(() => () => {
+    if (dismissEdge.current) window.clearTimeout(dismissEdge.current);
+  }, []);
 
   const setCut = (id: string, cut: boolean) => {
     setCutIds((prev) => {
@@ -157,6 +181,11 @@ export function VersionTree({
     }
     return { w: mx + 300, h: my + 120 };
   }, [pos]);
+
+  function openMenuFor(nodeId: string, clientX: number, clientY: number) {
+    const r = wrapRef.current?.getBoundingClientRect();
+    if (r) setMenu({ x: clientX - r.left, y: clientY - r.top, nodeId });
+  }
 
   function startDrag(e: React.PointerEvent, id: string) {
     // Primary button only; keyboard users still select through click.
@@ -250,8 +279,8 @@ export function VersionTree({
                     strokeWidth={16}
                     stroke="transparent"
                     className="pointer-events-auto"
-                    onPointerEnter={() => setEdgeHover({ id: n.id, x: (x1 + x2) / 2, y: (y1 + y2) / 2 })}
-                    onPointerLeave={() => setEdgeHover((cur) => (cur?.id === n.id ? null : cur))}
+                    onPointerEnter={() => holdEdge({ id: n.id, x: (x1 + x2) / 2, y: (y1 + y2) / 2 })}
+                    onPointerLeave={releaseEdge}
                   />
                 )}
               </g>
@@ -264,7 +293,8 @@ export function VersionTree({
           <button
             type="button"
             aria-label="Cut this connection"
-            onPointerEnter={() => setEdgeHover(edgeHover)}
+            onPointerEnter={() => holdEdge(edgeHover)}
+            onPointerLeave={releaseEdge}
             onClick={() => setCut(edgeHover.id, true)}
             className="absolute z-20 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-line-strong bg-panel text-ink-2 shadow-[0_6px_18px_-6px_rgba(0,0,0,0.35)] hover:border-crit hover:text-crit"
             style={{ left: edgeHover.x, top: edgeHover.y }}
@@ -310,8 +340,18 @@ export function VersionTree({
               aria-pressed={selected}
               onContextMenu={(e) => {
                 e.preventDefault();
-                const r = wrapRef.current?.getBoundingClientRect();
-                if (r) setMenu({ x: e.clientX - r.left, y: e.clientY - r.top, nodeId: n.id });
+                openMenuFor(n.id, e.clientX, e.clientY);
+              }}
+              /* Right-click was the ONLY way to reach Regenerate — no
+                 affordance, no keyboard path, and nothing at all on touch,
+                 where contextmenu does not fire. The menu key and a visible
+                 button now open the same menu. */
+              onKeyDown={(e) => {
+                if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+                  e.preventDefault();
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  openMenuFor(n.id, r.right, r.top);
+                }
               }}
               className={`rs-enter absolute touch-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
               style={{ left: p.x, top: p.y, width: p.w, height: p.h }}
@@ -356,6 +396,32 @@ export function VersionTree({
                   </span>
                 )}
               </span>
+
+              {selected && n.kind === 'frame' && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Node actions"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openMenuFor(n.id, e.clientX, e.clientY);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      openMenuFor(n.id, r.right, r.top);
+                    }
+                  }}
+                  className="absolute -right-2.5 -top-2.5 z-10 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-line-strong bg-panel text-ink-2 shadow-sm hover:text-ink"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" />
+                  </svg>
+                </span>
+              )}
 
               {n.discarded && (
                 <span className="absolute -top-4 left-0 whitespace-nowrap text-[10.5px] font-semibold text-crit">discarded</span>
@@ -432,7 +498,12 @@ export function VersionTree({
         return (
           <div
             className="rs-enter absolute z-40 w-[230px] rounded-card border border-line bg-panel p-1.5 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.45)]"
-            style={{ left: Math.min(menu.x, (wrapRef.current?.clientWidth ?? 9999) - 240), top: menu.y }}
+            style={{
+              left: Math.min(menu.x, (wrapRef.current?.clientWidth ?? 9999) - 240),
+              // Clamped in both axes: a right-click near the bottom put the menu
+              // off-screen with no way to reach its items.
+              top: Math.min(menu.y, Math.max(8, (wrapRef.current?.clientHeight ?? 9999) - 210)),
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-bold tracking-[0.1em] text-ink-4">

@@ -108,8 +108,28 @@ async function resolveImageInput(u: string): Promise<{ mimeType: string; data: B
   throw new Error('image must be a valid data URL or HTTP URL');
 }
 
+/*
+ * Firestore rejects any document over 1MB — and rejects it on WRITE, so a
+ * document that has grown too large cannot even be updated to mark its run
+ * failed. It stops responding entirely, which is the worst failure mode
+ * available.
+ *
+ * A real run in this database reached 1,333,473 bytes, and 790KB of one
+ * document was a base64 image sitting in `avatarMultiViews`. Images belong in
+ * Storage with a URL here; this refuses to write the payload back in, whatever
+ * path tries to. Losing an inline image is recoverable, a permanently
+ * unwritable run document is not.
+ */
+function stripInlineImages<T>(obj: T): T {
+  return JSON.parse(
+    JSON.stringify(obj, (_, v) =>
+      typeof v === 'string' && v.startsWith('data:') && v.length > 4096 ? null : v === undefined ? null : v,
+    ),
+  );
+}
+
 function sanitizeFirestore<T>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj, (_, v) => (v === undefined ? null : v)));
+  return stripInlineImages(obj);
 }
 
 export async function createRun(args: StartArgs): Promise<string> {
@@ -303,6 +323,15 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             frame.mimeType
           );
 
+          /*
+             The run-level summary the library reads, updated for EVERY frame
+             rather than only accepted ones. Keying it on acceptance was a bug
+             found by checking the data after optimising: a run whose steps were
+             all judged "partial" had produced three real images and the library
+             reported it as having none. What the run made is what it made.
+          */
+          await touch({ frameCount: FieldValue.increment(1), thumbUrl: url });
+
           // Critique and identity run in parallel — the identity check is a
           // separate call because the combined one was measured to wave through
           // a visibly different person from a real run.
@@ -367,6 +396,17 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             parentImage = { data: frame.bytes, mimeType: frame.mimeType };
             landed = true;
             await markStep(attempt > 0 ? 'retried' : 'done');
+            /*
+             * Keep a summary on the run document itself.
+             *
+             * The library used to reconstruct this by reading every node of
+             * every run — and a node holds a full frame — so listing a handful
+             * of runs pulled megabytes and measured 4.7 to 13 SECONDS. The
+             * numbers it wanted were already derivable at write time.
+             *
+             * thumbUrl is the newest accepted frame, which is also the one that
+             * best represents where the run got to.
+             */
             await touch({
               previewFrames: FieldValue.arrayUnion({
                 stepNo: step.stepNo,

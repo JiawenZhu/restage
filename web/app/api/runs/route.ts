@@ -72,42 +72,25 @@ export async function GET(req: Request) {
       .limit(safeLimit)
       .get();
 
-    const runs = await Promise.all(
-      snapshot.docs.map(async (doc: QueryDocumentSnapshot<DocumentData>) => {
+    const runs = snapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => {
         const data = doc.data();
 
         /*
-         * One thumbnail per run — and it must be a frame the run PRODUCED.
+         * No subcollection reads. This block used to open every node document
+         * of every run just to count frames and pick a thumbnail — and a node
+         * holds a base64 frame, so listing a few runs moved megabytes and
+         * measured 4.7 to 13 seconds against real data. The orchestrator now
+         * maintains `frameCount` and `thumbUrl` on the run as it works.
          *
-         * This preferred `previewFrames[0]`, which is the enrolment photo, so
-         * every card in the library showed the same face on the same background
-         * and none of them showed what the run made. It also meant the thumbnail
-         * was a Storage URL, and Storage is private now, so those links 403.
-         *
-         * Generated frames are data URLs held in Firestore, so they need no
-         * signing and cannot expire. Newest achieved first; a run that never got
-         * a clean frame falls back to its last attempt, and only a run with no
-         * frames at all shows nothing.
+         * Runs created before that fall back to previewFrames, which was always
+         * on the document: entry 0 is the enrolment photo, so the LAST entry is
+         * the one that shows what the run produced.
          */
-        let thumbUrl: string | undefined;
-        let frameCount = 0;
-        try {
-          const nodesSnap = await doc.ref.collection('nodes').orderBy('createdAt', 'desc').get();
-          const frames = nodesSnap.docs.filter((n) => {
-            const d = n.data();
-            if (d.kind !== 'frame' || typeof d.frameUrl !== 'string') return false;
-            // A Storage URL without a download token predates the bucket being
-            // locked down and would render as a broken image. Better to show a
-            // run with no thumbnail than one with a broken one.
-            if (d.frameUrl.startsWith('data:')) return true;
-            return d.frameUrl.includes('token=');
-          });
-          frameCount = frames.length;
-          const best = frames.find((n) => n.data().status === 'achieved') ?? frames[0];
-          thumbUrl = best?.data().frameUrl;
-        } catch {
-          // A run whose nodes cannot be read is still worth listing.
-        }
+        const previews: { frameUrl?: string }[] = Array.isArray(data.previewFrames) ? data.previewFrames : [];
+        const generated = previews.slice(1);
+        const thumbUrl: string | undefined =
+          data.thumbUrl ?? generated[generated.length - 1]?.frameUrl ?? undefined;
+        const frameCount: number = typeof data.frameCount === 'number' ? data.frameCount : generated.length;
 
         return {
           id: doc.id,
@@ -124,9 +107,8 @@ export async function GET(req: Request) {
           createdAt: data.createdAt,
           updatedAt: data.updatedAt ?? data.createdAt,
           thumbUrl,
-        };
-      }),
-    );
+      };
+    });
 
     return NextResponse.json({ runs }, { headers: { 'cache-control': 'no-store' } });
   } catch (err) {

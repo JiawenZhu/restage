@@ -115,6 +115,10 @@ export function VersionTree({
      needs to be, and a second click on a button that has changed its own label
      is a clearer signal of intent than a browser modal nobody reads. */
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  /* Delete was pressed on something still connected. The button is always
+     there — hiding it made "why can I not delete this" an unanswerable
+     question — so this holds the explanation of why it did not fire. */
+  const [blockedDelete, setBlockedDelete] = useState<string | null>(null);
 
   // Load saved positions once per run. localStorage throws in some privacy
   // modes; losing a layout preference is not worth losing the page.
@@ -212,6 +216,7 @@ export function VersionTree({
 
   function openMenuFor(nodeId: string, clientX: number, clientY: number) {
     setConfirmDelete(null);
+    setBlockedDelete(null);
     const r = wrapRef.current?.getBoundingClientRect();
     if (r) setMenu({ x: clientX - r.left, y: clientY - r.top, nodeId });
   }
@@ -618,15 +623,29 @@ export function VersionTree({
               </button>
             )}
 
-            {/* Only reachable from a disconnected node, and only on the second
-                click. Detaching and destroying are different risks, so they are
-                different actions — this is the one thing here that cannot be
-                undone. */}
-            {onDelete && isDisconnected && (
+            {/*
+              ALWAYS SHOWN, even on something still connected.
+              
+              It used to appear only once a node was disconnected, which answers
+              the question "can I delete this" by making the control vanish —
+              and a missing button explains nothing. Somebody looking for delete
+              concludes the product cannot do it, which is exactly the report
+              that arrived.
+              
+              The two-step safety is unchanged: detaching is reversible and
+              destroying is not, so delete still only fires on a disconnected
+              node and still asks twice. Pressing it early now SAYS so, and
+              offers the step that was missing rather than leaving a dead end.
+            */}
+            {onDelete && target.kind !== 'avatar' && target.id !== 'root' && (
               <button
                 type="button"
                 className={`${item} ${confirmDelete === target.id ? 'text-crit-ink' : ''}`}
                 onClick={() => {
+                  if (!isDisconnected) {
+                    setBlockedDelete(target.id);
+                    return;
+                  }
                   if (confirmDelete !== target.id) { setConfirmDelete(target.id); return; }
                   setMenu(null);
                   setConfirmDelete(null);
@@ -638,6 +657,32 @@ export function VersionTree({
                   ? `Delete ${target.kind === 'video' ? 'this clip' : 'it'} for good — click again`
                   : 'Delete permanently…'}
               </button>
+            )}
+
+            {/* Why it did not delete, and the way forward. Offering Disconnect
+                here is not a bypass: it performs the reversible step and stops,
+                leaving delete still two further clicks away. */}
+            {blockedDelete === target.id && !isDisconnected && (
+              <div className="mx-1 mb-1 mt-0.5 rounded-lg bg-warn-soft px-2.5 py-2">
+                <p className="text-[11.5px] font-semibold leading-snug text-warn-ink">
+                  Disconnect it first
+                </p>
+                <p className="mt-0.5 text-[11px] leading-snug text-ink-2">
+                  {target.kind === 'video'
+                    ? 'This clip is still attached to the shot it was made from.'
+                    : 'This shot is still part of the ad.'}{' '}
+                  Deleting cannot be undone, so it only works on something already taken out.
+                </p>
+                {onDisconnect && (
+                  <button
+                    type="button"
+                    onClick={() => { setBlockedDelete(null); setMenu(null); onDisconnect(target.id); }}
+                    className="mt-1.5 text-[11.5px] font-semibold text-warn-ink underline"
+                  >
+                    Disconnect it now
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Reordering is free: shots are photographed independently, so

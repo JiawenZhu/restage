@@ -63,6 +63,39 @@ console.log(`  ${okRemove ? '✅' : '❌'} 删帧：s4 接到 s2alt，s3 留在�
 const p = shotPlan(24, lineageOf(all).length);
 console.log(`\n  用户设的 24s / ${lineageOf(all).length} 个镜头 → 每段 ${p.perShot}s，总 ${p.total}s`);
 
+/*
+ * 用户否掉链条中间的一帧。
+ *
+ * 这是真实运行里最容易踩的一种情况，而之前完全没有测到。用户点「否掉」的那
+ * 一帧，后面几步早就是在它上面改出来的 —— 它虽然不该出现在成片里，却仍然是
+ * 链条上承重的一环。之前的走法碰到它就停，于是它下面的每一步都被悄悄丢掉：
+ * 在真实的六步运行里，第 2 步被否掉之后整个序列从 6 个镜头塌成 1 个，而渲染
+ * 按钮照样写着「把全部 1 个镜头渲染成一支广告」。
+ *
+ * 现在的走法是「跨过去」而不是「停下来」：被否掉的帧不计入成片，但链条继续
+ * 往下走。
+ */
+await nodes.doc('s2alt').update({ status: 'rejected' });
+all = await read();
+const afterReject = lineageOf(all).map((n) => n.id).join(',');
+console.log(`\n  否掉链条中间的 s2alt 之后: ${afterReject.split(',').join(' -> ')}`);
+const okReject = afterReject === 's1,s4';
+console.log(`  ${okReject ? '✅' : '❌'} 否掉中间帧：跨过它继续往下走，不会把后面的步骤一起丢掉`);
+
+/* 过时的清单里不该混进已渲染的片子。video 节点用 99 当哨兵步号，之前直接把它
+   报给用户，于是界面上出现「第 99 步已过时」，重建报价也把它算成一次生成。 */
+await nodes.doc('vid').set({
+  parentId: 's4', stepNo: 99, kind: 'video', status: 'achieved', createdAt: Date.now() + 50,
+});
+await nodes.doc('s5').set({
+  parentId: 's4', stepNo: 5, kind: 'frame', status: 'achieved', frameUrl: 'https://x/s5.jpg', createdAt: Date.now() + 60,
+});
+const rm2 = await removeFrame(runRef.id, 's4');
+console.log(`\n  取出 s4（下面挂着一个 video + 一个 frame）`);
+console.log(`  报给用户的步骤: ${rm2.staleSteps.join(', ')}   计价节点数: ${rm2.rebuildableIds.length}`);
+const okNoSentinel = !rm2.staleSteps.includes(99) && rm2.rebuildableIds.length === 1 && rm2.staleIds.length === 2;
+console.log(`  ${okNoSentinel ? '✅' : '❌'} 过时清单：video 仍标记为过时，但不报成「第 99 步」也不计入重建价格`);
+
 for (const d of (await nodes.get()).docs) await d.ref.delete();
 await runRef.delete();
-process.exit(okSwap && okRemove ? 0 : 1);
+process.exit(okSwap && okRemove && okReject && okNoSentinel ? 0 : 1);

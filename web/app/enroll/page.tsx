@@ -43,8 +43,41 @@ export default function Enroll() {
           </p>
         </div>
 
+        {/*
+          The four things that actually decide how good every run will look.
+
+          These are the same rules the generator is given in look.ts — 85mm-ish
+          distance, camera a little above eye level, soft light from the front —
+          and they were told to the model and never to the person holding the
+          camera. That asymmetry showed: a real enrolment came in shot from
+          below with a ceiling light overhead and the subject mid-word, and the
+          prompt then asked for the exact opposite of the reference it was
+          locked to. No wording can win that argument. The reference is the
+          ceiling on everything generated from it, so the advice belongs here,
+          before the camera turns on.
+        */}
+        <div className="mx-auto mt-8 max-w-3xl rounded-card border border-line bg-panel px-5 py-4">
+          <p className="text-[13px] font-semibold">Four things that decide how good this looks</p>
+          <ul className="mt-2.5 grid gap-2 sm:grid-cols-2">
+            {[
+              ['Put the camera a little above your eyes', 'Shooting up from below is the least flattering angle there is.'],
+              ['Face a window, and turn off the light above you', 'Overhead light drops shadows under your eyes and brows.'],
+              ['Sit back to about arm’s length', 'Close to a wide lens enlarges your nose and narrows your cheeks.'],
+              ['Plain wall behind you, mouth closed', 'Less for the model to remove, and a composed expression to copy.'],
+            ].map(([t, why]) => (
+              <li key={t} className="flex gap-2.5">
+                <span className="mt-[7px] block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                <span>
+                  <span className="block text-[13px] font-medium leading-snug">{t}</span>
+                  <span className="block text-[12px] leading-snug text-ink-3">{why}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
         {/* What the next minute looks like, before it starts. */}
-        <ol className="mx-auto mt-8 grid max-w-3xl gap-2.5 sm:grid-cols-4">
+        <ol className="mx-auto mt-6 grid max-w-3xl gap-2.5 sm:grid-cols-4">
           {STEPS.map((s) => (
             <li key={s.n} className="rounded-card border border-line bg-panel px-3.5 py-3">
               <span className="tnum flex h-6 w-6 items-center justify-center rounded-full bg-subtle text-[11.5px] font-bold text-ink-2">

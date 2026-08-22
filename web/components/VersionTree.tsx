@@ -379,7 +379,7 @@ export function VersionTree({
 
               <span
                 className={`relative block h-full w-full overflow-hidden rounded-node border-2 bg-elevated ${STATUS_RING[n.status] ?? 'border-line'} ${
-                  n.status === 'rejected' ? 'opacity-35 saturate-[0.15]' : ''
+                  n.status === 'rejected' || n.removedFromSequence ? 'opacity-35 saturate-[0.15]' : ''
                 } ${n.discarded ? 'opacity-50 saturate-[0.3]' : ''} ${
                   n.stale && !n.discarded ? 'opacity-60 saturate-[0.4]' : ''
                 } ${selected ? 'shadow-[0_10px_30px_-10px_rgba(0,0,0,0.45)]' : ''}`}

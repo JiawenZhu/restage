@@ -2,7 +2,16 @@ import { NextResponse } from 'next/server';
 import { consume, tooMany } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { adminDb, requireUid } from '@/lib/firebaseAdmin';
-import { downloadRendered, MAX_CLIP_SECONDS, MIN_CLIP_SECONDS, pollRender, submitRender } from '@/lib/gemini';
+import {
+  downloadRendered,
+  generateOmniVideo,
+  MAX_CLIP_SECONDS,
+  MIN_CLIP_SECONDS,
+  OMNI_FIXED_SECONDS,
+  OMNI_FIXED_SHORT_EDGE,
+  pollRender,
+  submitRender,
+} from '@/lib/gemini';
 import { lastFrameOf, segmentsFor, stitch } from '@/lib/stitch';
 import { lineageOf, shotPlan, type LineageNode } from '@/lib/lineage';
 import { motionDirection } from '@/lib/look';
@@ -36,6 +45,7 @@ export const maxDuration = 300;
 const Body = z.object({
   nodeId: z.string().min(1).optional(),
   mode: z.enum(['frame', 'sequence']).default('frame'),
+  engine: z.enum(['veo', 'omni']).default('veo').optional(),
   seconds: z.union([z.literal(4), z.literal(8), z.literal(16), z.literal(24), z.literal(32)]).optional(),
 });
 
@@ -148,12 +158,30 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
   let shots: { id: string; frameUrl: string; label?: string; instruction?: string }[];
 
   if (parsed.data.mode === 'sequence') {
-    const chain = lineageOf(allNodes).filter((n) => n.frameUrl && !n.stale);
+    const chain = lineageOf(allNodes).filter((n) => n.frameUrl);
     if (!chain.length) {
       return NextResponse.json({ error: 'this run has no finished sequence to render' }, { status: 400 });
     }
-    if (chain.some((n) => (n as { stale?: boolean }).stale)) {
-      return NextResponse.json({ error: 'rebuild the stale steps before rendering the sequence' }, { status: 409 });
+    /*
+     * Asked BEFORE the out-of-date frames are removed, which is the only order
+     * that can actually refuse.
+     *
+     * This filtered `!n.stale` first and then asked whether anything remaining
+     * was stale — a test that cannot fire, because the filter had just removed
+     * every case it was looking for. So a sequence with two out-of-date steps
+     * did not get the 409 it was meant to get: it quietly rendered the
+     * remaining shots and handed back a shorter ad than the storyboard, with
+     * nothing said about the steps that were dropped.
+     */
+    const stale = chain.filter((n) => (n as { stale?: boolean }).stale);
+    if (stale.length) {
+      return NextResponse.json(
+        {
+          error: `Rebuild ${stale.length} out-of-date step${stale.length > 1 ? 's' : ''} before rendering the sequence — ` +
+            `step ${stale.map((n) => n.stepNo).join(', ')} ${stale.length > 1 ? 'no longer follow' : 'no longer follows'} from the frame above ${stale.length > 1 ? 'them' : 'it'}.`,
+        },
+        { status: 409 },
+      );
     }
     shots = chain.map((n) => ({
       id: n.id,
@@ -236,28 +264,110 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
       const wanted = Math.max(MIN_CLIP_SECONDS, parsed.data.seconds ?? run.seconds ?? MAX_CLIP_SECONDS);
       const plan = shotPlan(wanted, shots.length, MIN_CLIP_SECONDS, MAX_CLIP_SECONDS);
 
-      type Segment = { seconds: number; seed: { data: Buffer; mimeType: string } | undefined; label?: string; continues: boolean };
-      const queue: Segment[] = [];
+      const selectedEngine = parsed.data.engine || (run.videoEngine as string) || 'veo';
+      let finalVideoBytes: Buffer;
+      let hasAudio = false;
+      let audioNote: string | null = null;
+      /* Something true about the ENGINE that the user should see — a length or a
+         resolution their choice did not survive. Separate from audioNote so a
+         caption problem and an engine limit do not overwrite one another. */
+      let engineNote: string | null = null;
 
-      if (isSequence) {
-        for (const shot of shots) {
-          const seed = await resolveImage(shot.frameUrl);
-          queue.push({ seconds: plan.perShot, seed: seed ?? undefined, label: shot.label, continues: false });
+      if (selectedEngine === 'omni') {
+        /*
+         * One model call for the entire ad, so the storyboard has to travel in
+         * the PROMPT — there is no queue here to carry it.
+         *
+         * This passed `shots[0].label` and nothing else. In sequence mode that
+         * is the storyboard's FIRST BEAT standing in for all of it: the user
+         * asks to render the whole sequence, waits, and gets a single scene of
+         * step one, with every other shot the agent planned dropped silently.
+         */
+        const beats = shots
+          .map((s, i) => `${i + 1}. ${(s.label ?? s.instruction ?? '').trim()}`)
+          .filter((l) => l.length > 4);
+
+        const prompt = buildCinematicUgcVideoPrompt(
+          run.goal,
+          isSequence ? undefined : shots[0].label,
+          run.aspect,
+          isSequence && beats.length > 1
+            ? `Shot list — play these beats in order as one continuous ${OMNI_FIXED_SECONDS}-second take, ` +
+              `giving each roughly equal screen time and moving between them on action rather than restarting the shot: ${beats.join(' ')}`
+            : undefined,
+        );
+
+        /*
+         * The enrolment views go in as references.
+         *
+         * Only the single starting frame was sent before. Enrolment captures
+         * three angles precisely because identity holds better from three than
+         * from one, and none of that was reaching this engine. Verified against
+         * a real avatar: front plus left, with the photographic direction from
+         * look.ts, produced a natural and clearly recognisable person where one
+         * reference reproduced the wide-lens, overhead-lit flaws of the capture.
+         */
+        const views = (run.avatarMultiViews ?? {}) as { front?: string; left?: string; right?: string };
+        const references = (
+          await Promise.all(
+            [views.front, views.left, views.right].filter(Boolean).map((u) => resolveImage(u as string)),
+          )
+        ).filter(Boolean) as Array<{ data: Buffer; mimeType: string }>;
+
+        await videoRef.update({
+          engine: 'omni',
+          rationale:
+            `Gemini Omni Flash — one ${OMNI_FIXED_SECONDS}s take with native audio` +
+            (isSequence && beats.length > 1 ? `, following all ${beats.length} shots` : '') +
+            (references.length ? `, held to your face from ${references.length} enrolment view${references.length > 1 ? 's' : ''}` : '') +
+            '.',
+        });
+
+        const omni = await generateOmniVideo({
+          prompt,
+          firstFrame: firstFrame ?? undefined,
+          references,
+          aspect: run.aspect,
+        });
+        finalVideoBytes = omni.bytes;
+        // Measured from the container rather than assumed from the datasheet.
+        hasAudio = omni.hasAudio;
+
+        /*
+         * Two things this engine cannot do, said rather than swallowed. The
+         * length has no parameter at all, and the resolution parameter is
+         * accepted and then ignored — both verified against the live API.
+         */
+        if (wanted !== OMNI_FIXED_SECONDS) {
+          engineNote =
+            `Gemini Omni always returns about ${OMNI_FIXED_SECONDS} seconds at ${OMNI_FIXED_SHORT_EDGE}p, so this is not the ` +
+            `${wanted}s you asked for. Render with Veo 3.1 to get the length you set.`;
+        } else {
+          engineNote = `Gemini Omni renders at ${OMNI_FIXED_SHORT_EDGE}p. Veo 3.1 goes higher.`;
         }
       } else {
-        const count = segmentsFor(wanted, MAX_CLIP_SECONDS);
-        for (let i = 0; i < count; i++) {
-          const remaining = wanted - i * MAX_CLIP_SECONDS;
-          queue.push({
-            seconds: Math.min(MAX_CLIP_SECONDS, Math.max(MIN_CLIP_SECONDS, remaining)),
-            seed: i === 0 ? firstFrame : undefined,   // later ones are seeded by the previous tail
-            continues: i > 0,
-          });
-        }
-      }
+        type Segment = { seconds: number; seed: { data: Buffer; mimeType: string } | undefined; label?: string; continues: boolean };
+        const queue: Segment[] = [];
 
-      const segments: Buffer[] = [];
-      let carried = firstFrame;
+        if (isSequence) {
+          for (const shot of shots) {
+            const seed = await resolveImage(shot.frameUrl);
+            queue.push({ seconds: plan.perShot, seed: seed ?? undefined, label: shot.label, continues: false });
+          }
+        } else {
+          const count = segmentsFor(wanted, MAX_CLIP_SECONDS);
+          for (let i = 0; i < count; i++) {
+            const remaining = wanted - i * MAX_CLIP_SECONDS;
+            queue.push({
+              seconds: Math.min(MAX_CLIP_SECONDS, Math.max(MIN_CLIP_SECONDS, remaining)),
+              seed: i === 0 ? firstFrame : undefined, // later ones are seeded by the previous tail
+              continues: i > 0,
+            });
+          }
+        }
+
+        const segments: Buffer[] = [];
+        let carried = firstFrame;
 
       for (let i = 0; i < queue.length; i++) {
         const seg = queue[i];
@@ -321,70 +431,55 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         if (!isSequence && i + 1 < queue.length) carried = await lastFrameOf(bytes);
       }
 
-      let finalVideoBytes = await stitch(segments, isSequence ? undefined : (queue.length > 1 ? wanted : undefined));
+        finalVideoBytes = await stitch(segments, isSequence ? undefined : (queue.length > 1 ? wanted : undefined));
 
-      // ── Audio Muxing Pipeline ──
-      // If voiceover audio exists on the run, mux it into the video with ffmpeg
-      let hasAudio = false;
-      let audioNote: string | null = null;
-      if (run.audioUrl) {
-        try {
-          const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'veo-mux-'));
-          const videoPath = path.join(tempDir, 'raw_video.mp4');
-          const audioPath = path.join(tempDir, 'voiceover.wav');
-          const outputPath = path.join(tempDir, 'muxed_video.mp4');
+        // ── Audio Muxing Pipeline for Veo ──
+        // If voiceover audio exists on the run, mux it into the video with ffmpeg
+        if (run.audioUrl) {
+          try {
+            const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'veo-mux-'));
+            const videoPath = path.join(tempDir, 'raw_video.mp4');
+            const audioPath = path.join(tempDir, 'voiceover.wav');
+            const outputPath = path.join(tempDir, 'muxed_video.mp4');
 
-          await fs.writeFile(videoPath, finalVideoBytes);
+            await fs.writeFile(videoPath, finalVideoBytes);
 
-          // Download voice audio
-          const audioRes = await fetch(run.audioUrl);
-          if (audioRes.ok) {
-            const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
-            await fs.writeFile(audioPath, audioBuffer);
+            // Download voice audio
+            const audioRes = await fetch(run.audioUrl);
+            if (audioRes.ok) {
+              const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+              await fs.writeFile(audioPath, audioBuffer);
 
-            /*
-             * Explicit stream mapping, and no -shortest.
-             *
-             * Veo clips can carry their own audio track. Without -map, ffmpeg
-             * picks one audio stream by its own rules and the written voiceover
-             * — the line the workspace shows the user before they render — was
-             * the one that lost. And -shortest truncated the video whenever the
-             * voiceover was shorter than the clip, so an 8-second ad became a
-             * 5-second one. The video governs the length; the audio is padded
-             * with silence to match.
-             */
-            await execFileAsync('ffmpeg', [
-              '-y',
-              '-i', videoPath,
-              '-i', audioPath,
-              '-map', '0:v:0',
-              '-map', '1:a:0',
-              '-c:v', 'copy',
-              '-c:a', 'aac',
-              '-b:a', '192k',
-              '-af', 'apad',
-              '-t', String(Math.min(MAX_CLIP_SECONDS, run.seconds || MAX_CLIP_SECONDS)),
-              outputPath,
-            ]);
+              await execFileAsync('ffmpeg', [
+                '-y',
+                '-i', videoPath,
+                '-i', audioPath,
+                '-map', '0:v:0',
+                '-map', '1:a:0',
+                '-c:v', 'copy',
+                '-c:a', 'aac',
+                '-b:a', '192k',
+                '-af', 'apad',
+                '-t', String(Math.min(MAX_CLIP_SECONDS, run.seconds || MAX_CLIP_SECONDS)),
+                outputPath,
+              ]);
 
-            const muxedBytes = await fs.readFile(outputPath);
-            if (muxedBytes && muxedBytes.length > 0) {
-              finalVideoBytes = muxedBytes;
-              hasAudio = true;
+              const muxedBytes = await fs.readFile(outputPath);
+              if (muxedBytes && muxedBytes.length > 0) {
+                finalVideoBytes = muxedBytes;
+                hasAudio = true;
+              }
             }
-          }
 
-          // Clean up temp folder
-          await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
-        } catch (muxErr) {
-          /* A silent clip is a usable clip, but shipping one while the
-             workspace still displays the spoken line tells the user something
-             untrue. The reason is recorded on the node and shown. */
-          audioNote =
-            muxErr instanceof Error && /ENOENT/.test(muxErr.message)
-              ? 'ffmpeg is not installed on the server, so the voiceover could not be added.'
-              : 'The voiceover could not be added to this clip.';
-          console.warn('[render] audio mux failed:', muxErr);
+            // Clean up temp folder
+            await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+          } catch (muxErr) {
+            audioNote =
+              muxErr instanceof Error && /ENOENT/.test(muxErr.message)
+                ? 'ffmpeg is not installed on the server, so the voiceover could not be added.'
+                : 'The voiceover could not be added to this clip.';
+            console.warn('[render] audio mux failed:', muxErr);
+          }
         }
       }
 
@@ -455,6 +550,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         hasAudio,
         captioned,
         audioNote: audioNote ?? captionNote,
+        engineNote,
         videoKey: key,
         videoUrl: `/api/runs/${runId}/video?nodeId=${videoRef.id}`,
       });

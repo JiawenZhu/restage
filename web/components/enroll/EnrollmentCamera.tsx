@@ -131,10 +131,43 @@ export function EnrollmentCamera() {
       setErrorMessage(null);
       let mediaStream = stream;
       if (!mediaStream || !mediaStream.active) {
+        /*
+         * Ask for the most the camera has, not 720p.
+         *
+         * This requested 1280x720 and got exactly that, which is what a real
+         * enrolment produced: three 166-210 KB landscape frames in which the
+         * face occupied maybe a third of the width. Every frame of every run is
+         * generated against those pixels, so the reference is the ceiling on
+         * the whole product — and it was being set, by hand, to the lowest
+         * resolution any laptop camera still supports.
+         *
+         * `ideal` degrades on its own when a device cannot deliver, so asking
+         * high costs nothing on a weak camera and gains a great deal on a good
+         * one. applyConstraints then pushes to whatever the track reports it can
+         * actually do, which is often higher than any fixed number worth
+         * hardcoding.
+         */
         mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+          video: { width: { ideal: 3840 }, height: { ideal: 2160 }, facingMode: 'user' },
           audio: true,
         });
+
+        const track = mediaStream.getVideoTracks()[0];
+        try {
+          const caps = track?.getCapabilities?.() as { width?: { max?: number }; height?: { max?: number } } | undefined;
+          if (caps?.width?.max && caps?.height?.max) {
+            await track.applyConstraints({
+              width: { ideal: caps.width.max },
+              height: { ideal: caps.height.max },
+            });
+          }
+        } catch {
+          /* Not every browser reports capabilities, and the ideal request above
+             already got us the best it was willing to give. */
+        }
+        const got = track?.getSettings?.();
+        if (got?.width) console.info(`[enrol] capturing at ${got.width}x${got.height}`);
+
         setStream(mediaStream);
         streamRef.current = mediaStream;
 

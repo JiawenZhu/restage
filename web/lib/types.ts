@@ -51,6 +51,11 @@ export interface TreeNode {
   captioned?: boolean;
   hasAudio?: boolean;
   audioNote?: string | null;
+  /** Which video engine made this clip. */
+  engine?: 'veo' | 'omni';
+  /** A limit of that engine the user's choice did not survive — a length that
+   *  could not be honoured, a resolution it will not reach. */
+  engineNote?: string | null;
 
   verdict?: Verdict;
   /** The critic in its own voice — the most persuasive element in the interface. */
@@ -78,6 +83,8 @@ export interface Run {
   avatarId?: string;
   /** Which creative template shaped the plan, if any. */
   templateId?: string | null;
+  /** Video rendering engine used for the run. */
+  videoEngine?: 'veo' | 'omni';
   goal: string;
   aspect: Aspect;
   seconds: 4 | 8 | 16 | 24;

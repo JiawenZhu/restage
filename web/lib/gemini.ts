@@ -199,6 +199,128 @@ export async function downloadRendered(videoUri: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
+/*
+ * What this model will and will not do, measured against the live API rather
+ * than read off a docs page. Both numbers are load-bearing: the UI quotes them,
+ * and the render route has to tell the user when their choice is being ignored.
+ *
+ *   · Length is FIXED at ~10s. There is no duration control anywhere in the
+ *     request — 'duration', 'duration_seconds', 'length_seconds', 'seconds' and
+ *     'video_duration' were each rejected as unknown parameters, at the top
+ *     level and inside response_format. So a run set to 8s or 24s gets 10s.
+ *   · Size is FIXED at 720x1280. response_format.resolution IS validated —
+ *     it names '360p','720p','1080p','4k' as legal — but the preview model
+ *     ignores it: requesting 360p and requesting 1080p both returned 720x1280.
+ *
+ * That second one is the whole answer to "why does Omni look worse than Veo".
+ * Veo runs to 1080p; this preview cannot, and no prompt wording changes it.
+ */
+export const OMNI_FIXED_SECONDS = 10;
+export const OMNI_FIXED_SHORT_EDGE = 720;
+
+export interface OmniVideoRequest {
+  prompt: string;
+  /** The storyboard frame this shot should start on. */
+  firstFrame?: { data: Buffer | Uint8Array; mimeType: string };
+  /**
+   * Enrolment views — front, left, right.
+   *
+   * Identity holds markedly better with more than one angle, which is the whole
+   * reason enrolment captures three. Verified side by side: one reference of a
+   * face shot on a wide lens under a ceiling light reproduced those flaws;
+   * front plus left, with the same photographic direction, produced a natural,
+   * well-lit, clearly recognisable person.
+   */
+  references?: Array<{ data: Buffer | Uint8Array; mimeType: string }>;
+  aspect: Aspect;
+  /** Sent so the call is correct the day the preview starts honouring it. */
+  resolution?: '360p' | '720p' | '1080p' | '4k';
+}
+
+export interface OmniVideoResult {
+  bytes: Buffer;
+  /** Whether the returned container actually carries an audio track. */
+  hasAudio: boolean;
+}
+
+/**
+ * Gemini Omni Flash via the Interactions API.
+ *
+ * This model is reachable ONLY through POST /interactions — `generateContent`
+ * answers "This model only supports Interactions API." — so the unusual shape
+ * of this request is required, not incidental.
+ */
+export async function generateOmniVideo(req: OmniVideoRequest): Promise<OmniVideoResult> {
+  const inputs: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mime_type: string }> = [];
+
+  const asImage = (i: { data: Buffer | Uint8Array; mimeType: string }) => ({
+    type: 'image' as const,
+    data: Buffer.from(i.data).toString('base64'),
+    mime_type: i.mimeType,
+  });
+
+  // References first, then the frame to start on, then the direction. The
+  // starting frame is last of the images so it reads as "begin here" rather
+  // than as one more example of the face.
+  for (const r of req.references ?? []) inputs.push(asImage(r));
+  if (req.firstFrame) inputs.push(asImage(req.firstFrame));
+  inputs.push({ type: 'text', text: req.prompt });
+
+  const res = await fetch(`${BASE}/interactions?key=${key()}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gemini-omni-flash-preview',
+      input: inputs.length === 1 && inputs[0].type === 'text' ? inputs[0].text : inputs,
+      response_format: {
+        type: 'video',
+        aspect_ratio: req.aspect,
+        resolution: req.resolution ?? '1080p',
+      },
+    }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(scrub(json?.error?.message ?? `omni render failed (${res.status})`));
+  }
+
+  const modelOutput = json.steps?.find((s: { type: string }) => s.type === 'model_output');
+  const videoObj = modelOutput?.content?.find((c: { type: string }) => c.type === 'video');
+
+  if (!videoObj?.data) {
+    throw new Error('Omni finished but returned no video stream');
+  }
+
+  const bytes = Buffer.from(videoObj.data, 'base64');
+  return { bytes, hasAudio: containsAudioTrack(bytes) };
+}
+
+/*
+ * Does this MP4 carry sound?
+ *
+ * The render route used to assert `hasAudio = true` for every Omni clip on the
+ * grounds that the model advertises native audio, and then the workspace told
+ * the user their ad had a voiceover whether or not one existed. Reading the
+ * container is cheap: an MP4 declares each track in an 'hdlr' box whose
+ * handler_type is 'soun' for audio. No ffmpeg, no temp file.
+ *
+ * handler_type sits TWELVE bytes past the box name — four for version+flags,
+ * four for the pre_defined field, then the four-character code. Written first
+ * as +8, which lands on pre_defined: that reads as four zero bytes on every
+ * file, so a clip with perfectly good AAC in it reported as silent. Checked
+ * against real output both ways, +12 yields 'vide','soun','mdir'.
+ */
+function containsAudioTrack(mp4: Buffer): boolean {
+  const hdlr = Buffer.from('hdlr');
+  let at = mp4.indexOf(hdlr);
+  while (at !== -1) {
+    if (mp4.subarray(at + 12, at + 16).toString('latin1') === 'soun') return true;
+    at = mp4.indexOf(hdlr, at + 1);
+  }
+  return false;
+}
+
 /* ── planning and criticism ───────────────────────────────────────────────── */
 
 // Verified with a real call, not read off the models list: 2.5-flash is still

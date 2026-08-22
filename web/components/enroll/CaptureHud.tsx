@@ -73,9 +73,24 @@ export function CaptureHud({ step, yaw, locked, capturing, burstProgress, audioL
           without dimming the view of it, and at 0.22 it was invisible — which
           is the same as not having decided.
         */}
+        {/*
+          COLOURLESS WHILE IT CAPTURES.
+
+          The lock state used to paint the ring green and throw a 46px green
+          glow at 0.75 alpha around it — and the burst fires WHILE locked, for
+          2.6 seconds, at a face roughly half a metre from the screen. Glasses
+          reflect the screen. The green was visible in both lenses of a real
+          enrolment photo, and from there it goes into the identity reference
+          that every frame of every run is generated against.
+
+          A capture indicator must not be a light source. The ring stays white
+          for the duration; "you got there" is already said by the chip at the
+          bottom of the frame, which is small, off the face, and not reflected
+          in anything that matters.
+        */}
         <div
           className={`relative h-[76%] rounded-[50%] transition-all duration-300 ${
-            locked
+            locked && !capturing
               ? 'shadow-[0_0_0_9999px_rgba(0,0,0,0.34),0_0_46px_rgba(10,143,60,0.75)]'
               : 'shadow-[0_0_0_9999px_rgba(0,0,0,0.34)]'
           }`}
@@ -84,7 +99,7 @@ export function CaptureHud({ step, yaw, locked, capturing, burstProgress, audioL
           <span className="absolute -inset-[3px] rounded-[50%] border-[5px] border-black/35" />
           <span
             className={`absolute inset-0 rounded-[50%] border-[3px] transition-colors duration-300 ${
-              locked ? 'border-good' : capturing ? 'border-accent' : 'border-white'
+              locked && !capturing ? 'border-good' : 'border-white'
             }`}
           />
         </div>

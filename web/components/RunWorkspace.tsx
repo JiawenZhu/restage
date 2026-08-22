@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { VersionTree } from './VersionTree';
 import { useUser } from './AuthGate';
 import { PromptComposer } from './PromptComposer';
+import { lineageOf, shotPlan, type LineageNode } from '@/lib/sequence';
 import type { Run, TreeNode } from '@/lib/types';
 
 /*
@@ -420,17 +421,32 @@ function Inspector({
     (n) => n.kind === 'video' && n.parentId === node?.id && n.status !== 'failed',
   );
 
-  /* The frames in the sequence: those something else was built on top of, plus
-     the last one. An alternate is a frame nothing continued from. */
-  const parents = new Set(nodes.filter((n) => n.kind === 'frame').map((n) => n.parentId).filter(Boolean) as string[]);
-  const sequence = nodes.filter(
-    (n) => n.kind === 'frame' && n.frameUrl && !n.discarded && !n.removedFromSequence && n.status !== 'rejected',
-  );
-  const sequenceLength = sequence.filter((n) => parents.has(n.id) || n.id === sequence[sequence.length - 1]?.id).length;
+  /* The same walk the renderer runs, not a second guess at it. This was a flat
+     filter plus a has-children test, which is not a walk: on an edited tree it
+     counted shots the server would not render, so the button promised one ad
+     and the queue built another. */
+  const sequence = lineageOf(nodes as unknown as LineageNode[]).filter((n) => n.frameUrl);
+  const sequenceLength = sequence.length;
   const staleInSequence = sequence.some((n) => n.stale);
-  const perShot = Math.max(4, Math.min(8, Math.round(lengthChoice / Math.max(1, sequenceLength))));
-  const canRender =
-    node.kind === 'frame' && !!node.frameUrl && !rendering && !alreadyRendered && run.status !== 'planning';
+  /* shotPlan, not a second copy of its arithmetic. It also reports whether the
+     chosen length actually survives the division, which the hand-rolled version
+     could not and so never mentioned. */
+  const plan = shotPlan(lengthChoice, sequenceLength);
+  const perShot = plan.perShot;
+  /*
+   * Rendering again is allowed.
+   *
+   * This also demanded !alreadyRendered, which quietly made the first render the
+   * only one: the moment a frame had a clip hanging off it, the render button,
+   * the whole-sequence panel and the engine picker all disappeared from that
+   * frame for good. On a finished run every frame in the chain has a clip, so
+   * there was no way to re-render at a different length, and no way to try the
+   * other engine at all — the picker existed on nodes that could never use it.
+   * Each render writes its own video node, so re-rendering overwrites nothing.
+   */
+  const canRender = node.kind === 'frame' && !!node.frameUrl && !rendering && run.status !== 'planning';
+
+  const [engineChoice, setEngineChoice] = useState<'veo' | 'omni'>((run.videoEngine as 'veo' | 'omni') || 'veo');
 
   async function renderVideo(mode: 'frame' | 'sequence' = 'frame') {
     if (!user || !node) return;
@@ -443,8 +459,8 @@ function Inspector({
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
         body: JSON.stringify(
           mode === 'sequence'
-            ? { mode: 'sequence', seconds: lengthChoice }
-            : { mode: 'frame', nodeId: node.id, seconds: lengthChoice },
+            ? { mode: 'sequence', seconds: lengthChoice, engine: engineChoice }
+            : { mode: 'frame', nodeId: node.id, seconds: lengthChoice, engine: engineChoice },
         ),
       });
       const json = await res.json();
@@ -517,10 +533,33 @@ function Inspector({
           </p>
         )}
 
+        {/*
+          Anything true about this clip that the user did not get.
+
+          Both of these were already being written onto the node and neither was
+          ever rendered — the render route takes care to record why a voiceover
+          was dropped, and that sentence went into Firestore and stopped there.
+          A clip that quietly lacks the line the workspace showed you, or that
+          came back four seconds shorter than you asked, has to say so on the
+          clip itself.
+        */}
+        {node.kind === 'video' && node.status === 'achieved' && (node.audioNote || node.engineNote) && (
+          <div className="mt-3 flex flex-col gap-1.5">
+            {[node.audioNote, node.engineNote].filter(Boolean).map((note) => (
+              <p key={note} className="flex gap-2 text-[12.5px] leading-snug text-warn-ink">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="mt-[2px] shrink-0" aria-hidden>
+                  <circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16.5v.01" />
+                </svg>
+                {note}
+              </p>
+            ))}
+          </div>
+        )}
+
         {node.kind === 'video' && node.status === 'generating' && (
           <p className="mt-3 flex items-center gap-2 text-[13px] text-ink-2">
             <span className="rs-cursor block h-[6px] w-[6px] rounded-full bg-accent" />
-            Rendering — about 40 seconds.
+            {node.engine === 'omni' ? 'Rendering — about 20 seconds.' : 'Rendering — about 40 seconds.'}
           </p>
         )}
 
@@ -586,15 +625,23 @@ function Inspector({
 
         {/* The sequence is the storyboard: every frame animated in order, which
             is a multi-shot ad rather than one held moment. */}
-        {node.kind === 'frame' && sequenceLength > 1 && !rendering && !alreadyRendered && (
+        {node.kind === 'frame' && sequenceLength > 1 && !rendering && (
           <div className="rounded-card border border-line bg-elevated p-3">
             <div className="flex items-baseline justify-between gap-2">
               <p className="text-[11px] font-bold tracking-[0.1em] text-ink-3">THE WHOLE SEQUENCE</p>
               <span className="tnum text-[11px] text-ink-4">{sequenceLength} shots</span>
             </div>
             <p className="mt-1.5 text-[12.5px] leading-snug text-ink-2">
-              Animate every frame in order — {perShot}s each, about {sequenceLength * perShot}s in total.
+              Animate every frame in order — {perShot}s each, about {plan.total}s in total.
             </p>
+            {/* The model will not go below 4s a shot, so enough shots push the
+                total past what was asked. Said here rather than discovered in
+                the finished file. */}
+            {!plan.honoursRequest && (
+              <p className="mt-1 text-[12px] leading-snug text-warn-ink">
+                {sequenceLength} shots will not fit in {lengthChoice}s — 4s is the shortest shot the model makes.
+              </p>
+            )}
 
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               {([8, 16, 24, 32] as const).map((n) => (
@@ -618,8 +665,51 @@ function Inspector({
               title={staleInSequence ? 'Rebuild the out-of-date steps first' : undefined}
               className="mt-3 w-full rounded-lg bg-accent-strong py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
             >
-              {staleInSequence ? 'Rebuild the sequence first' : `Render all ${sequenceLength} shots`}
+              {staleInSequence
+                ? 'Rebuild the sequence first'
+                : `Render all ${sequenceLength} shot${sequenceLength > 1 ? 's' : ''}`}
             </button>
+          </div>
+        )}
+
+        {/*
+          Which engine renders this frame.
+
+          It reads its numbers off measurements of the live API rather than the
+          datasheet: Omni has no duration parameter of any kind, and its
+          resolution parameter is validated and then ignored — 360p and 1080p
+          both come back 720x1280. The picker used to sell it as a peer of Veo
+          with "native synchronized 48kHz speech & audio", which is the internal
+          transport described to somebody who wants to know what they will get.
+
+          The same control also stood on the new-run form, where it asked for a
+          decision about rendering before the user had seen a single frame, and
+          could then disagree with this one. It lives only here now — next to
+          the button it affects.
+        */}
+        {node.kind === 'frame' && !rendering && (
+          <div className="rounded-lg border border-line bg-subtle px-3 py-2.5">
+            <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">ENGINE</p>
+            <div className="mt-1.5 flex items-center gap-1.5">
+              {(['veo', 'omni'] as const).map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => setEngineChoice(e)}
+                  aria-pressed={engineChoice === e}
+                  className={`rounded px-2.5 py-1 text-[11.5px] font-semibold transition-colors ${
+                    engineChoice === e ? 'bg-accent text-white shadow-xs' : 'text-ink-3 hover:text-ink-2'
+                  }`}
+                >
+                  {e === 'veo' ? 'Veo 3.1' : 'Gemini Omni'}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[11.5px] leading-snug text-ink-3">
+              {engineChoice === 'veo'
+                ? 'Higher resolution, and it keeps the length you set — longer clips are chained shot by shot. About 40 seconds each.'
+                : 'One take of about 10 seconds at 720p, whatever length you set, with speech and sound generated together. Renders in about 20.'}
+            </p>
           </div>
         )}
 
@@ -644,7 +734,7 @@ function Inspector({
             {rendering
               ? 'Rendering…'
               : alreadyRendered
-                ? 'Already rendered — the clip is on the tree'
+                ? 'Render this frame again'
                 : busy
                   ? 'Starting…'
                   : failedRender

@@ -23,94 +23,28 @@
  */
 import { adminDb } from './firebaseAdmin';
 
-export interface LineageNode {
-  id: string;
-  parentId: string | null;
-  stepNo: number;
-  kind: string;
-  status: string;
-  stale?: boolean;
-  discarded?: boolean;
-  /** Taken out of the sequence by the user. Kept on the canvas. */
-  removedFromSequence?: boolean;
-  frameUrl?: string;
-  instruction?: string;
-}
+import {
+  descendantsOf,
+  summarise,
+  type LineageNode,
+  type RewireResult,
+} from './sequence';
+
+/* Re-exported so existing importers keep working and there is still one
+   definition of each. */
+export {
+  lineageOf,
+  descendantsOf,
+  isOutOfSequence,
+  shotPlan,
+  rebuildEstimate,
+  type LineageNode,
+  type RewireResult,
+} from './sequence';
 
 async function loadNodes(runId: string): Promise<LineageNode[]> {
   const snap = await adminDb().collection('runs').doc(runId).collection('nodes').orderBy('createdAt').get();
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<LineageNode, 'id'>) }));
-}
-
-/**
- * The frames actually in the sequence, in order.
- *
- * Walks from the root following the chain of frames that have children, which
- * is what "in the lineage" means — an alternate is a frame nothing was built
- * on top of.
- */
-export function lineageOf(nodes: LineageNode[]): LineageNode[] {
-  const byParent = new Map<string, LineageNode[]>();
-  for (const n of nodes) {
-    const key = n.parentId ?? 'root';
-    if (!byParent.has(key)) byParent.set(key, []);
-    byParent.get(key)!.push(n);
-  }
-
-  const chain: LineageNode[] = [];
-  let currentId = 'root';
-  const seen = new Set<string>();
-
-  while (!seen.has(currentId)) {
-    seen.add(currentId);
-    const children = (byParent.get(currentId) ?? []).filter((c) => c.kind === 'frame' && !isDiscarded(c));
-    if (!children.length) break;
-    // The one the run continued from: it has children of its own, or failing
-    // that, the newest surviving attempt.
-    const next =
-      children.find((c) => (byParent.get(c.id) ?? []).some((g) => g.kind === 'frame')) ??
-      children[children.length - 1];
-    chain.push(next);
-    currentId = next.id;
-  }
-  return chain;
-}
-
-/*
- * A discarded attempt, or one the user took out, is not part of the sequence.
- *
- * This was briefly written as a method installed on Object.prototype so that
- * the filter above would read as prose. That is a global mutation affecting
- * every object in the process, including ones from libraries, for a cosmetic
- * gain. A plain function reads nearly as well and breaks nothing.
- */
-function isDiscarded(n: LineageNode): boolean {
-  return n.discarded === true || n.removedFromSequence === true || n.status === 'rejected';
-}
-
-/** Every descendant of a node, in step order. */
-export function descendantsOf(nodes: LineageNode[], nodeId: string): LineageNode[] {
-  const byParent = new Map<string, LineageNode[]>();
-  for (const n of nodes) {
-    const key = n.parentId ?? 'root';
-    if (!byParent.has(key)) byParent.set(key, []);
-    byParent.get(key)!.push(n);
-  }
-  const out: LineageNode[] = [];
-  const walk = (id: string) => {
-    for (const c of byParent.get(id) ?? []) {
-      out.push(c);
-      walk(c.id);
-    }
-  };
-  walk(nodeId);
-  return out.sort((a, b) => a.stepNo - b.stepNo);
-}
-
-export interface RewireResult {
-  /** Steps that now descend from a frame that is no longer their source. */
-  staleIds: string[];
-  staleSteps: number[];
 }
 
 /**
@@ -143,20 +77,15 @@ export async function promoteFrame(runId: string, targetId: string, replacementI
   batch.update(nodesRef.doc(replacementId), { stepNo: target.stepNo, stale: false });
   await batch.commit();
 
-  const stale = children.flatMap((c) => [c, ...descendantsOf(nodes, c.id)]);
   // Everything downstream is stale, not just the direct children: step 5 was
   // edited from step 4, which was edited from the frame that just changed.
-  const ids = [...new Set(stale.map((n) => n.id))];
-  if (ids.length) {
+  const result = summarise(children.flatMap((c) => [c, ...descendantsOf(nodes, c.id)]));
+  if (result.staleIds.length) {
     const b2 = db.batch();
-    for (const id of ids) b2.update(nodesRef.doc(id), { stale: true });
+    for (const id of result.staleIds) b2.update(nodesRef.doc(id), { stale: true });
     await b2.commit();
   }
-
-  return {
-    staleIds: ids,
-    staleSteps: [...new Set(stale.map((n) => n.stepNo))].sort((a, b) => a - b),
-  };
+  return result;
 }
 
 /**
@@ -180,51 +109,24 @@ export async function removeFrame(runId: string, nodeId: string): Promise<Rewire
 
   const batch = db.batch();
   for (const child of children) batch.update(nodesRef.doc(child.id), { parentId: newParent, stale: true });
-  // Marked rather than deleted: the canvas is a record of what happened, and a
-  // frame that silently vanishes makes the record a lie.
-  batch.update(nodesRef.doc(nodeId), { status: 'rejected', removedFromSequence: true });
+  /* Marked rather than deleted: the canvas is a record of what happened, and a
+     frame that silently vanishes makes the record a lie.
+
+     Only the one flag. This also wrote status:'rejected', which made the node
+     claim two different things about itself — the tree draws "taken out" for
+     the flag and "you rejected this" for the status, both absolutely positioned
+     at the same offset, so they rendered on top of each other. Taking a frame
+     out is not a verdict on it; it is often removed BECAUSE it was fine
+     somewhere else. */
+  batch.update(nodesRef.doc(nodeId), { removedFromSequence: true });
   await batch.commit();
 
-  const stale = children.flatMap((c) => [c, ...descendantsOf(nodes, c.id)]);
-  const ids = [...new Set(stale.map((n) => n.id))];
-  if (ids.length) {
+  const result = summarise(children.flatMap((c) => [c, ...descendantsOf(nodes, c.id)]));
+  if (result.staleIds.length) {
     const b2 = db.batch();
-    for (const id of ids) b2.update(nodesRef.doc(id), { stale: true });
+    for (const id of result.staleIds) b2.update(nodesRef.doc(id), { stale: true });
     await b2.commit();
   }
-
-  return {
-    staleIds: ids,
-    staleSteps: [...new Set(stale.map((n) => n.stepNo))].sort((a, b) => a - b),
-  };
+  return result;
 }
 
-/**
- * How long each shot runs, given the length the user already chose.
- *
- * They set a length on /studio before the run started, and that choice should
- * survive into the render rather than being replaced by a constant. Six frames
- * of a 24-second ad are four seconds each; three frames of the same ad are
- * eight. The model's floor is 4s and its ceiling is 8s, so a sequence long
- * enough to push below the floor gets shots of 4s and a longer total than
- * asked — which is stated rather than silently applied.
- */
-export function shotPlan(totalSeconds: number, shots: number, min = 4, max = 8) {
-  if (shots <= 0) return { perShot: min, total: 0, honoursRequest: true };
-  const ideal = totalSeconds / shots;
-  const perShot = Math.max(min, Math.min(max, Math.round(ideal)));
-  return {
-    perShot,
-    total: perShot * shots,
-    honoursRequest: Math.abs(perShot * shots - totalSeconds) <= shots,
-  };
-}
-
-/** Roughly what a rebuild will cost, so the number shown is not invented. */
-export function rebuildEstimate(steps: number): { seconds: number; label: string } {
-  // Measured across real runs: a frame plus its two judges lands around 26s.
-  const seconds = steps * 26;
-  const label =
-    seconds < 60 ? 'under a minute' : `about ${Math.round(seconds / 60)} minute${seconds >= 90 ? 's' : ''}`;
-  return { seconds, label };
-}

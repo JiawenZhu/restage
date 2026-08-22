@@ -34,6 +34,7 @@ export interface StartArgs {
   aspect: Aspect;
   seconds: 4 | 8 | 16 | 24;
   templateId?: string;
+  videoEngine?: 'veo' | 'omni';
   avatarId?: string | null;
   /** Enrolment capture as a data URL or HTTP URL. */
   avatarDataUrl: string;
@@ -275,6 +276,7 @@ export async function createRun(args: StartArgs): Promise<string> {
     aspect: args.aspect,
     seconds: args.seconds,
     templateId: args.templateId ?? null,
+    videoEngine: args.videoEngine ?? 'veo',
     avatarId: args.avatarId ?? null,
     status: 'planning',
     plan: [],

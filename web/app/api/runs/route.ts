@@ -43,6 +43,7 @@ const Body = z.object({
    */
   seconds: z.union([z.literal(4), z.literal(8), z.literal(16), z.literal(24)]),
   templateId: z.string().optional(),
+  videoEngine: z.enum(['veo', 'omni']).default('veo').optional(),
   /** Which enrolled avatar this run used, when it came from one. The Run type
    *  declared this as required and nothing ever sent it. */
   avatarId: z.string().max(64).nullable().optional(),

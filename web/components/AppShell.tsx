@@ -8,10 +8,27 @@ import { AuthModal } from './AuthModal';
 
 export function AppShell({
   children,
+  fill = false,
   right,
 }: {
   children: React.ReactNode;
   right?: React.ReactNode;
+  /**
+   * Bound the shell to the viewport instead of letting it grow.
+   *
+   * For a page whose panes scroll INTERNALLY — the run workspace is three of
+   * them side by side. `min-h-screen` lets the shell grow to fit its tallest
+   * child, and once it does, every pane grows with it and their own
+   * `overflow-y-auto` never engages. The page then technically scrolls, but the
+   * wheel is always over a pane that consumed the event, so nothing moves and
+   * whatever sits at the bottom of a pane is simply unreachable. Measured at
+   * 820px of viewport: the shell was 1268px tall and the Render button sat at
+   * y=1210, four hundred pixels past the fold with no way to get to it.
+   *
+   * Only from `lg`. Below that the workspace stacks into one column, and a
+   * column of panes is exactly the case that SHOULD scroll the page.
+   */
+  fill?: boolean;
 }) {
   const { user, loading, logout } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -29,7 +46,11 @@ export function AppShell({
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas text-ink">
+    <div
+      className={`flex min-h-screen flex-col bg-canvas text-ink ${
+        fill ? 'lg:h-screen lg:min-h-0 lg:overflow-hidden' : ''
+      }`}
+    >
       {/* The workspace now stacks down to phone widths, so the header has to
           go with it: at 420px the wordmark, three nav items and the account
           cluster collided. Nav moves into a sheet below md. */}

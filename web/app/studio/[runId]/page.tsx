@@ -9,7 +9,7 @@ import { LiveRun } from '@/components/LiveRun';
 export default async function Run({ params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params;
   return (
-    <AppShell>
+    <AppShell fill>
       <LiveRun runId={runId} />
     </AppShell>
   );

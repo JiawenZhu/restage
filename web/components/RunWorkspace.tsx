@@ -671,7 +671,9 @@ function Inspector({
         )}
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-line px-[18px] py-3.5">
+      {/* shrink-0: the action bar is the point of the panel and must not be
+          the thing that gets squeezed when the notes above it run long. */}
+      <div className="flex shrink-0 flex-col gap-2 border-t border-line px-[18px] py-3.5">
         {(error || clipError) && <p className="text-[12.5px] text-crit-ink">{error ?? clipError}</p>}
 
         {/* The human verdict. The critic catches gross identity swaps but not

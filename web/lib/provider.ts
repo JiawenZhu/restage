@@ -1,0 +1,540 @@
+/*
+ * Two ways to reach the same models, and the rule for who gets which.
+ *
+ * SERVER ONLY. This file holds an API key and mints Google access tokens.
+ *
+ * Restage talks to Google over two entirely separate doors:
+ *
+ *   api-key  — generativelanguage.googleapis.com, authenticated with
+ *              GEMINI_API_KEY. This is AI Studio. It carries the newest
+ *              preview models, and it is rate limited hard: the console
+ *              measured Veo 3 Fast at 2 RPM and 10 requests A DAY, which is
+ *              enough to demo a product and not enough to sell one.
+ *
+ *   vertex   — {location}-aiplatform.googleapis.com, authenticated with a
+ *              service account. Enterprise quota, billed to the project, and
+ *              the door a commercial account has to go through.
+ *
+ * THE MODELS ARE NOT THE SAME ON BOTH SIDES, and that is the part worth being
+ * careful about. Vertex does not carry the 3.x preview line, so the same
+ * function runs on a different model depending on the door. Every measurement
+ * this codebase has recorded — the identity scores, the verdict distribution the
+ * retry gate is tuned on, the latency figures — was taken on the AI Studio
+ * models. None of it automatically transfers. See MODELS below for what that
+ * means in practice, per role.
+ *
+ * NO CROSS-PROVIDER FALLBACK. A commercial run that quietly finishes on the
+ * shared free-tier key spends the wrong quota, drains the key everyone else is
+ * using, and hides an outage behind a success. When Vertex is down for a
+ * commercial user, the run fails and says Vertex is down.
+ */
+
+if (typeof window !== 'undefined') {
+  throw new Error(
+    'lib/provider is server-only. Importing it from a client component would ' +
+      'bundle GEMINI_API_KEY into the page. Call it from app/api/* instead.',
+  );
+}
+
+import { GoogleAuth } from 'google-auth-library';
+import { adminDb } from './firebaseAdmin';
+import { fetchJson, withRetry, type RetryOptions } from './backoff';
+
+export type Provider = 'vertex' | 'api-key';
+
+/**
+ * Where billing and credentials live: users/{uid}/private/account.
+ *
+ * NOT on the user document, which is owner-readable AND owner-WRITABLE. Putting
+ * `plan` there would make upgrading yourself onto infrastructure we pay for a
+ * one-line setDoc() from the browser console, and putting the encrypted key
+ * there would ship the ciphertext to every client for no reason. firestore.rules
+ * denies this subcollection to clients outright; the Admin SDK ignores rules, so
+ * the API routes still reach it.
+ */
+export function accountDoc(uid: string) {
+  return adminDb().collection('users').doc(uid).collection('private').doc('account');
+}
+
+/**
+ * The two things a user can choose, in their words rather than ours.
+ *
+ *   byok — "Use your own API key". They paste a Google AI Studio key, Google
+ *          bills them directly, and we never see a cent of it. Their key, their
+ *          quota, their limits.
+ *   paid — "Paid". They pay Restage and we run it on infrastructure we own.
+ *
+ * WHAT THE USER IS NEVER TOLD is which API sits behind "paid". Vertex is an
+ * implementation detail — it is how we happen to get capacity today, not a
+ * promise we want to make or a word anyone outside this codebase should have to
+ * learn. Nothing user-facing says "Vertex", and nothing should start.
+ */
+export type Plan = 'byok' | 'paid';
+
+export const PROVIDER_FOR_PLAN: Record<Plan, Provider> = {
+  byok: 'api-key',
+  paid: 'vertex',
+};
+
+/** What the choice is called on screen. The provider name appears in neither. */
+export const PLAN_LABEL: Record<Plan, string> = {
+  byok: 'Your own API key',
+  paid: 'Paid',
+};
+
+/* ── which model plays which role, on each side ───────────────────────────── */
+
+export interface ModelSet {
+  /** Storyboard stills, conditioned on the enrolment angles. */
+  image: string;
+  /** Veo. Long-running; one job per shot. */
+  video: string;
+  /** The planner: goal → shot list + look bible. */
+  text: string;
+  /** The critic and the identity verifier. The two calls that decide whether a
+   *  frame showing somebody's face is allowed to stand. */
+  judge: string;
+  /** Spoken line and prompt rewriting — short, and a human is waiting. */
+  fastText: string;
+  /**
+   * The one-call whole-ad engine.
+   *
+   * `null` means this provider HAS NO SUCH ENGINE, which is the case on Vertex:
+   * gemini-omni-flash-preview is an AI Studio model reached through the
+   * /interactions endpoint and has no Vertex equivalent. Callers must check
+   * this rather than falling through to `video`, because falling through
+   * silently turns "Gemini Omni" into a second, identical Veo render while the
+   * interface goes on describing a continuous take with native audio.
+   */
+  omni: string | null;
+}
+
+export const MODELS: Record<Provider, ModelSet> = {
+  'api-key': {
+    image: process.env.RESTAGE_IMAGE_MODEL ?? 'gemini-3-pro-image',
+    video: process.env.RESTAGE_VIDEO_MODEL ?? 'veo-3.1-fast-generate-preview',
+    text: process.env.RESTAGE_TEXT_MODEL ?? 'gemini-3.7-flash',
+    judge: process.env.RESTAGE_JUDGE_MODEL ?? 'gemini-3.7-flash',
+    fastText: process.env.RESTAGE_FAST_TEXT_MODEL ?? 'gemini-3.5-flash-lite',
+    omni: process.env.RESTAGE_OMNI_MODEL ?? 'gemini-omni-flash-preview',
+  },
+  vertex: {
+    image: process.env.RESTAGE_VERTEX_IMAGE_MODEL ?? 'gemini-2.5-flash-image',
+    /*
+     * The FAST variant, matching the model every timing in this codebase was
+     * measured against — the ~40s per-clip estimate on the canvas, the shot
+     * plan arithmetic, the render-loop pacing.
+     *
+     * NOT YET CONFIRMED LIVE. The only Veo model verified working on this
+     * project's Vertex endpoint is the full `veo-3.1-generate-001`; the fast
+     * variant's exact id needs checking against the project before this is
+     * trusted, and RESTAGE_VERTEX_VIDEO_MODEL exists so that is a config change
+     * rather than a deploy. The full model works and costs more per second,
+     * which on a seven-shot sequence is seven times the difference.
+     */
+    video: process.env.RESTAGE_VERTEX_VIDEO_MODEL ?? 'veo-3.1-fast-generate-001',
+    text: process.env.RESTAGE_VERTEX_TEXT_MODEL ?? 'gemini-2.5-flash',
+    /*
+     * WORTH KNOWING: this is not the model the identity gate was measured on.
+     *
+     * gemini-3.7-flash scored 10/10 on faceMatches across a same-person pair
+     * and a genuinely different woman. gemini-3.5-flash-lite scored 6/10 —
+     * near chance, wrong in both directions — and inverted the verdict
+     * distribution (8/10 "failed" against 3.7's 9/10 "partial"), which alone
+     * would fire the retry gate on nearly every step. gemini-2.5-flash has not
+     * been put through that test at all. Until it is, the commercial path's
+     * identity checking is unmeasured, which is the wrong way round for the
+     * accounts that are paying. scripts/check-providers.mts is the harness.
+     */
+    judge: process.env.RESTAGE_VERTEX_JUDGE_MODEL ?? 'gemini-2.5-flash',
+    fastText: process.env.RESTAGE_VERTEX_FAST_TEXT_MODEL ?? 'gemini-2.5-flash',
+    omni: null,
+  },
+};
+
+/* ── where each provider lives ────────────────────────────────────────────── */
+
+export function resolveProjectId(): string {
+  return (
+    process.env.RESTAGE_GOOGLE_CLOUD_PROJECT ||
+    /* Read AFTER the Restage-specific name but BEFORE the Firebase one: this is
+       the variable the deployment actually sets, and it was being skipped
+       entirely, so a project set here was silently ignored in favour of the
+       Firebase project id. */
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+    serviceAccountProjectId() ||
+    'restage-studio'
+  );
+}
+
+function serviceAccountProjectId(): string | undefined {
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) return undefined;
+  try {
+    return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON).project_id;
+  } catch {
+    return undefined;
+  }
+}
+
+export const VERTEX_PROJECT = resolveProjectId();
+export const VERTEX_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+export const VERTEX_BASE = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1beta1/projects/${VERTEX_PROJECT}/locations/${VERTEX_LOCATION}/publishers/google`;
+export const STUDIO_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+
+export function baseFor(provider: Provider): string {
+  return provider === 'vertex' ? VERTEX_BASE : STUDIO_BASE;
+}
+
+/** Never let a credential reach a log, an error message or a Firestore doc. */
+export function scrub(message: string): string {
+  return message
+    .replace(/Bearer\s+[\w.\-]+/gi, 'Bearer ***')
+    .replace(/key=[\w\-]+/g, 'key=***')
+    .replace(/ya29\.[\w.\-]+/g, '***');
+}
+
+/* ── credentials ──────────────────────────────────────────────────────────── */
+
+/*
+ * Somebody else's API key, held on their behalf.
+ *
+ * A BYOK user pastes a Google AI Studio key and we spend it for them. That makes
+ * this the most sensitive value in the product after the enrolment photographs,
+ * and it is worse than our own key in one specific way: rotating ours is a
+ * chore we control, and rotating theirs is an apology.
+ *
+ * So it is encrypted at rest with a secret that lives only in the server's
+ * environment. A Firestore dump, a mis-scoped security rule, or a support
+ * engineer reading the console all get ciphertext. AES-256-GCM because it is
+ * authenticated — a tampered record fails to decrypt rather than decrypting to
+ * something attacker-chosen.
+ *
+ * It is never returned to a client, never written to a run document, never
+ * logged, and never leaves this file. Everything outside lib/provider.ts passes
+ * a uid and gets a finished Authorization header or query string back.
+ */
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+
+function encryptionKey(): Buffer {
+  const secret = process.env.RESTAGE_KEY_SECRET;
+  if (!secret || secret.length < 16) {
+    throw new Error(
+      'RESTAGE_KEY_SECRET is not set (or is too short). A user-supplied API key cannot be stored ' +
+        'without it, and storing one in plain text is not an acceptable alternative.',
+    );
+  }
+  // A fixed salt is fine here: the input is a high-entropy server secret, not a
+  // password, and a per-record salt would have to be stored beside the record
+  // anyway. scrypt is for turning an arbitrary-length secret into 32 bytes.
+  return scryptSync(secret, 'restage.provider.v1', 32);
+}
+
+export function encryptSecret(plain: string): string {
+  const iv = randomBytes(12);
+  const c = createCipheriv('aes-256-gcm', encryptionKey(), iv);
+  const enc = Buffer.concat([c.update(plain, 'utf8'), c.final()]);
+  return `v1.${iv.toString('base64url')}.${c.getAuthTag().toString('base64url')}.${enc.toString('base64url')}`;
+}
+
+export function decryptSecret(blob: string): string {
+  const [version, iv, tag, data] = blob.split('.');
+  if (version !== 'v1' || !iv || !tag || !data) throw new Error('stored key is unreadable');
+  const d = createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(iv, 'base64url'));
+  d.setAuthTag(Buffer.from(tag, 'base64url'));
+  return Buffer.concat([d.update(Buffer.from(data, 'base64url')), d.final()]).toString('utf8');
+}
+
+/** Enough to recognise which key is saved, and useless to anyone who steals it. */
+export function maskKey(key: string): string {
+  return key.length <= 10 ? '••••' : `${key.slice(0, 4)}••••${key.slice(-4)}`;
+}
+
+/**
+ * A shape check, not a validity check.
+ *
+ * Google keys start AIza and are ~39 characters. Catching an obviously wrong
+ * paste here — a whole URL, a service-account JSON, a Stripe key — gives a
+ * useful message instead of a 400 from Google three screens later. Whether the
+ * key actually WORKS is only knowable by using it, which the settings route
+ * does once before saving.
+ */
+export function looksLikeGoogleKey(key: string): boolean {
+  return /^AIza[\w-]{30,45}$/.test(key.trim());
+}
+
+/* A decrypted key, held briefly so one run does not re-read and re-decrypt on
+   every one of its twenty-odd calls. Short, because a user who removes their
+   key expects that to take effect. */
+const keyCache = new Map<string, { key: string; expiresAt: number }>();
+const KEY_TTL_MS = 60_000;
+
+export function forgetUserKey(uid: string): void {
+  keyCache.delete(uid);
+}
+
+/**
+ * The key to spend for this user.
+ *
+ * BYOK users have their own. If one is not saved, that is not an internal error
+ * — it is the single thing they have to do — so the message says so plainly.
+ *
+ * GEMINI_API_KEY remains as a DEVELOPMENT fallback only. In production, running
+ * a stranger's work on our own key is exactly the leak this design exists to
+ * prevent: it would be invisible, unattributed, and would drain the key every
+ * demo depends on.
+ */
+export async function apiKeyFor(uid?: string): Promise<string> {
+  if (uid) {
+    const hit = keyCache.get(uid);
+    if (hit && hit.expiresAt > Date.now()) return hit.key;
+    try {
+      const stored = (await accountDoc(uid).get()).data()?.geminiKeyEnc;
+      if (typeof stored === 'string' && stored) {
+        const key = decryptSecret(stored);
+        keyCache.set(uid, { key, expiresAt: Date.now() + KEY_TTL_MS });
+        return key;
+      }
+    } catch (e) {
+      console.warn('[provider] could not read the stored key:', scrub(String(e)));
+    }
+  }
+
+  const fallback = process.env.GEMINI_API_KEY;
+  if (fallback && process.env.NODE_ENV !== 'production') return fallback;
+
+  throw new Error(
+    'No API key is saved for this account. Add your Google AI Studio key in settings, or switch to the paid plan.',
+  );
+}
+
+/** Constant-time compare, for anywhere a saved key is checked against a new one. */
+export function sameKey(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+
+let auth: GoogleAuth | null = null;
+/*
+ * Cached token.
+ *
+ * google-auth-library caches internally when it owns the client, but the gcloud
+ * branch below does not — and that branch spawned a shell on EVERY model call.
+ * execSync also blocks the event loop, so on a serverless instance one token
+ * fetch stalls every other request on that instance. Caching to just inside the
+ * hour Google issues means the cost is paid once, not per frame.
+ */
+let cachedToken: { value: string; expiresAt: number } | null = null;
+const TOKEN_TTL_MS = 50 * 60 * 1000;
+
+export async function vertexToken(): Promise<string> {
+  if (cachedToken && cachedToken.expiresAt > Date.now()) return cachedToken.value;
+
+  const keep = (value: string) => {
+    cachedToken = { value, expiresAt: Date.now() + TOKEN_TTL_MS };
+    return value;
+  };
+
+  // 1. An explicit service account. The only branch that works in a container.
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (raw) {
+    try {
+      const credentials = JSON.parse(raw);
+      auth ??= new GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+      const token = (await (await auth.getClient()).getAccessToken())?.token;
+      if (token) return keep(token);
+    } catch (e) {
+      console.warn('[provider] service-account auth failed:', scrub(String(e)));
+    }
+  }
+
+  // 2. Application Default Credentials — the standard path on Cloud Run / GCE,
+  //    and what `gcloud auth application-default login` sets up locally.
+  try {
+    auth ??= new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+    const token = (await (await auth.getClient()).getAccessToken())?.token;
+    if (token) return keep(token);
+  } catch (e) {
+    console.warn('[provider] ADC auth failed:', scrub(String(e)));
+  }
+
+  /*
+   * 3. The gcloud CLI, and ONLY outside production.
+   *
+   * This used to run second, unguarded, on every single call — execSync spawns
+   * a shell, blocks the event loop while it does, and the binary does not exist
+   * in a deployed container. A developer's laptop would work and the deploy
+   * would fail on a code path nobody had exercised. It stays as a local
+   * convenience, last, and never in production.
+   */
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const { execSync } = await import('node:child_process');
+      const token = execSync('gcloud auth print-access-token', { encoding: 'utf8', timeout: 10_000 }).trim();
+      if (token.length > 20) return keep(token);
+    } catch {
+      /* falls through to the error below */
+    }
+  }
+
+  throw new Error(
+    'Could not obtain a Vertex AI access token. Set FIREBASE_SERVICE_ACCOUNT_JSON, ' +
+      'or run `gcloud auth application-default login` for local development.',
+  );
+}
+
+/** Headers and query string for one provider, ready to hand to fetch. */
+export async function authFor(
+  provider: Provider,
+  /* Whose key to spend on the BYOK path. Passing the uid rather than the key
+     itself is deliberate: the secret is resolved inside this file and never
+     travels through the orchestrator, the routes, or anything that writes to
+     Firestore. */
+  uid?: string,
+): Promise<{ headers: Record<string, string>; query: string }> {
+  if (provider === 'vertex') {
+    return {
+      headers: { Authorization: `Bearer ${await vertexToken()}`, 'Content-Type': 'application/json' },
+      query: '',
+    };
+  }
+  return { headers: { 'Content-Type': 'application/json' }, query: `?key=${await apiKeyFor(uid)}` };
+}
+
+/* ── who is this user ─────────────────────────────────────────────────────── */
+
+/**
+ * The plan on the user's own document, defaulting to BYOK.
+ *
+ * BYOK is the default for a reason: an account with no plan field is an account
+ * nobody has taken money from, and the failure mode of guessing wrong in that
+ * direction is "add your API key". Guessing the other way runs a stranger's
+ * work on infrastructure we pay for, silently, with no record of who owed what.
+ */
+export async function planFor(uid: string): Promise<Plan> {
+  try {
+    const snap = await accountDoc(uid).get();
+    return snap.data()?.plan === 'paid' ? 'paid' : 'byok';
+  } catch (e) {
+    /* Fail to BYOK, never to paid. A Firestore blip must not be able to promote
+       an account onto infrastructure we are paying for. */
+    console.warn('[provider] could not read the plan; treating as BYOK:', scrub(String(e)));
+    return 'byok';
+  }
+}
+
+export async function providerFor(uid: string): Promise<Provider> {
+  return PROVIDER_FOR_PLAN[await planFor(uid)];
+}
+
+/** Which provider a run recorded at the time it started. Runs pin their provider
+ *  so that upgrading mid-run cannot leave half an ad on each side. */
+export function providerOfRun(run: { provider?: string } | null | undefined): Provider {
+  return run?.provider === 'vertex' ? 'vertex' : 'api-key';
+}
+
+/* ── the calls themselves ─────────────────────────────────────────────────── */
+
+/**
+ * One `generateContent` call, on either door.
+ *
+ * The request body is identical — both accept `contents: [{ role, parts }]` —
+ * so the only differences are the host, the credential, and where it goes. Both
+ * are handled here so no caller has to remember which is which.
+ */
+export async function generateContent(opts: {
+  provider: Provider;
+  model: string;
+  body: unknown;
+  label: string;
+  uid?: string;
+  retry?: RetryOptions;
+}): Promise<Record<string, unknown>> {
+  const { headers, query } = await authFor(opts.provider, opts.uid);
+  return withRetry(
+    () =>
+      fetchJson(
+        `${baseFor(opts.provider)}/models/${opts.model}:generateContent${query}`,
+        { method: 'POST', headers, body: JSON.stringify(opts.body) },
+        scrub,
+      ),
+    { label: `${opts.provider}:${opts.label}`, ...(opts.retry ?? {}) },
+  );
+}
+
+/**
+ * Submit a Veo job. Returns the operation name to poll.
+ *
+ * Same method on both doors, different auth.
+ */
+export async function submitVideo(opts: {
+  provider: Provider;
+  model: string;
+  body: unknown;
+  label: string;
+  uid?: string;
+  retry?: RetryOptions;
+}): Promise<string> {
+  const { headers, query } = await authFor(opts.provider, opts.uid);
+  const json = await withRetry(
+    () =>
+      fetchJson(
+        `${baseFor(opts.provider)}/models/${opts.model}:predictLongRunning${query}`,
+        { method: 'POST', headers, body: JSON.stringify(opts.body) },
+        scrub,
+      ),
+    { label: `${opts.provider}:${opts.label}`, ...(opts.retry ?? {}) },
+  );
+  const name = (json as { name?: string }).name;
+  if (!name) throw new Error('render submitted but no operation name came back');
+  return name;
+}
+
+/**
+ * Poll a Veo operation. THIS IS WHERE THE TWO DOORS ACTUALLY DIVERGE.
+ *
+ *   vertex   POST :fetchPredictOperation with { operationName } in the body.
+ *   api-key  GET  /{operationName}, because AI Studio exposes the operation as
+ *            a resource of its own.
+ *
+ * Getting this wrong is not a loud failure — a GET against the Vertex host
+ * returns a 404 that reads like a missing model, which is a long way from the
+ * real cause.
+ */
+export async function pollVideo(opts: {
+  provider: Provider;
+  model: string;
+  operation: string;
+  uid?: string;
+  retry?: RetryOptions;
+}): Promise<Record<string, unknown>> {
+  const { headers, query } = await authFor(opts.provider, opts.uid);
+  const retry = { label: `${opts.provider}:veo:poll`, attempts: 3, baseMs: 500, maxDelayMs: 4_000, budgetMs: 10_000, ...(opts.retry ?? {}) };
+
+  if (opts.provider === 'vertex') {
+    return withRetry(
+      () =>
+        fetchJson(
+          `${VERTEX_BASE}/models/${opts.model}:fetchPredictOperation`,
+          { method: 'POST', headers, body: JSON.stringify({ operationName: opts.operation }) },
+          scrub,
+        ),
+      retry,
+    );
+  }
+  return withRetry(
+    () => fetchJson(`${STUDIO_BASE}/${opts.operation}${query}`, { method: 'GET', headers }, scrub),
+    retry,
+  );
+}
+
+/** What to tell a user when their own provider is the thing that failed. */
+export function outageMessage(provider: Provider): string {
+  /* Neither message names the provider. A user on the paid plan bought working
+     software, not a tour of which API is behind it, and a user on their own key
+     needs to know it is THEIR quota — which is the actionable half. */
+  return provider === 'vertex'
+    ? 'Something on our side did not answer, so this run stopped. It has not been moved onto anyone else’s quota. Nothing on the canvas is lost, and it is worth trying again shortly.'
+    : 'Your API key has hit its limit for now. It resets on Google’s schedule — everything already on this canvas is still here, and the paid plan runs without your key if you would rather not wait.';
+}

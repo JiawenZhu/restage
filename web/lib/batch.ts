@@ -128,6 +128,21 @@ const TERMINAL: BatchState[] = [
  * few reference photos, comfortably inside that, and the file route would add
  * an upload, a handle to track and a second thing to clean up.
  */
+/*
+ * THIS IS AN AI STUDIO ENDPOINT, and only that.
+ *
+ * batchGenerateContent lives on generativelanguage.googleapis.com and is
+ * authenticated with GEMINI_API_KEY. Vertex has its own batch mechanism with a
+ * different shape entirely, and nothing here speaks it. So a Vertex run must
+ * never reach this file: doing so would move a commercial user's work onto the
+ * shared free-tier key, spending the wrong quota, draining the key everyone
+ * else depends on, and hiding it behind a success. Callers gate on the
+ * provider; this is the backstop in case one forgets.
+ */
+export function batchAvailable(provider: 'vertex' | 'api-key'): boolean {
+  return provider === 'api-key' && !!process.env.GEMINI_API_KEY;
+}
+
 export async function submitBatch(model: string, items: BatchItem[], displayName: string): Promise<string> {
   if (!BATCHABLE.has(model)) {
     throw new Error(`${model} does not support batchGenerateContent`);

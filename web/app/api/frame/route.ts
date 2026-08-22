@@ -3,6 +3,7 @@ import { consume, tooMany } from '@/lib/rateLimit';
 import { requireUid } from '@/lib/firebaseAdmin';
 import { z } from 'zod';
 import { generateFrame } from '@/lib/gemini';
+import { providerFor } from '@/lib/provider';
 
 /*
  * One frame. ~14s measured, which is why the plan runs on frames and only the
@@ -60,7 +61,8 @@ export async function POST(req: Request) {
     .filter((r): r is NonNullable<typeof r> => !!r);
 
   try {
-    const { bytes, mimeType } = await generateFrame({ prompt: parsed.data.prompt, aspect: parsed.data.aspect, refs });
+    const provider = await providerFor(uid);
+    const { bytes, mimeType } = await generateFrame({ prompt: parsed.data.prompt, aspect: parsed.data.aspect, refs, provider, uid });
     return NextResponse.json({ image: `data:${mimeType};base64,${bytes.toString('base64')}` });
   } catch (err) {
     console.error('[frame]', err);

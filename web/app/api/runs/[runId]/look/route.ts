@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { adminDb, requireUid } from '@/lib/firebaseAdmin';
 import { changedFields, impactOf, regenerateEstimate, type ImpactNode, type LookField } from '@/lib/impact';
 import { deriveLook } from '@/lib/gemini';
+import { providerOfRun } from '@/lib/provider';
 import { rebuildStaleSteps } from '@/lib/orchestrator';
 import { consume, tooMany } from '@/lib/rateLimit';
 import { uploadToStorage } from '@/lib/orchestrator';
@@ -82,6 +83,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     const { look, kinds } = await deriveLook(
       (run.goal as string) ?? '',
       frames.map((n) => ({ id: n.id, stepNo: n.stepNo, label: n.label, instruction: (n as { instruction?: string }).instruction })),
+      providerOfRun(run as { provider?: string }),
+      run.uid as string,
     );
 
     const known = new Set(frames.map((n) => n.id));

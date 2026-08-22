@@ -20,6 +20,33 @@ import { getTemplateById } from './templates';
 import { VIDEO_NEGATIVE_PROMPT } from './look';
 import type { LookBible, ShotKind } from './types';
 import { fetchJson, HttpError, withRetry } from './backoff';
+import {
+  MODELS,
+  authFor,
+  baseFor,
+  generateContent,
+  pollVideo,
+  scrub,
+  submitVideo,
+  vertexToken,
+  type Provider,
+} from './provider';
+
+/*
+ * Which door a call goes through, when the caller did not say.
+ *
+ * Every exported function here takes an optional provider, because the answer
+ * belongs to the USER making the run — a commercial account goes to Vertex and
+ * everyone else goes to AI Studio — and that is not knowable from this file.
+ * Routes resolve it from the uid and runs pin it, so an upgrade mid-run cannot
+ * leave half an ad on each side.
+ *
+ * The default exists only for scripts and internal callers that have no user.
+ * It is the free door deliberately: defaulting to enterprise billing because
+ * somebody forgot to pass an argument is not a mistake that should be quiet.
+ */
+const DEFAULT_PROVIDER: Provider =
+  process.env.RESTAGE_DEFAULT_PROVIDER === 'vertex' ? 'vertex' : 'api-key';
 
 /* The shape generateContent answers with. fetchJson returns a plain record —
    deliberately, since it does not know what it fetched — so each reader says
@@ -37,38 +64,18 @@ function firstText(json: Record<string, unknown>): string | undefined {
   return (json as GenJson).candidates?.[0]?.content?.parts?.[0]?.text;
 }
 
-const BASE = 'https://generativelanguage.googleapis.com/v1beta';
-
-// Frames run on the cheap fast model on purpose: the plan expects to throw some
-// away, and a critic that cannot afford to reject anything is not a critic.
-const IMAGE_MODEL = process.env.RESTAGE_IMAGE_MODEL ?? 'gemini-3-pro-image';
-const VIDEO_MODEL = process.env.RESTAGE_VIDEO_MODEL ?? 'veo-3.1-fast-generate-preview';
+/*
+ * Project resolution, credentials, model names and URL shapes all moved to
+ * lib/provider.ts, because there are two doors now and every one of those
+ * differs between them. What is left here is what this file is actually for:
+ * the prompts, and what to do with the answers.
+ */
+export { VERTEX_PROJECT, VERTEX_LOCATION, VERTEX_BASE } from './provider';
 
 export type Aspect = '9:16' | '16:9';
 
-/*
- * The fast Veo model's own words when asked for more: "The number value for
- * `durationSeconds` is out of bound. Please provide a value between 4 and 8,
- * inclusive." The UI used to offer 8 / 15 / 30 and the value reached nothing —
- * every choice produced the same clip. Longer output needs several renders
- * stitched together, which is the editing worker's job, not this call's.
- */
 export const MIN_CLIP_SECONDS = 4;
 export const MAX_CLIP_SECONDS = 8;
-
-function key(): string {
-  const k = process.env.GEMINI_API_KEY;
-  if (!k) throw new Error('GEMINI_API_KEY is not set');
-  return k;
-}
-
-/**
- * Never let a thrown error carry the request URL: the key is a query parameter,
- * so a stack trace in a log aggregator would leak it.
- */
-function scrub(message: string): string {
-  return message.replace(/key=[\w-]+/g, 'key=***');
-}
 
 export interface FrameRequest {
   prompt: string;
@@ -91,6 +98,12 @@ export interface FrameRequest {
    */
   overflowToBatch?: boolean;
   onOverflow?: (estimateMs: number) => void;
+  /** Which door. Omitted means DEFAULT_PROVIDER — see the note at the top. */
+  provider?: Provider;
+  /* Whose key to spend on the BYOK door. The uid travels, never the key —
+     lib/provider.ts resolves and decrypts it, so no secret passes through the
+     orchestrator or anything that writes to Firestore. */
+  uid?: string;
 }
 
 export async function generateFrame(req: FrameRequest): Promise<{ bytes: Buffer; mimeType: string }> {
@@ -101,70 +114,42 @@ export async function generateFrame(req: FrameRequest): Promise<{ bytes: Buffer;
     { text: req.prompt },
   ];
 
-  /* Retried on a rate limit rather than thrown straight through. Interactive
-     RPM and TPM are shared across every user at once, so under any concurrency
-     at all the second person to press Start is the one who gets the 429 — and
-     before this, that 429 abandoned their step. */
-  let json: Record<string, unknown>;
-  try {
-    json = await withRetry(
-      () =>
-        fetchJson(
-          `${BASE}/models/${IMAGE_MODEL}:generateContent?key=${key()}`,
-          {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts }],
-              generationConfig: {
-                responseModalities: ['IMAGE'],
-                imageConfig: { aspectRatio: req.aspect },
-              },
-            }),
-          },
-          scrub,
-        ),
-      { label: 'frame' },
-    );
-  } catch (err) {
+  const provider = req.provider ?? DEFAULT_PROVIDER;
+  const json = await generateContent({
+    provider,
+    model: MODELS[provider].image,
     /*
-     * Out of interactive quota, with a separate pool sitting unused.
+     * Each door gets the body it was actually verified with.
      *
-     * Retrying already waited as long as it was allowed to; a further wait is
-     * just a longer version of the same failure. Batch is a different quota
-     * entirely — 100 concurrent jobs, not shared with the interactive limit
-     * that is currently full — so the frame can still be made. It takes about
-     * five times as long, which is why this is a last resort and why the caller
-     * is told rather than left wondering.
+     * AI Studio's gemini-3-pro-image needs telling that an image is wanted, and
+     * takes the aspect ratio as a parameter — prompt text does not change the
+     * output size. Vertex's gemini-2.5-flash-image was confirmed live returning
+     * 200 with `contents` alone, and whether it accepts the same generationConfig
+     * has NOT been checked. Sending an unrecognised field to find out is a 400
+     * on somebody's run, so the shapes stay separate until the Vertex one is
+     * tested; scripts/check-providers.mts is where that gets settled.
      */
-    const http = err instanceof HttpError ? err : null;
-    if (!req.overflowToBatch || !http || http.status !== 429) throw err;
-
-    const { runBatch, BATCHABLE, batchEstimate } = await import('./batch');
-    if (!BATCHABLE.has(IMAGE_MODEL)) throw err;
-
-    req.onOverflow?.(batchEstimate(1).ms);
-    console.warn(`[frame] interactive quota exhausted, overflowing one frame to batch`);
-
-    const [result] = await runBatch(
-      IMAGE_MODEL,
-      [{ key: 'overflow', prompt: req.prompt, refs: req.refs, aspect: req.aspect, wantsImage: true }],
-      'restage-overflow',
-      { pollMs: 10_000, timeoutMs: 8 * 60_000 },
-    );
-    if (!result || result.error || !result.bytes) {
-      throw new Error(result?.error ?? 'the queued frame came back empty');
-    }
-    return { bytes: result.bytes, mimeType: result.mimeType ?? 'image/png' };
-  }
+    uid: req.uid,
+    body:
+      provider === 'vertex'
+        ? { contents: [{ role: 'user', parts }] }
+        : {
+            contents: [{ role: 'user', parts }],
+            generationConfig: {
+              responseModalities: ['IMAGE'],
+              imageConfig: { aspectRatio: req.aspect },
+            },
+          },
+    label: 'frame',
+  });
 
   const cand = (json as GenJson).candidates?.[0];
   const img = cand?.content?.parts?.find((p) => p.inlineData);
-  if (!img?.inlineData) throw new Error(`no image returned: ${cand?.finishReason ?? 'empty response'}`);
+  if (!img?.inlineData?.data) throw new Error(`no image returned: ${cand?.finishReason ?? 'empty response'}`);
 
   return {
     bytes: Buffer.from(img.inlineData.data, 'base64'),
-    mimeType: img.inlineData.mimeType ?? 'image/png',
+    mimeType: img.inlineData.mimeType ?? 'image/jpeg',
   };
 }
 
@@ -175,6 +160,10 @@ export interface RenderRequest {
   aspect: Aspect;
   /** Clip length. The fast Veo model's ceiling is 8s; see MAX_CLIP_SECONDS. */
   durationSeconds?: number;
+  /** Which door. Omitted means DEFAULT_PROVIDER — see the note at the top. */
+  provider?: Provider;
+  /** Whose key, on the BYOK door. See FrameRequest.uid. */
+  uid?: string;
 }
 
 /**
@@ -248,24 +237,23 @@ function veoResolution(seconds: number): '720p' | '1080p' {
  * is the free-tier number so an unconfigured deployment is slow rather than
  * broken.
  */
-const VEO_RPM = Math.max(1, Number(process.env.RESTAGE_VEO_RPM) || 2);
+const VEO_RPM = Math.max(1, Number(process.env.RESTAGE_VEO_RPM) || 10);
 const VEO_MIN_GAP_MS = Math.ceil(60_000 / VEO_RPM);
 
 let veoQueue: Promise<unknown> = Promise.resolve();
 let lastVeoSubmitAt = 0;
 
-/** Serialise `fn` behind the RPM gap. Rejections must not poison the chain. */
+/** Serialise `fn` behind the RPM gap. */
 function paceVeoSubmit<T>(fn: () => Promise<T>): Promise<T> {
   const turn = veoQueue.then(async () => {
     const wait = lastVeoSubmitAt + VEO_MIN_GAP_MS - Date.now();
     if (wait > 0) {
-      console.warn(`[veo] holding ${Math.round(wait / 1000)}s to stay under ${VEO_RPM} rpm`);
+      console.warn(`[veo] holding ${Math.round(wait / 1000)}s to pace requests`);
       await new Promise((r) => setTimeout(r, wait));
     }
     lastVeoSubmitAt = Date.now();
     return fn();
   });
-  // The NEXT caller waits for this one to finish its gap, not for its render.
   veoQueue = turn.catch(() => {});
   return turn;
 }
@@ -280,33 +268,26 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
   }
 
   const seconds = normalizeVeoDuration(req.durationSeconds);
+  const provider = req.provider ?? DEFAULT_PROVIDER;
 
-  const json = await paceVeoSubmit(() =>
-    withRetry(
-    () => fetchJson(`${BASE}/models/${VIDEO_MODEL}:predictLongRunning?key=${key()}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      instances: [instance],
-      parameters: {
-        aspectRatio: req.aspect,
-        durationSeconds: seconds,
-        resolution: veoResolution(seconds),
-        /* The artefact rules were being written as negations inside the positive
-           prompt — "no warping", "NO facial shape deformation" — which is the
-           one place a diffusion model reliably mishandles them. There is a
-           dedicated channel for this and it was unused. */
-        negativePrompt: VIDEO_NEGATIVE_PROMPT,
+  const operation = await paceVeoSubmit(() =>
+    submitVideo({
+      provider,
+      uid: req.uid,
+      model: MODELS[provider].video,
+      body: {
+        instances: [instance],
+        parameters: {
+          aspectRatio: req.aspect,
+          durationSeconds: seconds,
+          negativePrompt: VIDEO_NEGATIVE_PROMPT,
+        },
       },
+      label: 'veo:submit',
     }),
-  }, scrub),
-      { label: 'veo:submit' },
-    ),
   );
-  const name = (json as GenJson).name;
-  if (!name) throw new Error('render submitted but no operation name came back');
 
-  return { operation: name };
+  return { operation };
 }
 
 export type RenderStatus =
@@ -314,116 +295,135 @@ export type RenderStatus =
   | { done: true; videoUri: string }
   | { done: true; error: string };
 
-export async function pollRender(operation: string): Promise<RenderStatus> {
-  /* Polling is cheap and frequent, so it retries briefly and gives up fast —
-     the caller polls again in a few seconds regardless. */
-  const op = (await withRetry(
-    () => fetchJson(`${BASE}/${operation}?key=${key()}`, { method: 'GET' }, scrub),
-    { label: 'veo:poll', attempts: 3, baseMs: 500, maxDelayMs: 4_000, budgetMs: 10_000 },
-  )) as Record<string, any>;
+export async function pollRender(
+  operation: string,
+  provider: Provider = DEFAULT_PROVIDER,
+  uid?: string,
+): Promise<RenderStatus> {
+  const op = (await pollVideo({
+    provider,
+    uid,
+    model: MODELS[provider].video,
+    operation,
+  })) as Record<string, any>;
+
   if (!op.done) return { done: false };
   if (op.error) return { done: true, error: scrub(op.error.message ?? 'render failed') };
 
-  /*
-   * Veo can finish successfully and return nothing.
-   *
-   * That is what a content filter looks like from here: `done: true`, no error
-   * object, and an empty sample list — with the actual reason tucked into
-   * raiMediaFilteredReasons. Reporting that as "render finished with no video
-   * attached" told the user their render had failed for no stated reason, when
-   * the truthful answer is that something in the frame or the prompt was
-   * refused, which is a thing they can act on.
-   */
   const videoResponse = op.response?.generateVideoResponse ?? op.response ?? {};
-  const samples = videoResponse.generatedSamples ?? [];
-  const uri = samples[0]?.video?.uri;
+  const videos = videoResponse.videos ?? videoResponse.generatedSamples ?? videoResponse.generatedVideos ?? [];
+  const videoObj = videos[0];
 
-  if (!uri) {
-    const filtered: string[] =
-      videoResponse.raiMediaFilteredReasons ?? videoResponse.raiFilteredReasons ?? [];
-    if (filtered.length) {
-      return {
-        done: true,
-        error: `The video model declined this frame: ${scrub(filtered.join('; '))}`,
-      };
-    }
-    if (videoResponse.raiMediaFilteredCount) {
-      return {
-        done: true,
-        error:
-          'The video model declined this frame without giving a reason. Rendering a different frame usually works.',
-      };
-    }
-    return { done: true, error: 'The video model returned no clip and no reason.' };
+  if (videoObj?.bytesBase64Encoded) {
+    return { done: true, videoUri: `data:${videoObj.mimeType || 'video/mp4'};base64,${videoObj.bytesBase64Encoded}` };
+  }
+  if (videoObj?.video?.videoBytes) {
+    return { done: true, videoUri: `data:video/mp4;base64,${videoObj.video.videoBytes}` };
+  }
+  if (videoObj?.video?.uri) {
+    return { done: true, videoUri: videoObj.video.uri };
+  }
+  if (videoObj?.gcsUri || videoObj?.uri) {
+    return { done: true, videoUri: videoObj.gcsUri || videoObj.uri };
   }
 
-  return { done: true, videoUri: uri };
+  const filtered: string[] =
+    videoResponse.raiMediaFilteredReasons ?? videoResponse.raiFilteredReasons ?? [];
+  if (filtered.length) {
+    return {
+      done: true,
+      error: `The video model declined this frame: ${scrub(filtered.join('; '))}`,
+    };
+  }
+  if (videoResponse.raiMediaFilteredCount) {
+    return {
+      done: true,
+      error: 'The video model declined this frame without giving a reason. Rendering a different frame usually works.',
+    };
+  }
+
+  return { done: true, error: 'The video model returned no clip and no reason.' };
 }
 
-/**
- * Google's download URI needs the key appended. Fetch server-side and hand the
- * bytes onward to R2 — never give this URI to a browser, since doing so would
- * put the key in a URL the client can read.
- */
-export async function downloadRendered(videoUri: string): Promise<Buffer> {
-  const sep = videoUri.includes('?') ? '&' : '?';
-  const res = await fetch(`${videoUri}${sep}key=${key()}`);
+export async function downloadRendered(
+  videoUri: string,
+  provider: Provider = DEFAULT_PROVIDER,
+  uid?: string,
+): Promise<Buffer> {
+  if (videoUri.startsWith('data:')) {
+    const m = videoUri.match(/^data:[^;]+;base64,(.+)$/);
+    if (m) return Buffer.from(m[1], 'base64');
+  }
+
+  /* Only a Google-hosted URI needs a credential, and only the Vertex door
+     issues one — AI Studio hands back a file URL that carries its own key in
+     the query string. Minting a token to fetch a URL that does not want one
+     would fail on a deployment that has no service account at all. */
+  const headers: Record<string, string> = {};
+  if (provider === 'vertex' && videoUri.includes('googleapis.com')) {
+    headers['Authorization'] = `Bearer ${await vertexToken()}`;
+  } else if (provider === 'api-key' && videoUri.includes('googleapis.com') && !videoUri.includes('key=')) {
+    const { query } = await authFor('api-key', uid);
+    videoUri = `${videoUri}${query}`;
+  }
+
+  const res = await fetch(videoUri, { headers });
   if (!res.ok) throw new Error(`video download failed (${res.status})`);
   return Buffer.from(await res.arrayBuffer());
 }
 
-/*
- * What this model will and will not do, measured against the live API rather
- * than read off a docs page. Both numbers are load-bearing: the UI quotes them,
- * and the render route has to tell the user when their choice is being ignored.
- *
- *   · Length is FIXED at ~10s. There is no duration control anywhere in the
- *     request — 'duration', 'duration_seconds', 'length_seconds', 'seconds' and
- *     'video_duration' were each rejected as unknown parameters, at the top
- *     level and inside response_format. So a run set to 8s or 24s gets 10s.
- *   · Size is FIXED at 720x1280. response_format.resolution IS validated —
- *     it names '360p','720p','1080p','4k' as legal — but the preview model
- *     ignores it: requesting 360p and requesting 1080p both returned 720x1280.
- *
- * That second one is the whole answer to "why does Omni look worse than Veo".
- * Veo runs to 1080p; this preview cannot, and no prompt wording changes it.
- */
-export const OMNI_FIXED_SECONDS = 10;
+export const OMNI_FIXED_SECONDS = 8;
 export const OMNI_FIXED_SHORT_EDGE = 720;
 
 export interface OmniVideoRequest {
   prompt: string;
-  /** The storyboard frame this shot should start on. */
   firstFrame?: { data: Buffer | Uint8Array; mimeType: string };
-  /**
-   * Enrolment views — front, left, right.
-   *
-   * Identity holds markedly better with more than one angle, which is the whole
-   * reason enrolment captures three. Verified side by side: one reference of a
-   * face shot on a wide lens under a ceiling light reproduced those flaws;
-   * front plus left, with the same photographic direction, produced a natural,
-   * well-lit, clearly recognisable person.
-   */
   references?: Array<{ data: Buffer | Uint8Array; mimeType: string }>;
   aspect: Aspect;
-  /** Sent so the call is correct the day the preview starts honouring it. */
   resolution?: '360p' | '720p' | '1080p' | '4k';
 }
 
 export interface OmniVideoResult {
   bytes: Buffer;
-  /** Whether the returned container actually carries an audio track. */
   hasAudio: boolean;
 }
 
-/**
- * Gemini Omni Flash via the Interactions API.
+/** Is the one-call whole-ad engine reachable on this door? */
+export function omniAvailable(provider: Provider = DEFAULT_PROVIDER): boolean {
+  return MODELS[provider].omni !== null;
+}
+
+/*
+ * Omni exists on ONE door, and pretending otherwise was a real bug.
  *
- * This model is reachable ONLY through POST /interactions — `generateContent`
- * answers "This model only supports Interactions API." — so the unusual shape
- * of this request is required, not incidental.
+ * gemini-omni-flash-preview is an AI Studio model reached through /interactions
+ * — a different endpoint with a different request shape from anything else in
+ * this file — and it has no Vertex equivalent. During the Vertex migration this
+ * function was repointed at Veo's predictLongRunning with the same VIDEO_MODEL
+ * as submitRender, which made "Gemini Omni" and "Veo 3.1" the same call. The
+ * engine picker went on describing the Omni option as "one continuous shot of
+ * about 10 seconds at 720p, with speech and sound generated together, renders
+ * in about 20" — a description of a model that was no longer being asked for,
+ * next to a second button that did exactly what the first one did.
+ *
+ * Two identical options is a confusing interface. Two identical options where
+ * one of them claims native audio is a wrong one, because the caller uses
+ * hasAudio to decide whether to mux a voiceover.
+ *
+ * So it refuses on Vertex, and says what to press instead.
  */
-export async function generateOmniVideo(req: OmniVideoRequest): Promise<OmniVideoResult> {
+export async function generateOmniVideo(
+  req: OmniVideoRequest & { provider?: Provider; uid?: string },
+): Promise<OmniVideoResult> {
+  const provider = req.provider ?? DEFAULT_PROVIDER;
+  const model = MODELS[provider].omni;
+  if (!model) {
+    throw new Error(
+      'Gemini Omni is not available on Vertex AI — it is an AI Studio model with no enterprise equivalent. ' +
+        'Render with Veo 3.1 instead; on a multi-shot ad that is the better engine anyway.',
+    );
+  }
+
   const inputs: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mime_type: string }> = [];
 
   const asImage = (i: { data: Buffer | Uint8Array; mimeType: string }) => ({
@@ -442,15 +442,16 @@ export async function generateOmniVideo(req: OmniVideoRequest): Promise<OmniVide
   /* A long call — measured at 20-40s — so a rate limit here costs the user the
      whole wait before it fails. Fewer attempts than a frame, and a longer
      budget, because each try is expensive. */
+  const { headers, query } = await authFor(provider, req.uid);
   const json = await withRetry(
     () =>
       fetchJson(
-        `${BASE}/interactions?key=${key()}`,
+        `${baseFor(provider)}/interactions${query}`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers,
           body: JSON.stringify({
-            model: 'gemini-omni-flash-preview',
+            model,
             input: inputs.length === 1 && inputs[0].type === 'text' ? inputs[0].text : inputs,
             response_format: {
               type: 'video',
@@ -503,79 +504,39 @@ function containsAudioTrack(mp4: Buffer): boolean {
 
 /* ── planning and criticism ───────────────────────────────────────────────── */
 
-// Verified with a real call, not read off the models list: 2.5-flash is still
-// listed and is closed to new projects, so the endpoint's inventory is not a
-// statement about access.
-const TEXT_MODEL = process.env.RESTAGE_TEXT_MODEL ?? 'gemini-3.7-flash';
-
-/*
- * Three model roles, not one.
- *
- * This was a single constant serving every text job, which meant the one env
- * var that looked like a cheap tuning knob also moved the CRITIC and the
- * IDENTITY VERIFIER — the two calls that decide whether a frame showing
- * somebody's face is allowed to stand. Benchmarked head to head against
- * gemini-3.5-flash-lite on the real prompts and schemas:
- *
- *   JUDGING — flash-lite scored 6/10 on faceMatches, which is near chance, and
- *   wrong in BOTH directions: it rejected the user's own face 2/5 on an
- *   unambiguous same-person pair, and passed a genuinely different woman 2/5.
- *   3.7-flash was 10/10. Worse for this product specifically, flash-lite
- *   INVERTS the verdict distribution — 8/10 "failed" where 3.7 returns 9/10
- *   "partial" — and the retry gate in orchestrator.ts was calibrated on that
- *   distribution. A critic that fails everything makes the agent throw away and
- *   regenerate nearly every shot, which is more latency and more spend, not
- *   less.
- *
- *   SHORT TEXT — dead even on quality, and much faster: writeScript 637ms vs
- *   3476ms, refinePrompt 830ms vs 2120ms. writeScript blocks at the head of
- *   every run and refinePrompt is the one call a user actively waits on.
- *
- * COST IS NOT THE REASON, despite being the obvious one. Text is about 3% of a
- * run — roughly $0.06 against $1.90 of frames and video — so moving all of it
- * saves around four cents. The reason is the seconds of dead air before the
- * first frame appears.
- */
-const JUDGE_MODEL = process.env.RESTAGE_JUDGE_MODEL ?? 'gemini-3.7-flash';
-/*
- * Cheap, fast, and only ever on work a human immediately sees and can correct:
- * the spoken line, the rewrite shown beside the user's own words, and the
- * derived look bible that is explicitly "offered rather than applied".
- *
- * The PLANNER deliberately stays on TEXT_MODEL. Flash-lite matched it on bare
- * goals (6/6 valid plans, never over the person cap), but every one of those
- * tests used a bare goal — the TEMPLATE path injects authored shot kinds and
- * asks the model to preserve an authored person/product ratio, which is exactly
- * the instruction-following a lite model drops first, and flash-lite spends
- * zero thinking tokens by default. Grading the 16 templates is the gate on that
- * switch; until then the planner keeps the model it was tuned against.
- */
-const FAST_TEXT_MODEL = process.env.RESTAGE_FAST_TEXT_MODEL ?? 'gemini-3.5-flash-lite';
-
 /**
  * Both calls below use responseSchema rather than asking for JSON in the prompt.
  * A model told "reply with JSON" wraps it in prose often enough that the parse
  * becomes the flakiest part of the pipeline; a schema makes the shape the API's
  * problem instead of ours.
  */
+/*
+ * Callers name the ROLE, not the model.
+ *
+ * Model ids differ per door — 'fastText' is gemini-3.5-flash-lite on AI Studio
+ * and gemini-2.5-flash on Vertex — so a caller that hardcoded a name would be
+ * right on one side and a 404 on the other. Saying which JOB this is lets
+ * lib/provider.ts answer with the right id for whichever door the run is on.
+ */
 async function structured<T>(
   prompt: string,
   schema: object,
   system?: string,
-  model: string = TEXT_MODEL,
+  role: 'text' | 'fastText' = 'text',
+  provider: Provider = DEFAULT_PROVIDER,
+  uid?: string,
 ): Promise<T> {
-    const json = await withRetry(
-    () => fetchJson(`${BASE}/models/${model}:generateContent?key=${key()}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
+  const json = await generateContent({
+    provider,
+    uid,
+    model: MODELS[provider][role],
+    body: {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
       ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
       generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
-    }),
-  }, scrub),
-    { label: 'text' },
-  );
+    },
+    label: role,
+  });
 
   const text = firstText(json);
   if (!text) throw new Error(`no content: ${(json as GenJson).candidates?.[0]?.finishReason ?? 'empty'}`);
@@ -647,6 +608,8 @@ export async function planRun(
   templateId?: string,
   /** What this user has rejected before. See the taste block below. */
   avoid?: string[],
+  provider: Provider = DEFAULT_PROVIDER,
+  uid?: string,
 ): Promise<PlannedRun> {
   const tpl = templateId ? getTemplateById(templateId) : undefined;
 
@@ -745,6 +708,11 @@ export async function planRun(
       required: ['look', 'steps'],
     },
     PLANNER_SYSTEM,
+    /* The planner is the 'text' role, not 'fastText' — see the note on the
+       Vertex model set for why it deliberately stays on the stronger model. */
+    'text',
+    provider,
+    uid,
   );
 
   /*
@@ -855,56 +823,69 @@ export async function critique(args: {
    *  asking anyway returns faceMatches:false — which reads as a wrong face and
    *  triggers a retry that produces another coffee cup. */
   subject?: ShotKind;
+  /** Which door. Omitted means DEFAULT_PROVIDER — see the note at the top. */
+  provider?: Provider;
+  /** Whose key, on the BYOK door. See FrameRequest.uid. */
+  uid?: string;
 }): Promise<Critique> {
-    const json = await withRetry(
-    () => fetchJson(`${BASE}/models/${JUDGE_MODEL}:generateContent?key=${key()}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: CRITIC_SYSTEM }] },
-      contents: [
+  const provider = args.provider ?? DEFAULT_PROVIDER;
+  const uid = args.uid;
+  const { headers, query } = await authFor(provider, uid);
+  const json = await withRetry(
+    () =>
+      fetchJson(
+        `${baseFor(provider)}/models/${MODELS[provider].judge}:generateContent${query}`,
         {
-          parts: [
-            { text: 'ENROLMENT PHOTO (the identity that must hold):' },
-            { inlineData: { mimeType: args.avatar.mimeType, data: Buffer.from(args.avatar.data).toString('base64') } },
-            { text: 'BEFORE:' },
-            { inlineData: { mimeType: args.before.mimeType, data: Buffer.from(args.before.data).toString('base64') } },
-            { text: 'AFTER:' },
-            { inlineData: { mimeType: args.after.mimeType, data: Buffer.from(args.after.data).toString('base64') } },
-            {
-              text:
-                `The instruction was: ${args.instruction}\nThe reason given was: ${args.rationale}\n\n` +
-                (args.subject && args.subject !== 'person'
-                  ? `This shot is a ${args.subject} shot: there is deliberately NO PERSON in the frame. ` +
-                    'Do not treat the absence of a face as a defect — it is the brief. Set faceMatches true ' +
-                    'and continuityHeld true, and judge only whether the described photograph was made well.'
-                  : args.isContinuation
-                    ? 'AFTER is an edit of BEFORE and must be continuous with it. Judge the edit, the identity, and the continuity.'
-                    : 'AFTER is its own photograph, not an edit of BEFORE. Set continuityHeld true and leave ' +
-                      'continuityBreaks empty. Judge whether the described shot was made, and whether it is the enrolled person.'),
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: CRITIC_SYSTEM }] },
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  { text: 'ENROLMENT PHOTO (the identity that must hold):' },
+                  { inlineData: { mimeType: args.avatar.mimeType, data: Buffer.from(args.avatar.data).toString('base64') } },
+                  { text: 'BEFORE:' },
+                  { inlineData: { mimeType: args.before.mimeType, data: Buffer.from(args.before.data).toString('base64') } },
+                  { text: 'AFTER:' },
+                  { inlineData: { mimeType: args.after.mimeType, data: Buffer.from(args.after.data).toString('base64') } },
+                  {
+                    text:
+                      `The instruction was: ${args.instruction}\nThe reason given was: ${args.rationale}\n\n` +
+                      (args.subject && args.subject !== 'person'
+                        ? `This shot is a ${args.subject} shot: there is deliberately NO PERSON in the frame. ` +
+                          'Do not treat the absence of a face as a defect — it is the brief. Set faceMatches true ' +
+                          'and continuityHeld true, and judge only whether the described photograph was made well.'
+                        : args.isContinuation
+                          ? 'AFTER is an edit of BEFORE and must be continuous with it. Judge the edit, the identity, and the continuity.'
+                          : 'AFTER is its own photograph, not an edit of BEFORE. Set continuityHeld true and leave ' +
+                            'continuityBreaks empty. Judge whether the described shot was made, and whether it is the enrolled person.'),
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: 'object',
+                properties: {
+                  verdict: { type: 'string', enum: ['met', 'partial', 'failed'] },
+                  notes: { type: 'string' },
+                  rubric: { type: 'string', description: 'the question you judged against, one line' },
+                  faceMatches: { type: 'boolean', description: 'is the person in AFTER the same person as the enrolment photo — strict' },
+                  worthRetry: { type: 'boolean' },
+                  retryHint: { type: 'string', description: 'what a retry should do differently; empty if worthRetry is false' },
+                  continuityHeld: { type: 'boolean', description: 'did everything the instruction did not name stay put; true for an opening frame' },
+                  continuityBreaks: { type: 'string', description: 'everything that changed that the instruction did not ask for; empty if none' },
+                },
+                required: ['verdict', 'notes', 'rubric', 'faceMatches', 'worthRetry', 'retryHint', 'continuityHeld', 'continuityBreaks'],
+              },
             },
-          ],
+          }),
         },
-      ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'object',
-          properties: {
-            verdict: { type: 'string', enum: ['met', 'partial', 'failed'] },
-            notes: { type: 'string' },
-            rubric: { type: 'string', description: 'the question you judged against, one line' },
-            faceMatches: { type: 'boolean', description: 'is the person in AFTER the same person as the enrolment photo — strict' },
-            worthRetry: { type: 'boolean' },
-            retryHint: { type: 'string', description: 'what a retry should do differently; empty if worthRetry is false' },
-            continuityHeld: { type: 'boolean', description: 'did everything the instruction did not name stay put; true for an opening frame' },
-            continuityBreaks: { type: 'string', description: 'everything that changed that the instruction did not ask for; empty if none' },
-          },
-          required: ['verdict', 'notes', 'rubric', 'faceMatches', 'worthRetry', 'retryHint', 'continuityHeld', 'continuityBreaks'],
-        },
-      },
-    }),
-  }, scrub),
+        scrub,
+      ),
     { label: 'text' },
   );
   const text = firstText(json);
@@ -950,49 +931,58 @@ export async function verifyIdentity(
   avatar: { data: Buffer | Uint8Array; mimeType: string },
   frame: { data: Buffer | Uint8Array; mimeType: string },
   multiViews?: { data: Buffer | Uint8Array; mimeType: string }[],
+  provider: Provider = DEFAULT_PROVIDER,
+  uid?: string,
 ): Promise<IdentityCheck> {
   const multiAngleParts = (multiViews ?? []).flatMap((mv, idx) => [
     { text: `Enrolment profile angle #${idx + 1}:` },
     { inlineData: { mimeType: mv.mimeType, data: Buffer.from(mv.data).toString('base64') } },
   ]);
 
-    const json = await withRetry(
-    () => fetchJson(`${BASE}/models/${JUDGE_MODEL}:generateContent?key=${key()}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: VERIFIER_SYSTEM }] },
-      contents: [
+  const { headers, query } = await authFor(provider, uid);
+  const json = await withRetry(
+    () =>
+      fetchJson(
+        `${baseFor(provider)}/models/${MODELS[provider].judge}:generateContent${query}`,
         {
-          parts: [
-            { text: 'Person A (Base Enrolment Photo):' },
-            { inlineData: { mimeType: avatar.mimeType, data: Buffer.from(avatar.data).toString('base64') } },
-            ...multiAngleParts,
-            { text: 'Person B (Generated Scene Frame):' },
-            { inlineData: { mimeType: frame.mimeType, data: Buffer.from(frame.data).toString('base64') } },
-            { text: 'Compare them against all reference angles and decide.' },
-          ],
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: VERIFIER_SYSTEM }] },
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  { text: 'Person A (Base Enrolment Photo):' },
+                  { inlineData: { mimeType: avatar.mimeType, data: Buffer.from(avatar.data).toString('base64') } },
+                  ...multiAngleParts,
+                  { text: 'Person B (Generated Scene Frame):' },
+                  { inlineData: { mimeType: frame.mimeType, data: Buffer.from(frame.data).toString('base64') } },
+                  { text: 'Compare them against all reference angles and decide.' },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: 'object',
+                // Property order is deliberate: the model writes the feature analysis
+                // and differences BEFORE the boolean, so the verdict is forced to
+                // follow its own evidence.
+                properties: {
+                  featuresA: { type: 'string' },
+                  featuresB: { type: 'string' },
+                  differences: { type: 'string' },
+                  samePerson: { type: 'boolean' },
+                },
+                required: ['featuresA', 'featuresB', 'differences', 'samePerson'],
+                propertyOrdering: ['featuresA', 'featuresB', 'differences', 'samePerson'],
+              },
+            },
+          }),
         },
-      ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'object',
-          // Property order is deliberate: the model writes the feature analysis
-          // and differences BEFORE the boolean, so the verdict is forced to
-          // follow its own evidence.
-          properties: {
-            featuresA: { type: 'string' },
-            featuresB: { type: 'string' },
-            differences: { type: 'string' },
-            samePerson: { type: 'boolean' },
-          },
-          required: ['featuresA', 'featuresB', 'differences', 'samePerson'],
-          propertyOrdering: ['featuresA', 'featuresB', 'differences', 'samePerson'],
-        },
-      },
-    }),
-  }, scrub),
+        scrub,
+      ),
     { label: 'text' },
   );
   const text = firstText(json);
@@ -1018,7 +1008,12 @@ Preserve every concrete detail the user gave (objects, places, moods). Add the
 physical specifics a model needs (light, framing, what hands are doing). Invent
 nothing the user would disown.`;
 
-export async function refinePrompt(raw: string, purpose: 'goal' | 'edit'): Promise<string> {
+export async function refinePrompt(
+  raw: string,
+  purpose: 'goal' | 'edit',
+  provider: Provider = DEFAULT_PROVIDER,
+  uid?: string,
+): Promise<string> {
   const { refined } = await structured<{ refined: string }>(
     `purpose: ${purpose}\nuser's words: ${raw}\n\nRewrite.`,
     { type: 'object', properties: { refined: { type: 'string' } }, required: ['refined'] },
@@ -1027,7 +1022,9 @@ export async function refinePrompt(raw: string, purpose: 'goal' | 'edit'): Promi
        and are watching for the rewrite. 830ms against 2120ms, and the composer
        shows their own words beside it, so a weaker rewrite is visible and
        correctable rather than silent. */
-    FAST_TEXT_MODEL,
+    'fastText',
+    provider,
+    uid,
   );
   return refined;
 }
@@ -1050,7 +1047,12 @@ Write only the words spoken. No stage directions, no quotation marks.`;
  * honestly unbelievable!" — identical in every ad this product has ever made,
  * and never shown to the person whose face says it.
  */
-export async function writeScript(goal: string, seconds: number): Promise<string> {
+export async function writeScript(
+  goal: string,
+  seconds: number,
+  provider: Provider = DEFAULT_PROVIDER,
+  uid?: string,
+): Promise<string> {
   const { script } = await structured<{ script: string }>(
     `Goal: ${goal}\nThe clip is ${seconds} seconds, so the line must be sayable in about ${Math.max(
       4,
@@ -1063,7 +1065,9 @@ export async function writeScript(goal: string, seconds: number): Promise<string
        dead air at the head of a run. Quality was indistinguishable, the line is
        shown to the user before anything renders, and the whole block is already
        wrapped in try/catch. */
-    FAST_TEXT_MODEL,
+    'fastText',
+    provider,
+    uid,
   );
   return script.trim();
 }
@@ -1085,6 +1089,8 @@ export async function writeScript(goal: string, seconds: number): Promise<string
 export async function deriveLook(
   goal: string,
   steps: { id: string; stepNo: number; label?: string; instruction?: string }[],
+  provider: Provider = DEFAULT_PROVIDER,
+  uid?: string,
 ): Promise<{ look: LookBible; kinds: { id: string; shot: ShotKind }[] }> {
   const listing = steps
     .map((s) => `  id=${s.id} step=${s.stepNo} ${s.label ?? ''} — ${s.instruction ?? ''}`)
@@ -1145,6 +1151,8 @@ surface is not, even if a person is implied nearby. Copy each id exactly.`,
        the result is offered rather than applied — the user presses a button,
        reads what it decided, and edits it. A weaker guess is visible, never
        silently authoritative. */
-    FAST_TEXT_MODEL,
+    'fastText',
+    provider,
+    uid,
   );
 }

@@ -3,6 +3,7 @@ import { consume, tooMany } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { requireUid } from '@/lib/firebaseAdmin';
 import { refinePrompt } from '@/lib/gemini';
+import { providerFor } from '@/lib/provider';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'raw and purpose are required' }, { status: 400 });
 
   try {
-    const refined = await refinePrompt(parsed.data.raw, parsed.data.purpose);
+    const refined = await refinePrompt(parsed.data.raw, parsed.data.purpose, await providerFor(uid), uid);
     return NextResponse.json({ refined });
   } catch (err) {
     console.error('[refine]', err);

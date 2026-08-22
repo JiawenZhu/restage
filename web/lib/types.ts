@@ -131,6 +131,17 @@ export interface Run {
   look?: LookBible | null;
   /** Video rendering engine used for the run. */
   videoEngine?: 'veo' | 'omni';
+  /*
+   * Which door this run goes through, decided once when it starts.
+   *
+   * PINNED, not looked up per call. A run that resolved the provider on every
+   * step would change models underneath itself the moment an account was
+   * upgraded or downgraded mid-run — the first three shots on one image model
+   * and the last four on another, in an ad whose entire promise is that the
+   * frames look like one shoot. Absent means 'api-key', which is what every run
+   * made before this field existed was.
+   */
+  provider?: 'vertex' | 'api-key';
   /* A label the user can change, separate from `goal`.
      The goal is what the planner was actually given and what every shot was
      generated from; letting a rename overwrite it would make the run claim it

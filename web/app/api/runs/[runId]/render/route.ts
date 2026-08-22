@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { consume, tooMany } from '@/lib/rateLimit';
+import { omniAvailable } from '@/lib/gemini';
+import { providerOfRun } from '@/lib/provider';
 import { z } from 'zod';
 import { adminDb, requireUid } from '@/lib/firebaseAdmin';
 import {
@@ -359,6 +361,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
       const plan = shotPlan(wanted, shots.length, MIN_CLIP_SECONDS, MAX_CLIP_SECONDS);
 
       const selectedEngine = parsed.data.engine || (run.videoEngine as string) || 'veo';
+      /* The run's own door, pinned when it started. Not re-resolved from the
+         user's plan: a mid-run upgrade must not render the back half of an ad
+         on a different model from the front half. */
+      const provider = providerOfRun(run as { provider?: string });
       let finalVideoBytes: Buffer;
       let hasAudio = false;
       let audioNote: string | null = null;
@@ -422,7 +428,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
             '.',
         });
 
+        /* Omni exists on AI Studio only. Refusing here, before anything is
+           submitted or billed, beats discovering it after a Veo-shaped call has
+           already gone out under the wrong name. */
+        if (!omniAvailable(provider)) {
+          throw new Error(
+            'Gemini Omni is not available on this account\u2019s provider. Render with Veo 3.1 \u2014 on a multi-shot ad it is the better engine anyway.',
+          );
+        }
         const omni = await generateOmniVideo({
+          provider,
+          uid,
           prompt,
           firstFrame: firstFrame ?? undefined,
           references,
@@ -504,6 +520,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         );
 
         const { operation } = await submitRender({
+          provider,
+          uid,
           durationSeconds: seg.seconds,
           prompt,
           firstFrame: seed,
@@ -522,7 +540,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         for (let k = 0; k < 60; k++) {
           await new Promise((r) => setTimeout(r, 5000));
           try {
-            const st = await pollRender(operation);
+            const st = await pollRender(operation, provider, uid);
             consecutiveErrors = 0;
             if (st.done) {
               if ('error' in st) throw new Error(st.error);
@@ -537,7 +555,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         }
         if (!uri) throw new Error(`shot ${i + 1} did not finish in five minutes`);
 
-        const bytes = await downloadRendered(uri);
+        const bytes = await downloadRendered(uri, provider, uid);
         segments.push(bytes);
 
         // Only the chained case needs a tail; a sequence shot has its own seed.

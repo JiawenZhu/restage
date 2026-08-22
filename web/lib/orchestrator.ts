@@ -19,6 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { adminDb, adminStorage } from './firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { critique, generateFrame, planRun, verifyIdentity, writeScript } from './gemini';
+import { providerOfRun, type Provider } from './provider';
 import type { Aspect, LookBible, PlanStep, ShotKind } from './types';
 import { objectShotDirection, personShotDirection } from './look';
 
@@ -35,6 +36,9 @@ export interface StartArgs {
   seconds: 4 | 8 | 16 | 24;
   templateId?: string;
   videoEngine?: 'veo' | 'omni';
+  /* Resolved from the user's plan by the route, and pinned onto the run. See
+     the note on Run.provider for why this is decided once rather than per call. */
+  provider?: Provider;
   avatarId?: string | null;
   /** Enrolment capture as a data URL or HTTP URL. */
   avatarDataUrl: string;
@@ -277,6 +281,7 @@ export async function createRun(args: StartArgs): Promise<string> {
     seconds: args.seconds,
     templateId: args.templateId ?? null,
     videoEngine: args.videoEngine ?? 'veo',
+    provider: args.provider ?? 'api-key',
     avatarId: args.avatarId ?? null,
     status: 'planning',
     plan: [],
@@ -319,6 +324,13 @@ export async function createRun(args: StartArgs): Promise<string> {
 export async function executeRun(runId: string, args: StartArgs): Promise<void> {
   const db = adminDb();
   const run = db.collection('runs').doc(runId);
+  /* Decided by the route from the user's plan and pinned onto the run document
+     by createRun. Read once here so every model call in this run goes through
+     the same door. */
+  const provider: Provider = args.provider ?? 'api-key';
+  /* The uid travels with the provider so the BYOK door can spend THIS user's
+     key. Never the key itself — see lib/provider.ts. */
+  const uid = args.uid;
   const nodes = run.collection('nodes');
 
   const touch = (patch: Record<string, unknown>) =>
@@ -357,7 +369,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
       // Was a fixed sentence with the goal dropped into the middle, identical
       // in every ad the product has ever produced. The model writes the line
       // now, and the workspace shows it before anything is rendered.
-      const voiceoverText = await writeScript(args.goal, args.seconds);
+      const voiceoverText = await writeScript(args.goal, args.seconds, provider, uid);
       const audioBuffer = await synthesizeSpeech({
         text: voiceoverText,
         voiceName: 'en-US-Chirp3-HD-Aoede',
@@ -394,7 +406,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
       .map((d) => d.data().instruction as string | undefined)
       .filter((x): x is string => !!x);
 
-    const { steps, look } = await planRun(args.goal, args.aspect, args.seconds, args.templateId, avoid);
+    const { steps, look } = await planRun(args.goal, args.aspect, args.seconds, args.templateId, avoid, provider, uid);
     await touch({
       status: 'running',
       /* The look is stored on the RUN, not on a step. Shots are photographed
@@ -516,7 +528,13 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             prompt,
             aspect: args.aspect,
             refs,
-            overflowToBatch: true,
+            provider,
+            uid,
+            /* Only the shared free-tier door needs an overflow valve. Vertex has
+               enterprise quota and lib/batch.ts is an AI Studio endpoint, so
+               overflowing a Vertex run would silently move it onto the other
+               provider's key — the exact cross-provider leak this design refuses. */
+            overflowToBatch: provider === 'api-key',
             onOverflow: () => {
               /* Deliberately vague, because the measurements are: the same job
                  shape came back in 109s once and 200s another time. Promising
@@ -566,6 +584,8 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
           // a visibly different person from a real run.
           const [verdict, identity] = await Promise.all([
             critique({
+              provider,
+              uid,
               instruction: step.instruction,
               rationale: step.rationale,
               avatar,
@@ -584,7 +604,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
               subject: kind,
             }),
             isPerson
-              ? verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType }, extraViews)
+              ? verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType }, extraViews, provider, uid)
               : Promise.resolve({ samePerson: true, differences: '' }),
           ]);
 
@@ -820,6 +840,8 @@ export async function regenerateNode(args: {
   const runSnap = await runRef.get();
   if (!runSnap.exists || runSnap.data()!.uid !== args.uid) throw new Error('no such run');
   const run = runSnap.data()!;
+  const provider = providerOfRun(run);
+  const uid = run.uid as string;
 
   const sourceSnap = await runRef.collection('nodes').doc(args.sourceNodeId).get();
   const source = sourceSnap.data();
@@ -875,17 +897,21 @@ export async function regenerateNode(args: {
         prompt,
         aspect: run.aspect,
         refs: isPerson ? [avatarImage, ...extraViews] : [],
+        provider,
+        uid,
       });
 
       const [verdict, identity] = await Promise.all([
         critique({
+          provider,
+          uid,
           instruction: args.instruction,
           rationale: 'User-directed regeneration.',
           avatar: avatarImage,
           before: parentImage,
           after: { data: frame.bytes, mimeType: frame.mimeType },
         }),
-        verifyIdentity(avatarImage, { data: frame.bytes, mimeType: frame.mimeType }, extraViews),
+        verifyIdentity(avatarImage, { data: frame.bytes, mimeType: frame.mimeType }, extraViews, provider, uid),
       ]);
 
       const wrongFace = !identity.samePerson || !verdict.faceMatches;
@@ -940,6 +966,9 @@ export async function rebuildStaleSteps(runId: string, uid: string, only?: strin
   const runSnap = await runRef.get();
   if (!runSnap.exists || runSnap.data()!.uid !== uid) throw new Error('no such run');
   const run = runSnap.data()!;
+  /* `uid` is already a parameter here, and the line above has just proved it
+     matches the run's owner — so it is the same value, checked. */
+  const provider = providerOfRun(run);
 
   const nodesRef = runRef.collection('nodes');
   type StoredNode = Record<string, unknown> & { id: string };
@@ -991,6 +1020,8 @@ export async function rebuildStaleSteps(runId: string, uid: string, only?: strin
           prompt,
           aspect: run.aspect,
           refs: isPerson ? [avatar] : [],
+          provider,
+          uid,
           // A rebuild is background work the user was told takes minutes.
           overflowToBatch: true,
         });
@@ -1004,6 +1035,8 @@ export async function rebuildStaleSteps(runId: string, uid: string, only?: strin
 
         const [verdict, identity] = await Promise.all([
           critique({
+            provider,
+            uid,
             instruction,
             rationale: (node.rationale as string) ?? 'Rebuilt after the sequence changed.',
             avatar,
@@ -1016,7 +1049,7 @@ export async function rebuildStaleSteps(runId: string, uid: string, only?: strin
             subject: kind,
           }),
           isPerson
-            ? verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType })
+            ? verifyIdentity(avatar, { data: frame.bytes, mimeType: frame.mimeType }, undefined, provider, uid)
             : Promise.resolve({ samePerson: true, differences: '' }),
         ]);
 

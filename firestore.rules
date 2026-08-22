@@ -20,6 +20,31 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
 
       /*
+       * Billing and credentials. NOT the owner's to read or write.
+       *
+       * The document above is owner-read/owner-WRITE, which is right for
+       * preferences and wrong for anything that decides who pays. Two things
+       * cannot live there:
+       *
+       *   plan — 'paid' routes a run onto infrastructure Restage pays for. If
+       *   the client can write it, upgrading yourself is one setDoc() in the
+       *   browser console, and the only record is a bill.
+       *
+       *   geminiKeyEnc — the user's own API key, encrypted. The ciphertext is
+       *   not the key, but sending it to a browser buys nothing and is one
+       *   configuration mistake away from being the key. It never needs to
+       *   leave the server, so it never should.
+       *
+       * `if false` denies every CLIENT path. The Admin SDK bypasses rules
+       * entirely, so the API routes still read and write this freely — which is
+       * the point: these fields move when the server says so, not when a user
+       * does.
+       */
+      match /private/{document} {
+        allow read, write: if false;
+      }
+
+      /*
        * Enrolment captures are biometric-adjacent. Only the owner reads them —
        * no "public avatars" path, no sharing by link — and NOBODY writes them
        * from a client.

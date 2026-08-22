@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { consume, tooMany } from '@/lib/rateLimit';
+import { providerFor } from '@/lib/provider';
 import { z } from 'zod';
 import { requireUid, adminDb } from '@/lib/firebaseAdmin';
 import { createRun, executeRun } from '@/lib/orchestrator';
@@ -201,7 +202,16 @@ export async function POST(req: Request) {
     if (!parsed.data.avatarId && !parsed.data.avatarDataUrl) {
       return NextResponse.json({ error: 'choose an enrolled face or upload a photo' }, { status: 400 });
     }
-    const args = { uid, ...parsed.data, avatarDataUrl: parsed.data.avatarDataUrl ?? '' };
+    /*
+     * Which door this account goes through, decided here and pinned to the run.
+     *
+     * Resolved once, at the top, rather than inside each model call: a run that
+     * looked this up per step would change models underneath itself if the plan
+     * changed mid-run, and half an ad on each provider is exactly the kind of
+     * visible seam this product exists to avoid.
+     */
+    const provider = await providerFor(uid);
+    const args = { uid, provider, ...parsed.data, avatarDataUrl: parsed.data.avatarDataUrl ?? '' };
     const runId = await createRun(args);
 
     // Deliberately not awaited. The run takes 1-3 minutes and the client watches

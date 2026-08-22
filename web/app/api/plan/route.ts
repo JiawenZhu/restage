@@ -3,6 +3,7 @@ import { consume, tooMany } from '@/lib/rateLimit';
 import { requireUid } from '@/lib/firebaseAdmin';
 import { z } from 'zod';
 import { planRun } from '@/lib/gemini';
+import { providerFor } from '@/lib/provider';
 
 /*
  * Planning is a text call and takes ~7s measured. It runs here rather than in a
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    const provider = await providerFor(uid);
     const { steps, look } = await planRun(
       parsed.data.goal,
       parsed.data.aspect,

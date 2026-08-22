@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { AuthModal } from '@/components/AuthModal';
+import { CaptureHud } from './CaptureHud';
 
 type Mode = 'camera' | 'upload';
 type Step = 'ready' | 'front' | 'left' | 'right' | 'audio' | 'review' | 'saving' | 'done';
@@ -833,97 +834,15 @@ export function EnrollmentCamera() {
               className="h-full w-full object-cover [transform:scaleX(-1)]"
             />
 
-            {/* Dynamic Real-time Pose Angle Indicator Badge */}
-            {(step === 'left' || step === 'right') && !isCapturingBurst && (
-              <div className="absolute top-4 right-4 flex items-center gap-2 rounded-xl bg-black/75 px-3.5 py-1.5 backdrop-blur-md border border-white/10">
-                <span className={`h-2.5 w-2.5 rounded-full ${angleLocked ? 'bg-good animate-ping' : 'bg-accent'}`} />
-                <span className="text-xs font-bold text-white tracking-wider">
-                  {angleLocked ? '✓ 60° ANGLE LOCKED!' : 'AUTO-DETECTOR READY'}
-                </span>
-              </div>
-            )}
-
-            {/* Directional 3D Turn Arc Animation Guides */}
-            {step === 'left' && !isCapturingBurst && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-start pl-8">
-                <div
-                  className={`flex items-center gap-2 rounded-xl px-4 py-2.5 backdrop-blur-md transition-all duration-300 ${
-                    angleLocked ? 'bg-good/90 text-white scale-110' : 'bg-black/70 text-accent-ink animate-bounce'
-                  }`}
-                >
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M19 12H5M12 19l-7-7 7-7" />
-                  </svg>
-                  <span className="text-xs font-bold tracking-wide">
-                    {angleLocked ? 'ANGLE REACHED • CAPTURING…' : 'TURN HEAD LEFT ← 60°'}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {step === 'right' && !isCapturingBurst && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-end pr-8">
-                <div
-                  className={`flex items-center gap-2 rounded-xl px-4 py-2.5 backdrop-blur-md transition-all duration-300 ${
-                    angleLocked ? 'bg-good/90 text-white scale-110' : 'bg-black/70 text-accent-ink animate-bounce'
-                  }`}
-                >
-                  <span className="text-xs font-bold tracking-wide">
-                    {angleLocked ? 'ANGLE REACHED • CAPTURING…' : '60° → TURN HEAD RIGHT'}
-                  </span>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            )}
-
-            {/* Oval Alignment HUD */}
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div
-                className={`relative h-[72%] w-[46%] rounded-[50%] border-2 transition-all duration-300 ${
-                  angleLocked
-                    ? 'border-good shadow-[0_0_45px_rgba(78,194,110,0.8)] scale-105'
-                    : isCapturingBurst
-                    ? 'border-accent shadow-[0_0_40px_rgba(57,135,229,0.7)] scale-105'
-                    : 'border-white/50'
-                }`}
-              >
-                {/* Crosshairs */}
-                <span className="absolute -left-3 top-1/2 h-0.5 w-6 -translate-y-1/2 bg-accent/60" />
-                <span className="absolute -right-3 top-1/2 h-0.5 w-6 -translate-y-1/2 bg-accent/60" />
-                <span className="absolute left-1/2 -top-3 h-6 w-0.5 -translate-x-1/2 bg-accent/60" />
-                <span className="absolute left-1/2 -bottom-3 h-6 w-0.5 -translate-x-1/2 bg-accent/60" />
-              </div>
-            </div>
-
-            {/* Real-time Burst Progress Ring / Scanner */}
-            {isCapturingBurst && (
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/35 backdrop-blur-[1px]">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="h-16 w-16 animate-spin rounded-full border-4 border-accent border-t-transparent" />
-                  <span className="text-sm font-bold tracking-widest text-white drop-shadow-md">
-                    CAPTURING DENSE SWEEP ({burstProgress}%)
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Live Audio Level Meter inside Camera HUD */}
-            <div className="absolute bottom-3 left-4 flex items-center gap-2 rounded-lg bg-black/60 px-3 py-1.5 backdrop-blur-md">
-              <span className="text-[11px] font-semibold text-white/80">MIC</span>
-              <div className="flex h-3 w-20 gap-0.5 items-end overflow-hidden rounded bg-white/20 p-0.5">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((bar) => (
-                  <span
-                    key={bar}
-                    className={`flex-1 rounded-xs transition-all duration-75 ${
-                      audioLevel > bar * 12 ? 'bg-good' : 'bg-white/20'
-                    }`}
-                    style={{ height: `${bar * 12.5}%` }}
-                  />
-                ))}
-              </div>
-            </div>
+            <CaptureHud
+              step={step as 'front' | 'left' | 'right' | 'audio'}
+              yaw={headYaw}
+              locked={angleLocked}
+              capturing={isCapturingBurst}
+              burstProgress={burstProgress}
+              audioLevel={audioLevel}
+              retaking={!!retakeTarget}
+            />
           </div>
 
           {/* Teleprompter Card during Step 4 */}

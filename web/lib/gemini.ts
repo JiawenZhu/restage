@@ -507,3 +507,33 @@ export async function refinePrompt(raw: string, purpose: 'goal' | 'edit'): Promi
   );
   return refined;
 }
+
+/* ── the spoken script ────────────────────────────────────────────────────── */
+
+const SCRIPT_SYSTEM = `You write the line a creator actually says to camera in a
+short UGC ad. One to three sentences, spoken aloud in the time given.
+
+It has to sound like a person who owns the thing talking to a friend — specific,
+a little uneven, never a slogan. Name what the product does for them, not what
+it is. No "Hey guys", no "game changer", no "trust me", no exclamation stacking,
+no calls to action unless the goal asks for one.
+
+Write only the words spoken. No stage directions, no quotation marks.`;
+
+/**
+ * The voiceover used to be a fixed sentence with the user's goal dropped into
+ * the middle — "Hey guys, look at how well this works! <goal>. The quality is
+ * honestly unbelievable!" — identical in every ad this product has ever made,
+ * and never shown to the person whose face says it.
+ */
+export async function writeScript(goal: string, seconds: number): Promise<string> {
+  const { script } = await structured<{ script: string }>(
+    `Goal: ${goal}\nThe clip is ${seconds} seconds, so the line must be sayable in about ${Math.max(
+      4,
+      seconds - 2,
+    )} seconds at a natural pace.\n\nWrite the spoken line.`,
+    { type: 'object', properties: { script: { type: 'string' } }, required: ['script'] },
+    SCRIPT_SYSTEM,
+  );
+  return script.trim();
+}

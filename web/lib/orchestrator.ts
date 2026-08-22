@@ -18,7 +18,7 @@ if (typeof window !== 'undefined') {
 import { randomUUID } from 'node:crypto';
 import { adminDb, adminStorage } from './firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
-import { critique, generateFrame, planRun, verifyIdentity } from './gemini';
+import { critique, generateFrame, planRun, verifyIdentity, writeScript } from './gemini';
 import type { Aspect } from './types';
 
 /** One retry. A second failure keeps both attempts visible and moves on, because
@@ -222,7 +222,10 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
 
     // ── 1. Synthesize Spoken Voiceover Audio (Google Cloud TTS Chirp 3-HD) ──
     try {
-      const voiceoverText = `Hey guys, look at how well this works! ${args.goal.replace(/\.$/, '')}. The quality is honestly unbelievable!`;
+      // Was a fixed sentence with the goal dropped into the middle, identical
+      // in every ad the product has ever produced. The model writes the line
+      // now, and the workspace shows it before anything is rendered.
+      const voiceoverText = await writeScript(args.goal, args.seconds);
       const audioBuffer = await synthesizeSpeech({
         text: voiceoverText,
         voiceName: 'en-US-Chirp3-HD-Aoede',

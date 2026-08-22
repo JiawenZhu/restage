@@ -103,7 +103,10 @@ export default function Landing() {
               <Link href="/enroll" className="rounded-lg bg-accent px-7 py-3.5 text-[15px] font-semibold text-white">
                 Build your avatar — free
               </Link>
-              <Link href="/studio" className="flex items-center gap-2 rounded-lg border border-line-strong px-6 py-3.5 text-[15px] font-semibold">
+              {/* Pointed at /studio — an empty form behind a sign-in wall, which
+                  is the opposite of watching it work. /studio/demo renders the
+                  real workspace on a finished run, no account needed. */}
+              <Link href="/studio/demo" className="flex items-center gap-2 rounded-lg border border-line-strong px-6 py-3.5 text-[15px] font-semibold">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
                 Watch it work
               </Link>

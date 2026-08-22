@@ -27,17 +27,30 @@ export function RunWorkspace({ run, nodes }: { run: Run; nodes: TreeNode[] }) {
   const [pinned, setPinned] = useState<string | null>(null);
   const [regenTarget, setRegenTarget] = useState<TreeNode | null>(null);
 
-  // Until the user pins one, follow the agent: the newest node is where the work
-  // is, so the inspector reads as narration rather than something to operate.
-  const newest = nodes.length ? nodes[nodes.length - 1].id : null;
+  /*
+   * Until the user pins one, follow the agent — but to the newest node that has
+   * something to READ, not simply the newest.
+   *
+   * Selecting a node that is still generating left the inspector empty for the
+   * twenty seconds a frame takes, and what the user wants during that wait is
+   * exactly what it was hiding: the critic's verdict on the step that just
+   * finished. The generating node still carries its pulsing ring, so "the agent
+   * is here now" is not lost by not selecting it.
+   */
+  const readable = [...nodes]
+    .reverse()
+    .find((n) => n.status !== 'generating' && (n.frameUrl || n.criticNotes));
+  const newest = readable?.id ?? (nodes.length ? nodes[nodes.length - 1].id : null);
   const selectedId = pinned ?? newest;
   const selected = nodes.find((n) => n.id === selectedId) ?? null;
 
   return (
-    <div className="flex min-h-0 flex-1">
+    /* 700px of fixed side panels meant the canvas had negative width on a
+       tablet and the page scrolled sideways. Below lg the three panes stack. */
+    <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       <PlanPanel run={run} />
 
-      <section className="relative min-w-0 flex-1">
+      <section className="relative min-h-[380px] min-w-0 flex-1">
         <VersionTree
           nodes={nodes}
           aspect={run.aspect}
@@ -73,7 +86,7 @@ const STEP_GLYPH: Record<string, { cls: string; icon: React.ReactNode }> = {
 
 function PlanPanel({ run }: { run: Run }) {
   return (
-    <aside className="flex w-[300px] shrink-0 flex-col border-r border-line bg-panel">
+    <aside className="flex w-full shrink-0 flex-col border-b border-line bg-panel lg:max-h-none lg:w-[300px] lg:border-b-0 lg:border-r">
       <p className="px-[18px] pb-3 pt-[18px] text-[11px] font-bold tracking-[0.12em] text-ink-3">PLAN</p>
 
       {run.status === 'planning' && (
@@ -91,6 +104,21 @@ function PlanPanel({ run }: { run: Run }) {
           <p className="mt-1.5 text-[12.5px] leading-snug text-ink-2">
             {run.failureReason || 'Something went wrong and the run could not continue.'}
           </p>
+        </div>
+      )}
+
+      {/* What the person is going to say. It was generated on every run and
+          shown on none of them — the user's own face delivering a line they
+          never read. */}
+      {run.audioScript && (
+        <div className="mx-3.5 mb-3 rounded-card border border-line bg-elevated p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold tracking-[0.1em] text-ink-3">THE LINE</p>
+            {run.audioUrl && (
+              <audio src={run.audioUrl} controls className="h-6 w-[130px]" preload="none" />
+            )}
+          </div>
+          <p className="mt-1.5 text-[12.5px] leading-snug text-ink-2">“{run.audioScript}”</p>
         </div>
       )}
 
@@ -139,7 +167,7 @@ function Inspector({ node, run }: { node: TreeNode | null; run: Run }) {
 
   if (!node) {
     return (
-      <aside className="w-[400px] shrink-0 border-l border-line bg-panel p-[18px]">
+      <aside className="w-full shrink-0 border-t border-line bg-panel p-[18px] lg:w-[400px] lg:border-l lg:border-t-0">
         <p className="text-[13px] leading-relaxed text-ink-4">Select a node to see what produced it.</p>
       </aside>
     );
@@ -171,7 +199,7 @@ function Inspector({ node, run }: { node: TreeNode | null; run: Run }) {
   }
 
   return (
-    <aside className="flex w-[400px] shrink-0 flex-col border-l border-line bg-panel">
+    <aside className="flex w-full shrink-0 flex-col border-t border-line bg-panel lg:w-[400px] lg:border-l lg:border-t-0">
       <p className="px-[18px] pb-3 pt-[18px] text-[11px] font-bold tracking-[0.12em] text-ink-3">
         {node.kind === 'avatar' ? 'SOURCE AVATAR' : node.kind === 'video' ? 'RENDERED CLIP' : `STEP ${node.stepNo}`}
       </p>
@@ -297,7 +325,7 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
   }
 
   return (
-    <div className="rs-enter absolute right-4 top-4 z-40 w-[420px] rounded-card border border-line bg-panel p-4 shadow-[0_22px_50px_-16px_rgba(0,0,0,0.45)]">
+    <div className="rs-enter absolute inset-x-3 top-4 z-40 rounded-card border border-line bg-panel p-4 shadow-[0_22px_50px_-16px_rgba(0,0,0,0.45)] sm:inset-x-auto sm:right-4 sm:w-[420px]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10.5px] font-bold tracking-[0.12em] text-ink-3">

@@ -13,6 +13,9 @@ export const demoRun: Run = {
   goal: 'A 15-second ad where I actually use the serum, in my kitchen. Should feel filmed, not shot.',
   aspect: '9:16',
   seconds: 8,
+  // The landing page's "Watch it work" points here, so the demo has to show
+  // every part of a real run — including the line the creator says.
+  audioScript: 'I keep it by the sink and use it while the coffee brews, and my skin stops feeling tight by about day three.',
   status: 'running',
   plan: [
     { stepNo: 1, instruction: 'Put her in a real room', rationale: 'A blank wall reads as a set. Kitchens are where this product is actually used.', status: 'done' },

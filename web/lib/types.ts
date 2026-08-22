@@ -72,6 +72,9 @@ export interface Run {
   plan: PlanStep[];
   /** Why a failed run stopped, so the workspace can say it rather than spin. */
   failureReason?: string;
+  /** The line the creator says. Written by the model, editable by the user. */
+  audioScript?: string;
+  audioUrl?: string;
   /** R2 object key for the rendered clip. The key is the durable record; the
    *  playable URL is re-signed on demand by /api/runs/[runId]/video. */
   videoKey?: string;

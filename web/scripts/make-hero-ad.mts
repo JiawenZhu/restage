@@ -3,10 +3,11 @@
  *
  * The hero showed a still with a play badge drawn on top of it, which for a
  * product whose claim is "your ads do not look generated" is the weakest
- * possible evidence: a picture of a video. Worse, the three enrolment angles
- * beside it were a different woman from the one in the still, so the one thing
- * the hero is meant to demonstrate — that these three photos produce that
- * person — was visibly untrue.
+ * possible evidence: a picture of a video.
+ *
+ * The face is the site's own persona — see the note on `views` below. It is the
+ * same face as the three enrolment angles printed beside the video, so the one
+ * thing the hero exists to demonstrate is checkable by looking at the page.
  *
  * This runs the REAL pipeline. Not a rehearsal of it: the same planRun that
  * writes the shot list, the same generateFrame that draws each shot from the
@@ -25,45 +26,37 @@ for (const l of readFileSync(new URL('../.env.local', import.meta.url), 'utf8').
   if (m && m[2].trim()) process.env[m[1]] ??= m[2].trim().replace(/^["']|["']$/g, '');
 }
 
-const AVATAR = process.argv[2] ?? 'av_1787409381263';
+/*
+ * The reference face comes from public/img, not from an enrolled account.
+ *
+ * It read the owner's own avatar out of Firestore, which put a real person's
+ * face on the public marketing site. That account exists to exercise the
+ * product as a client would, and client captures are not marketing assets — the
+ * enrolment photographs are the most sensitive thing this product holds.
+ *
+ * public/img/av-{front,left,right}.jpg is the site's own persona, generated
+ * rather than photographed, and already the face of every other image on the
+ * page. Using her keeps the hero consistent with the rest of the site and keeps
+ * a customer's likeness out of it.
+ */
 const UID = 'ypGBh9tgrxQixPdJWwI6k40lF812';
-/* Three shots, eight seconds each. Eight is not a style choice — the model
-   refuses 1080p below a full eight-second shot, so anything shorter is 720p
-   however it is asked for. Three of them is a real cut (the place, the product,
-   the person) without a twenty-minute render. */
 const SHOTS = 3;
 const SECONDS = SHOTS * 8;
 const GOAL =
   'A creator in her own sunlit kitchen shows how a few drops of a facial oil ' +
   'absorb in seconds, ending on her looking genuinely pleased with her skin.';
 
-const { adminDb, adminStorage } = await import('../lib/firebaseAdmin');
 const { planRun, generateFrame, submitRender, pollRender, downloadRendered } = await import('../lib/gemini');
 const { stitch } = await import('../lib/stitch');
 const { personShotDirection, objectShotDirection } = await import('../lib/look');
 
 const P = 'vertex' as const;
 
-/* ── the enrolled face ─────────────────────────────────────────────────────── */
-const snap = await adminDb().collection('users').doc(UID).collection('avatars').doc(AVATAR).get();
-const paths = snap.data()?.paths as { front?: string; left?: string; right?: string } | undefined;
-if (!paths?.front) throw new Error(`avatar ${AVATAR} has no captures`);
-
-const bucket = adminStorage().bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!);
-const read = async (p?: string) => (p ? { data: (await bucket.file(p).download())[0], mimeType: 'image/jpeg' } : null);
-const front = (await read(paths.front))!;
-const views = [front, await read(paths.left), await read(paths.right)].filter(Boolean) as typeof front[];
-console.log(`avatar ${AVATAR}: ${views.length} enrolment angles`);
-
-/* The same three angles go onto the landing page, so the hero's claim — these
-   photos became this person — is one anyone can check by looking. */
-for (const [name, p] of [['front', paths.front], ['left', paths.left], ['right', paths.right]] as const) {
-  const img = await read(p);
-  if (img) {
-    writeFileSync(new URL(`../public/img/av-${name}.jpg`, import.meta.url), img.data);
-    console.log(`  wrote public/img/av-${name}.jpg`);
-  }
-}
+const views = (['front', 'left', 'right'] as const).map((a) => ({
+  data: readFileSync(new URL(`../public/img/av-${a}.jpg`, import.meta.url)),
+  mimeType: 'image/jpeg',
+}));
+console.log(`reference: ${views.length} angles from public/img (the site persona)`);
 
 /* ── plan ──────────────────────────────────────────────────────────────────── */
 console.log('\nplanning…');

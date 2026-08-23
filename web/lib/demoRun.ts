@@ -17,15 +17,6 @@ export const demoRun: Run = {
   // The landing page's "Watch it work" points here, so the demo has to show
   // every part of a real run — including the line the creator says.
   audioScript: 'I keep it by the sink and use it while the coffee brews, and my skin stops feeling tight by about day three.',
-  look: {
-    location:
-      'A sunlit kitchen counter of pale oak beside an open casement window, with a small basil plant and plain cabinetry behind',
-    wardrobe: 'A cream ribbed cotton tank top, no jewellery',
-    light: 'Late morning sun through the window from camera left, warm and directional, no overhead fill',
-    palette: 'Warm oak, cream, soft green, amber glass',
-    product:
-      'A small amber glass dropper bottle of facial oil with a white pipette top and a plain cream label',
-  },
   status: 'running',
   plan: [
     { stepNo: 1, instruction: 'Put them in a real room', rationale: 'A blank wall reads as a set. Kitchens are where this product is actually used.', status: 'done' },

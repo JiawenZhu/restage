@@ -11,9 +11,9 @@ envFile.split('\n').forEach((line) => {
 });
 
 async function main() {
-  const frontImg = fs.readFileSync('public/img/av-front.jpg');
-  const leftImg = fs.readFileSync('public/img/av-left.jpg');
-  const rightImg = fs.readFileSync('public/img/av-right.jpg');
+  const frontImg = fs.readFileSync('public/img/persona-front.jpg');
+  const leftImg = fs.readFileSync('public/img/persona-left.jpg');
+  const rightImg = fs.readFileSync('public/img/persona-right.jpg');
 
   const avatarDataUrl = 'data:image/jpeg;base64,' + frontImg.toString('base64');
   const leftDataUrl = 'data:image/jpeg;base64,' + leftImg.toString('base64');

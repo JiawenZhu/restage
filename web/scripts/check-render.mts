@@ -11,7 +11,7 @@ for (const line of readFileSync(new URL('../.env.local', import.meta.url), 'utf8
 const { submitRender, pollRender, downloadRendered } = await import('../lib/gemini');
 const { putVideo, signedVideoUrl, deleteVideo } = await import('../lib/r2');
 
-const frame = readFileSync(new URL('../public/img/f4.jpg', import.meta.url));
+const frame = readFileSync(new URL('../public/img/shot-4.jpg', import.meta.url));
 const t0 = Date.now();
 const t = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
 

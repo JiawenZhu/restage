@@ -10,7 +10,7 @@ for (const l of readFileSync(new URL('../.env.local', import.meta.url),'utf8').s
 const { generateFrame } = await import('../lib/gemini');
 const { stillDirection } = await import('../lib/look');
 
-const avatar = readFileSync(new URL('../public/img/av-front.jpg', import.meta.url));
+const avatar = readFileSync(new URL('../public/img/persona-front.jpg', import.meta.url));
 const ref = { data: avatar, mimeType: 'image/jpeg' };
 const instruction = 'Place them at a kitchen counter in the morning, holding a small serum bottle.';
 

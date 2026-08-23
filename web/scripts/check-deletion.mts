@@ -18,7 +18,7 @@ const uid = `_deltest_${Date.now()}`;
 const avatarId = 'av_probe';
 const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'restage-studio.firebasestorage.app';
 const bucket = adminStorage().bucket(bucketName);
-const img = readFileSync(new URL('../public/img/av-front.jpg', import.meta.url));
+const img = readFileSync(new URL('../public/img/persona-front.jpg', import.meta.url));
 
 const paths = {
   front: `users/${uid}/avatars/${avatarId}/front.jpg`,

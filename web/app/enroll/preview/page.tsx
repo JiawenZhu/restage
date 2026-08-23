@@ -37,7 +37,7 @@ export default function EnrolPreview() {
 
         <div className="relative mt-6 aspect-video w-full overflow-hidden rounded-2xl border border-line-strong bg-black">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/img/f4.jpg" alt="" className="h-full w-full object-cover opacity-90" />
+          <img src="/img/shot-4.jpg" alt="" className="h-full w-full object-cover opacity-90" />
           <CaptureHud
             step={step}
             yaw={yaw}

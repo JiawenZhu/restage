@@ -17,7 +17,7 @@ for (const line of readFileSync(new URL('../.env.local', import.meta.url), 'utf8
 const { createRun, executeRun } = await import('../lib/orchestrator');
 const { adminDb } = await import('../lib/firebaseAdmin');
 
-const avatar = readFileSync(new URL('../public/img/av-front.jpg', import.meta.url));
+const avatar = readFileSync(new URL('../public/img/persona-front.jpg', import.meta.url));
 const args = {
   uid: '_looptest',
   goal: 'A 15-second ad where I actually use the serum, in my kitchen. Should feel filmed, not shot.',

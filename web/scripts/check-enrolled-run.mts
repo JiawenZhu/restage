@@ -14,7 +14,7 @@ const { createRun } = await import('../lib/orchestrator');
 const uid = `_enrolltest_${Date.now()}`;
 const avatarId = 'av_probe';
 const bucket = adminStorage().bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'restage-studio.firebasestorage.app');
-const img = readFileSync(new URL('../public/img/av-front.jpg', import.meta.url));
+const img = readFileSync(new URL('../public/img/persona-front.jpg', import.meta.url));
 
 const paths = { front: `users/${uid}/avatars/${avatarId}/front.jpg`, left: `users/${uid}/avatars/${avatarId}/left.jpg`, right: `users/${uid}/avatars/${avatarId}/right.jpg` };
 for (const p of Object.values(paths)) await bucket.file(p).save(img, { contentType: 'image/jpeg' });

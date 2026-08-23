@@ -53,7 +53,7 @@ const { personShotDirection, objectShotDirection } = await import('../lib/look')
 const P = 'vertex' as const;
 
 const views = (['front', 'left', 'right'] as const).map((a) => ({
-  data: readFileSync(new URL(`../public/img/av-${a}.jpg`, import.meta.url)),
+  data: readFileSync(new URL(`../public/img/persona-${a}.jpg`, import.meta.url)),
   mimeType: 'image/jpeg',
 }));
 console.log(`reference: ${views.length} angles from public/img (the site persona)`);

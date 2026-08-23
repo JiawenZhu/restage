@@ -155,7 +155,7 @@ export default function Landing() {
           {/* enrol → clip, the product in one frame */}
           <div className="flex items-center gap-5">
             <div className="hidden shrink-0 flex-col gap-2.5 sm:flex">
-              {(['av-left', 'av-front', 'av-right'] as const).map((f) => (
+              {(['persona-left', 'persona-front', 'persona-right'] as const).map((f) => (
                 <Image
                   key={f}
                   src={`/img/${f}.jpg`}
@@ -165,7 +165,7 @@ export default function Landing() {
                   className="h-[92px] w-[92px] rounded-[10px] border-2 object-cover"
                   /* The selected angle was ringed in the product's blue, which
                      is now the one colour on the page that belongs to nothing. */
-                  style={{ borderColor: f === 'av-front' ? 'var(--c-accent)' : 'var(--c-line)' }}
+                  style={{ borderColor: f === 'persona-front' ? 'var(--c-accent)' : 'var(--c-line)' }}
                 />
               ))}
               <p className="rs-slate mt-2 text-center leading-relaxed">
@@ -280,15 +280,15 @@ export default function Landing() {
             <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-6">
               <div className="flex items-center gap-3 overflow-x-auto">
                 {[
-                  { src: 'av-front', ring: 'border-white/25' },
-                  { src: 'f1', ring: 'border-[#5cd67d]' },
-                  { src: 'f2', ring: 'border-[#5cd67d]' },
+                  { src: 'persona-front', ring: 'border-white/25' },
+                  { src: 'shot-1', ring: 'border-[#5cd67d]' },
+                  { src: 'shot-2', ring: 'border-[#5cd67d]' },
                 ].map((n) => (
                   <Image key={n.src} src={`/img/${n.src}.jpg`} alt="" width={76} height={132} className={`h-[132px] w-[76px] shrink-0 rounded-[7px] border-2 object-cover ${n.ring}`} />
                 ))}
                 <div className="relative shrink-0">
                   <div className="absolute -inset-1.5 rounded-xl border-2 border-accent" />
-                  <Image src="/img/f3.jpg" alt="" width={76} height={132} className="h-[132px] w-[76px] rounded-[7px] border-2 border-accent object-cover opacity-45" />
+                  <Image src="/img/shot-3.jpg" alt="" width={76} height={132} className="h-[132px] w-[76px] rounded-[7px] border-2 border-accent object-cover opacity-45" />
                   <span className="absolute inset-0 flex items-center justify-center text-center text-[8.5px] font-extrabold tracking-[0.06em] text-[var(--c-accent)]">
                     GENERATING
                   </span>
@@ -297,7 +297,7 @@ export default function Landing() {
 
               {/* the discarded attempt, kept — this is the proof, not a detail */}
               <div className="mt-4 flex items-center gap-2.5">
-                <Image src="/img/fx.jpg" alt="" width={52} height={90} className="h-[90px] w-[52px] rounded-md border-2 border-[#d03b3b]/85 object-cover opacity-45 saturate-[0.25]" />
+                <Image src="/img/shot-rejected.jpg" alt="" width={52} height={90} className="h-[90px] w-[52px] rounded-md border-2 border-[#d03b3b]/85 object-cover opacity-45 saturate-[0.25]" />
                 <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-[#d03b3b]">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden><path d="M18 6L6 18M6 6l12 12" /></svg>
                   discarded — it went full studio, so it tried again
@@ -354,11 +354,11 @@ export default function Landing() {
           </div>
           <div className="flex items-end gap-5">
             <div className="relative w-[180px] shrink-0 overflow-hidden rounded-2xl shadow-[0_22px_50px_-24px_rgba(20,20,26,0.4)] sm:w-[260px]">
-              <Image src="/img/f4.jpg" alt="" width={260} height={462} className="h-[320px] w-full object-cover sm:h-[462px]" />
+              <Image src="/img/shot-4.jpg" alt="" width={260} height={462} className="h-[320px] w-full object-cover sm:h-[462px]" />
               <span className="absolute left-3 top-3 rounded-[5px] bg-accent-strong px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] text-white">9:16</span>
             </div>
             <div className="relative min-w-0 flex-1 overflow-hidden rounded-2xl shadow-[0_22px_50px_-24px_rgba(20,20,26,0.4)]">
-              <Image src="/img/w4.jpg" alt="" width={520} height={300} className="h-[200px] w-full object-cover sm:h-[300px]" />
+              <Image src="/img/scene-b.jpg" alt="" width={520} height={300} className="h-[200px] w-full object-cover sm:h-[300px]" />
               <span className="absolute left-3 top-3 rounded-[5px] bg-black/75 px-2.5 py-1 text-[10px] font-bold tracking-[0.08em] text-white">16:9</span>
             </div>
           </div>
@@ -456,7 +456,7 @@ export default function Landing() {
       {/* final CTA */}
       <section className="mx-auto mt-28 max-w-[1440px] px-6 sm:px-14">
         <div className="relative overflow-hidden rounded-[22px]">
-          <Image src="/img/w4.jpg" alt="" width={1320} height={380} className="h-[320px] w-full object-cover sm:h-[380px]" />
+          <Image src="/img/scene-b.jpg" alt="" width={1320} height={380} className="h-[320px] w-full object-cover sm:h-[380px]" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#14141a]/95 via-[#14141a]/75 to-[#14141a]/10" />
           <div className="absolute inset-0 flex max-w-2xl flex-col justify-center px-8 text-white sm:px-14">
             <h2 className="rs-display text-[clamp(1.75rem,4vw,2.875rem)]">

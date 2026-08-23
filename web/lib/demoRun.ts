@@ -17,9 +17,18 @@ export const demoRun: Run = {
   // The landing page's "Watch it work" points here, so the demo has to show
   // every part of a real run — including the line the creator says.
   audioScript: 'I keep it by the sink and use it while the coffee brews, and my skin stops feeling tight by about day three.',
+  look: {
+    location:
+      'A sunlit kitchen counter of pale oak beside an open casement window, with a small basil plant and plain cabinetry behind',
+    wardrobe: 'A cream ribbed cotton tank top, no jewellery',
+    light: 'Late morning sun through the window from camera left, warm and directional, no overhead fill',
+    palette: 'Warm oak, cream, soft green, amber glass',
+    product:
+      'A small amber glass dropper bottle of facial oil with a white pipette top and a plain cream label',
+  },
   status: 'running',
   plan: [
-    { stepNo: 1, instruction: 'Put her in a real room', rationale: 'A blank wall reads as a set. Kitchens are where this product is actually used.', status: 'done' },
+    { stepNo: 1, instruction: 'Put them in a real room', rationale: 'A blank wall reads as a set. Kitchens are where this product is actually used.', status: 'done' },
     { stepNo: 2, instruction: "Move to arm's-length framing", rationale: 'Nobody films themselves on a tripod. The camera has to be a hand.', status: 'done' },
     { stepNo: 3, instruction: 'Light it from the window', rationale: 'Retried once — the first pass went full studio and lost the room.', status: 'retried' },
     { stepNo: 4, instruction: 'Get the product to the lens', rationale: 'The bottle has to be legible in the first two seconds or the scroll wins.', status: 'running' },
@@ -48,7 +57,7 @@ export const demoNodes: TreeNode[] = [
   { id: 'root', parentId: null, stepNo: 0, kind: 'avatar', status: 'achieved', frameUrl: '/img/av-front.jpg', createdAt: t(1) },
   {
     id: 'n1', label: 'Kitchen scene', parentId: 'root', stepNo: 1, kind: 'frame', status: 'achieved', frameUrl: '/img/f1.jpg',
-    instruction: 'Put her in a real room',
+    instruction: 'Put them in a real room',
     rationale: 'A blank wall reads as a set. Kitchens are where this product is actually used, so the room has to carry that.',
     verdict: 'met',
     criticRubric: 'does the room look lived in?',
@@ -72,7 +81,7 @@ export const demoNodes: TreeNode[] = [
     rationale: 'First attempt at relighting.',
     verdict: 'failed',
     criticRubric: 'would a phone have produced this light?',
-    criticNotes: '"Lit her like a beauty campaign — clean gradient on the cheek, no room left behind her. That is the opposite of the goal."',
+    criticNotes: '"Lit them like a beauty campaign — clean gradient on the cheek, no room left behind. That is the opposite of the goal."',
     createdAt: t(4),
   },
   {

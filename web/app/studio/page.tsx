@@ -186,9 +186,12 @@ function NewRun() {
     try {
       if (!user) throw new Error('sign in to start a run');
       const token = await user.getIdToken();
+      const headers: Record<string, string> = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
+      const localKey = typeof window !== 'undefined' ? localStorage.getItem('rs-gemini-key') : null;
+      if (localKey) headers['x-gemini-api-key'] = localKey;
       const res = await fetch('/api/runs', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        headers,
         body: JSON.stringify({
           goal: goal.trim(),
           aspect,

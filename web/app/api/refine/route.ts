@@ -30,7 +30,8 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'raw and purpose are required' }, { status: 400 });
 
   try {
-    const refined = await refinePrompt(parsed.data.raw, parsed.data.purpose, await providerFor(uid), uid);
+    const apiKey = req.headers.get('x-gemini-api-key') || undefined;
+    const refined = await refinePrompt(parsed.data.raw, parsed.data.purpose, await providerFor(uid), uid, apiKey);
     return NextResponse.json({ refined });
   } catch (err) {
     console.error('[refine]', err);

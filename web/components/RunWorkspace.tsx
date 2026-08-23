@@ -749,9 +749,12 @@ function Inspector({
     setError(null);
     try {
       const token = await user.getIdToken();
+      const headers: Record<string, string> = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
+      const localKey = typeof window !== 'undefined' ? localStorage.getItem('rs-gemini-key') : null;
+      if (localKey) headers['x-gemini-api-key'] = localKey;
       const res = await fetch(`/api/runs/${run.id}/render`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        headers,
         body: JSON.stringify(
           mode === 'sequence'
             ? { mode: 'sequence', seconds: lengthChoice, engine: engineChoice }
@@ -1148,6 +1151,8 @@ function RegeneratePanel({ run, node, onClose }: { run: Run; node: TreeNode; onC
     try {
       const headers: Record<string, string> = { 'content-type': 'application/json' };
       if (user) headers.authorization = `Bearer ${await user.getIdToken()}`;
+      const localKey = typeof window !== 'undefined' ? localStorage.getItem('rs-gemini-key') : null;
+      if (localKey) headers['x-gemini-api-key'] = localKey;
       const res = await fetch(`/api/runs/${run.id}/regenerate`, {
         method: 'POST',
         headers,

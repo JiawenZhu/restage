@@ -85,25 +85,15 @@ export interface FrameRequest {
   /**
    * When the interactive quota is exhausted, fall through to the Batch API
    * rather than failing.
-   *
-   * THIS IS THE SCALING VALVE, and it is the only honest use of batch on a path
-   * somebody is watching. Interactive RPM and TPM are shared across every user
-   * at once; batch has its own pool of 100 concurrent jobs. So when the shared
-   * pool is full, the choice is not "fast or slow" — it is a slower frame or no
-   * frame at all.
-   *
-   * It costs about 103 seconds against roughly 20 interactive, measured, so it
-   * is never the first choice and never silent: `onOverflow` fires so the run
-   * can say on the canvas that it is queued and why.
    */
   overflowToBatch?: boolean;
   onOverflow?: (estimateMs: number) => void;
   /** Which door. Omitted means DEFAULT_PROVIDER — see the note at the top. */
   provider?: Provider;
-  /* Whose key to spend on the BYOK door. The uid travels, never the key —
-     lib/provider.ts resolves and decrypts it, so no secret passes through the
-     orchestrator or anything that writes to Firestore. */
+  /** Whose key to spend on the BYOK door. */
   uid?: string;
+  /** Direct client-provided Gemini API key override */
+  apiKey?: string;
 }
 
 export async function generateFrame(req: FrameRequest): Promise<{ bytes: Buffer; mimeType: string }> {
@@ -117,20 +107,9 @@ export async function generateFrame(req: FrameRequest): Promise<{ bytes: Buffer;
   const provider = req.provider ?? DEFAULT_PROVIDER;
   const json = await generateContent({
     provider,
+    uid: req.uid,
+    apiKey: req.apiKey,
     model: MODELS[provider].image,
-    /*
-     * One body for both doors now.
-     *
-     * These were split, because the Vertex image model had only been verified
-     * with bare `contents` and sending it an unrecognised field to find out
-     * would have been a 400 on somebody's run. Since settled by probing the
-     * global endpoint directly: gemini-3-pro-image there accepts exactly this
-     * generationConfig and returned a 1.6 MB image. Both doors now run the same
-     * model, so there is nothing left to differ about.
-     *
-     * The aspect ratio has to be a parameter. Prompt text does not change the
-     * output size.
-     */
     body: {
       contents: [{ role: 'user', parts }],
       generationConfig: {
@@ -160,8 +139,10 @@ export interface RenderRequest {
   durationSeconds?: number;
   /** Which door. Omitted means DEFAULT_PROVIDER — see the note at the top. */
   provider?: Provider;
-  /** Whose key, on the BYOK door. See FrameRequest.uid. */
+  /** Whose key, on the BYOK door. */
   uid?: string;
+  /** Direct client-provided Gemini API key override */
+  apiKey?: string;
 }
 
 /**
@@ -272,20 +253,13 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
     submitVideo({
       provider,
       uid: req.uid,
+      apiKey: req.apiKey,
       model: MODELS[provider].video,
       body: {
         instances: [instance],
         parameters: {
           aspectRatio: req.aspect,
           durationSeconds: seconds,
-          /*
-           * Ask for the resolution. This was added once, and the Vertex
-           * migration dropped it — veoResolution() sat in this file defined and
-           * called by nothing, so every clip since has come back at Veo's 720p
-           * default while the code still carried the reasoning for asking for
-           * more. Exactly the regression the original comment warns about:
-           * prompt text does not change the output size, the parameter does.
-           */
           resolution: veoResolution(seconds),
           negativePrompt: VIDEO_NEGATIVE_PROMPT,
         },
@@ -306,10 +280,12 @@ export async function pollRender(
   operation: string,
   provider: Provider = DEFAULT_PROVIDER,
   uid?: string,
+  apiKey?: string,
 ): Promise<RenderStatus> {
   const op = (await pollVideo({
     provider,
     uid,
+    apiKey,
     model: MODELS[provider].video,
     operation,
   })) as Record<string, any>;
@@ -356,21 +332,18 @@ export async function downloadRendered(
   videoUri: string,
   provider: Provider = DEFAULT_PROVIDER,
   uid?: string,
+  apiKey?: string,
 ): Promise<Buffer> {
   if (videoUri.startsWith('data:')) {
     const m = videoUri.match(/^data:[^;]+;base64,(.+)$/);
     if (m) return Buffer.from(m[1], 'base64');
   }
 
-  /* Only a Google-hosted URI needs a credential, and only the Vertex door
-     issues one — AI Studio hands back a file URL that carries its own key in
-     the query string. Minting a token to fetch a URL that does not want one
-     would fail on a deployment that has no service account at all. */
   const headers: Record<string, string> = {};
   if (provider === 'vertex' && videoUri.includes('googleapis.com')) {
     headers['Authorization'] = `Bearer ${await vertexToken()}`;
   } else if (provider === 'api-key' && videoUri.includes('googleapis.com') && !videoUri.includes('key=')) {
-    const { query } = await authFor('api-key', uid);
+    const { query } = await authFor('api-key', uid, apiKey);
     videoUri = `${videoUri}${query}`;
   }
 
@@ -395,39 +368,18 @@ export interface OmniVideoResult {
   hasAudio: boolean;
 }
 
-/** Is the one-call whole-ad engine reachable on this door? */
 export function omniAvailable(provider: Provider = DEFAULT_PROVIDER): boolean {
   return MODELS[provider].omni !== null;
 }
 
-/*
- * Omni exists on ONE door, and pretending otherwise was a real bug.
- *
- * gemini-omni-flash-preview is an AI Studio model reached through /interactions
- * — a different endpoint with a different request shape from anything else in
- * this file — and it has no Vertex equivalent. During the Vertex migration this
- * function was repointed at Veo's predictLongRunning with the same VIDEO_MODEL
- * as submitRender, which made "Gemini Omni" and "Veo 3.1" the same call. The
- * engine picker went on describing the Omni option as "one continuous shot of
- * about 10 seconds at 720p, with speech and sound generated together, renders
- * in about 20" — a description of a model that was no longer being asked for,
- * next to a second button that did exactly what the first one did.
- *
- * Two identical options is a confusing interface. Two identical options where
- * one of them claims native audio is a wrong one, because the caller uses
- * hasAudio to decide whether to mux a voiceover.
- *
- * So it refuses on Vertex, and says what to press instead.
- */
 export async function generateOmniVideo(
-  req: OmniVideoRequest & { provider?: Provider; uid?: string },
+  req: OmniVideoRequest & { provider?: Provider; uid?: string; apiKey?: string },
 ): Promise<OmniVideoResult> {
   const provider = req.provider ?? DEFAULT_PROVIDER;
   const model = MODELS[provider].omni;
   if (!model) {
     throw new Error(
-      'Gemini Omni is not available on Vertex AI — it is an AI Studio model with no enterprise equivalent. ' +
-        'Render with Veo 3.1 instead; on a multi-shot ad that is the better engine anyway.',
+      'Gemini Omni is an AI Studio preview model with no enterprise equivalent. Render with Veo 3.1 instead.',
     );
   }
 
@@ -439,17 +391,11 @@ export async function generateOmniVideo(
     mime_type: i.mimeType,
   });
 
-  // References first, then the frame to start on, then the direction. The
-  // starting frame is last of the images so it reads as "begin here" rather
-  // than as one more example of the face.
   for (const r of req.references ?? []) inputs.push(asImage(r));
   if (req.firstFrame) inputs.push(asImage(req.firstFrame));
   inputs.push({ type: 'text', text: req.prompt });
 
-  /* A long call — measured at 20-40s — so a rate limit here costs the user the
-     whole wait before it fails. Fewer attempts than a frame, and a longer
-     budget, because each try is expensive. */
-  const { headers, query } = await authFor(provider, req.uid);
+  const { headers, query } = await authFor(provider, req.uid, req.apiKey);
   const json = await withRetry(
     () =>
       fetchJson(
@@ -532,10 +478,12 @@ async function structured<T>(
   role: 'text' | 'fastText' = 'text',
   provider: Provider = DEFAULT_PROVIDER,
   uid?: string,
+  apiKey?: string,
 ): Promise<T> {
   const json = await generateContent({
     provider,
     uid,
+    apiKey,
     model: MODELS[provider][role],
     body: {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -613,10 +561,10 @@ export async function planRun(
   aspect: Aspect,
   seconds: number,
   templateId?: string,
-  /** What this user has rejected before. See the taste block below. */
   avoid?: string[],
   provider: Provider = DEFAULT_PROVIDER,
   uid?: string,
+  apiKey?: string,
 ): Promise<PlannedRun> {
   const tpl = templateId ? getTemplateById(templateId) : undefined;
 
@@ -720,6 +668,7 @@ export async function planRun(
     'text',
     provider,
     uid,
+    apiKey,
   );
 
   /*
@@ -834,10 +783,12 @@ export async function critique(args: {
   provider?: Provider;
   /** Whose key, on the BYOK door. See FrameRequest.uid. */
   uid?: string;
+  /** Direct client-provided Gemini API key override */
+  apiKey?: string;
 }): Promise<Critique> {
   const provider = args.provider ?? DEFAULT_PROVIDER;
   const uid = args.uid;
-  const { headers, query } = await authFor(provider, uid);
+  const { headers, query } = await authFor(provider, uid, args.apiKey);
   const json = await withRetry(
     () =>
       fetchJson(
@@ -940,13 +891,14 @@ export async function verifyIdentity(
   multiViews?: { data: Buffer | Uint8Array; mimeType: string }[],
   provider: Provider = DEFAULT_PROVIDER,
   uid?: string,
+  apiKey?: string,
 ): Promise<IdentityCheck> {
   const multiAngleParts = (multiViews ?? []).flatMap((mv, idx) => [
     { text: `Enrolment profile angle #${idx + 1}:` },
     { inlineData: { mimeType: mv.mimeType, data: Buffer.from(mv.data).toString('base64') } },
   ]);
 
-  const { headers, query } = await authFor(provider, uid);
+  const { headers, query } = await authFor(provider, uid, apiKey);
   const json = await withRetry(
     () =>
       fetchJson(
@@ -1020,6 +972,7 @@ export async function refinePrompt(
   purpose: 'goal' | 'edit',
   provider: Provider = DEFAULT_PROVIDER,
   uid?: string,
+  apiKey?: string,
 ): Promise<string> {
   const { refined } = await structured<{ refined: string }>(
     `purpose: ${purpose}\nuser's words: ${raw}\n\nRewrite.`,
@@ -1032,6 +985,7 @@ export async function refinePrompt(
     'fastText',
     provider,
     uid,
+    apiKey,
   );
   return refined;
 }
@@ -1059,6 +1013,7 @@ export async function writeScript(
   seconds: number,
   provider: Provider = DEFAULT_PROVIDER,
   uid?: string,
+  apiKey?: string,
 ): Promise<string> {
   const { script } = await structured<{ script: string }>(
     `Goal: ${goal}\nThe clip is ${seconds} seconds, so the line must be sayable in about ${Math.max(
@@ -1075,6 +1030,7 @@ export async function writeScript(
     'fastText',
     provider,
     uid,
+    apiKey,
   );
   return script.trim();
 }
@@ -1098,6 +1054,7 @@ export async function deriveLook(
   steps: { id: string; stepNo: number; label?: string; instruction?: string }[],
   provider: Provider = DEFAULT_PROVIDER,
   uid?: string,
+  apiKey?: string,
 ): Promise<{ look: LookBible; kinds: { id: string; shot: ShotKind }[] }> {
   const listing = steps
     .map((s) => `  id=${s.id} step=${s.stepNo} ${s.label ?? ''} — ${s.instruction ?? ''}`)
@@ -1161,5 +1118,6 @@ surface is not, even if a person is implied nearby. Copy each id exactly.`,
     'fastText',
     provider,
     uid,
+    apiKey,
   );
 }

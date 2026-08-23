@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from '@/lib/auth-context';
 import { AuthModal } from './AuthModal';
+import { ApiKeyModal } from './ApiKeyModal';
 
 export function AppShell({
   children,
@@ -15,25 +16,48 @@ export function AppShell({
   right?: React.ReactNode;
   /**
    * Bound the shell to the viewport instead of letting it grow.
-   *
-   * For a page whose panes scroll INTERNALLY — the run workspace is three of
-   * them side by side. `min-h-screen` lets the shell grow to fit its tallest
-   * child, and once it does, every pane grows with it and their own
-   * `overflow-y-auto` never engages. The page then technically scrolls, but the
-   * wheel is always over a pane that consumed the event, so nothing moves and
-   * whatever sits at the bottom of a pane is simply unreachable. Measured at
-   * 820px of viewport: the shell was 1268px tall and the Render button sat at
-   * y=1210, four hundred pixels past the fold with no way to get to it.
-   *
-   * Only from `lg`. Below that the workspace stacks into one column, and a
-   * column of panes is exactly the case that SHOULD scroll the page.
    */
   fill?: boolean;
 }) {
   const { user, loading, logout } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const [keyMask, setKeyMask] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+
+  useEffect(() => {
+    function checkKey() {
+      const localKey = typeof window !== 'undefined' ? localStorage.getItem('rs-gemini-key') : null;
+      if (localKey && localKey.length >= 20) {
+        setKeyMask(`${localKey.slice(0, 4)}••••${localKey.slice(-4)}`);
+      } else {
+        setKeyMask(null);
+      }
+    }
+
+    checkKey();
+    window.addEventListener('rs-key-changed', checkKey);
+    return () => window.removeEventListener('rs-key-changed', checkKey);
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch('/api/account/key', {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.keyPreview) {
+            setKeyMask(data.keyPreview);
+          }
+        }
+      } catch {}
+    })();
+  }, [user]);
 
   const openSignIn = () => {
     setAuthMode('signin');
@@ -51,9 +75,6 @@ export function AppShell({
         fill ? 'lg:h-screen lg:min-h-0 lg:overflow-hidden' : ''
       }`}
     >
-      {/* The workspace now stacks down to phone widths, so the header has to
-          go with it: at 420px the wordmark, three nav items and the account
-          cluster collided. Nav moves into a sheet below md. */}
       <header className="flex h-[68px] shrink-0 items-center gap-3 border-b border-line bg-panel px-4 md:gap-5 md:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <svg
@@ -81,8 +102,6 @@ export function AppShell({
           <Link href="/library" className="rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle">
             Library
           </Link>
-          {/* Pointed at /enroll, so "Avatars" opened the capture wizard and the
-              only thing you could do with an enrolled face was enrol another. */}
           <Link href="/avatars" className="rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle">
             Avatars
           </Link>
@@ -101,11 +120,30 @@ export function AppShell({
             </svg>
           </button>
 
+          {/* Gemini API Key Button */}
+          <button
+            type="button"
+            onClick={() => setApiKeyModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-subtle/80 px-2.5 py-1.5 text-xs font-semibold text-ink-2 hover:border-accent/50 hover:bg-subtle hover:text-ink transition-all"
+            title="Configure your Google Gemini API Key"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+              <path d="M21 2l-2 2m-1-1l-2 2m-2-2l-2 2m-2-2l-2 2M3 21l9-9m3.5-3.5a4.95 4.95 0 1 0-7-7 4.95 4.95 0 0 0 7 7z" />
+            </svg>
+            {keyMask ? (
+              <span className="flex items-center gap-1.5">
+                <span className="hidden sm:inline text-ink-3">Key:</span>
+                <span className="font-mono text-[11px] text-accent-ink">{keyMask}</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-ok" />
+              </span>
+            ) : (
+              <span className="text-ink-2">API Key</span>
+            )}
+          </button>
+
           {right}
           <ThemeToggle />
 
-          {/* A fixed-width stand-in while auth resolves. Rendering nothing made
-              every app page shift sideways the moment Firebase answered. */}
           {loading && <span aria-hidden className="h-7 w-[132px] rounded-lg bg-subtle" />}
 
           {!loading && (
@@ -172,6 +210,19 @@ export function AppShell({
               {label}
             </Link>
           ))}
+          <button
+            type="button"
+            onClick={() => {
+              setNavOpen(false);
+              setApiKeyModalOpen(true);
+            }}
+            className="flex items-center gap-2 rounded-md px-2 py-2.5 text-[14px] font-medium text-accent-ink hover:bg-subtle text-left"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 2l-2 2m-1-1l-2 2m-2-2l-2 2m-2-2l-2 2M3 21l9-9m3.5-3.5a4.95 4.95 0 1 0-7-7 4.95 4.95 0 0 0 7 7z" />
+            </svg>
+            {keyMask ? `Gemini API Key (${keyMask})` : 'Set Gemini API Key'}
+          </button>
         </nav>
       )}
 
@@ -181,6 +232,11 @@ export function AppShell({
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         initialMode={authMode}
+      />
+
+      <ApiKeyModal
+        open={apiKeyModalOpen}
+        onClose={() => setApiKeyModalOpen(false)}
       />
     </div>
   );

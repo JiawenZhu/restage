@@ -61,8 +61,9 @@ export async function POST(req: Request) {
     .filter((r): r is NonNullable<typeof r> => !!r);
 
   try {
+    const apiKey = req.headers.get('x-gemini-api-key') || undefined;
     const provider = await providerFor(uid);
-    const { bytes, mimeType } = await generateFrame({ prompt: parsed.data.prompt, aspect: parsed.data.aspect, refs, provider, uid });
+    const { bytes, mimeType } = await generateFrame({ prompt: parsed.data.prompt, aspect: parsed.data.aspect, refs, provider, uid, apiKey });
     return NextResponse.json({ image: `data:${mimeType};base64,${bytes.toString('base64')}` });
   } catch (err) {
     console.error('[frame]', err);

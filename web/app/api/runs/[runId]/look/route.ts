@@ -80,11 +80,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     const frames = nodes.filter((n) => n.kind === 'frame' && n.frameUrl && !n.discarded);
     if (!frames.length) return NextResponse.json({ error: 'this run has no frames to read' }, { status: 400 });
 
+    const apiKey = req.headers.get('x-gemini-api-key') || undefined;
     const { look, kinds } = await deriveLook(
       (run.goal as string) ?? '',
       frames.map((n) => ({ id: n.id, stepNo: n.stepNo, label: n.label, instruction: (n as { instruction?: string }).instruction })),
       providerOfRun(run as { provider?: string }),
       run.uid as string,
+      apiKey,
     );
 
     const known = new Set(frames.map((n) => n.id));

@@ -166,10 +166,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
     return NextResponse.json({ error: 'sign in to render' }, { status: 401 });
   }
 
-  /* The quota is taken further down, once the number of CLIPS this request will
-     actually submit is known. Charging one unit here — before the shot count
-     exists — is what let a seven-shot render cost the same as a one-shot one. */
-
+  const apiKey = req.headers.get('x-gemini-api-key') || undefined;
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'nodeId is required' }, { status: 400 });
 
@@ -452,6 +449,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         const omni = await generateOmniVideo({
           provider,
           uid,
+          apiKey,
           prompt,
           firstFrame: firstFrame ?? undefined,
           references,
@@ -535,6 +533,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         const { operation } = await submitRender({
           provider,
           uid,
+          apiKey,
           durationSeconds: seg.seconds,
           prompt,
           firstFrame: seed,
@@ -553,7 +552,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         for (let k = 0; k < 60; k++) {
           await new Promise((r) => setTimeout(r, 5000));
           try {
-            const st = await pollRender(operation, provider, uid);
+            const st = await pollRender(operation, provider, uid, apiKey);
             consecutiveErrors = 0;
             if (st.done) {
               if ('error' in st) throw new Error(st.error);
@@ -568,7 +567,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         }
         if (!uri) throw new Error(`shot ${i + 1} did not finish in five minutes`);
 
-        const bytes = await downloadRendered(uri, provider, uid);
+        const bytes = await downloadRendered(uri, provider, uid, apiKey);
         segments.push(bytes);
 
         // Only the chained case needs a tail; a sequence shot has its own seed.

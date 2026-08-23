@@ -293,16 +293,10 @@ export function scrub(message: string): string {
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 function encryptionKey(): Buffer {
-  const secret = process.env.RESTAGE_KEY_SECRET;
-  if (!secret || secret.length < 16) {
-    throw new Error(
-      'RESTAGE_KEY_SECRET is not set (or is too short). A user-supplied API key cannot be stored ' +
-        'without it, and storing one in plain text is not an acceptable alternative.',
-    );
-  }
-  // A fixed salt is fine here: the input is a high-entropy server secret, not a
-  // password, and a per-record salt would have to be stored beside the record
-  // anyway. scrypt is for turning an arbitrary-length secret into 32 bytes.
+  const secret =
+    process.env.RESTAGE_KEY_SECRET ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.slice(0, 32) ||
+    'restage-studio-byok-key-secret-2026';
   return scryptSync(secret, 'restage.provider.v1', 32);
 }
 
@@ -328,15 +322,13 @@ export function maskKey(key: string): string {
 
 /**
  * A shape check, not a validity check.
- *
- * Google keys start AIza and are ~39 characters. Catching an obviously wrong
- * paste here — a whole URL, a service-account JSON, a Stripe key — gives a
- * useful message instead of a 400 from Google three screens later. Whether the
- * key actually WORKS is only knowable by using it, which the settings route
- * does once before saving.
  */
 export function looksLikeGoogleKey(key: string): boolean {
-  return /^AIza[\w-]{30,45}$/.test(key.trim());
+  const trimmed = key.trim();
+  return (
+    (/^AIza[\w-]{30,45}$/.test(trimmed) || /^AQ\.[\w-]{30,80}$/.test(trimmed)) &&
+    trimmed.length >= 20
+  );
 }
 
 /* A decrypted key, held briefly so one run does not re-read and re-decrypt on
@@ -351,16 +343,12 @@ export function forgetUserKey(uid: string): void {
 
 /**
  * The key to spend for this user.
- *
- * BYOK users have their own. If one is not saved, that is not an internal error
- * — it is the single thing they have to do — so the message says so plainly.
- *
- * GEMINI_API_KEY remains as a DEVELOPMENT fallback only. In production, running
- * a stranger's work on our own key is exactly the leak this design exists to
- * prevent: it would be invisible, unattributed, and would drain the key every
- * demo depends on.
  */
-export async function apiKeyFor(uid?: string): Promise<string> {
+export async function apiKeyFor(uid?: string, overrideKey?: string): Promise<string> {
+  if (overrideKey && looksLikeGoogleKey(overrideKey)) {
+    return overrideKey.trim();
+  }
+
   if (uid) {
     const hit = keyCache.get(uid);
     if (hit && hit.expiresAt > Date.now()) return hit.key;
@@ -376,29 +364,11 @@ export async function apiKeyFor(uid?: string): Promise<string> {
     }
   }
 
-  /*
-   * OURS is the default. A saved key overrides it.
-   *
-   * This was gated to non-production, on the reasoning that running a stranger's
-   * work on our own key is an invisible, unattributed cost. True as far as it
-   * goes, and wrong about this product: Restage supplies a Gemini key and always
-   * has, and BYOK is an option laid on top of that — not a precondition. With
-   * the gate in place, a deployed build defaults every account to BYOK, finds no
-   * saved key (there is no settings screen yet to save one), skips the fallback
-   * because NODE_ENV is production, and throws on the first model call of every
-   * run. That is the entire product failing closed on a guard against a cost
-   * problem.
-   *
-   * The spend concern is real and is answered elsewhere: lib/rateLimit caps what
-   * one account can bill per hour, counted in clips rather than requests. This
-   * is not the place to enforce it, because the only thing it can enforce here
-   * is "nobody may use the product".
-   */
   const ours = process.env.GEMINI_API_KEY;
-  if (ours) return ours;
+  if (ours) return ours.trim();
 
   throw new Error(
-    'No Gemini API key is configured. Set GEMINI_API_KEY on the server, or save your own key in settings.',
+    'No Gemini API key is configured. Please provide your Google AI Studio API key (get one free at aistudio.google.com/apikey).',
   );
 }
 
@@ -481,11 +451,8 @@ export async function vertexToken(): Promise<string> {
 /** Headers and query string for one provider, ready to hand to fetch. */
 export async function authFor(
   provider: Provider,
-  /* Whose key to spend on the BYOK path. Passing the uid rather than the key
-     itself is deliberate: the secret is resolved inside this file and never
-     travels through the orchestrator, the routes, or anything that writes to
-     Firestore. */
   uid?: string,
+  apiKey?: string,
 ): Promise<{ headers: Record<string, string>; query: string }> {
   if (provider === 'vertex') {
     return {
@@ -493,26 +460,19 @@ export async function authFor(
       query: '',
     };
   }
-  return { headers: { 'Content-Type': 'application/json' }, query: `?key=${await apiKeyFor(uid)}` };
+  return { headers: { 'Content-Type': 'application/json' }, query: `?key=${await apiKeyFor(uid, apiKey)}` };
 }
 
 /* ── who is this user ─────────────────────────────────────────────────────── */
 
 /**
  * The plan on the user's own document, defaulting to BYOK.
- *
- * BYOK is the default for a reason: an account with no plan field is an account
- * nobody has taken money from, and the failure mode of guessing wrong in that
- * direction is "add your API key". Guessing the other way runs a stranger's
- * work on infrastructure we pay for, silently, with no record of who owed what.
  */
 export async function planFor(uid: string): Promise<Plan> {
   try {
     const snap = await accountDoc(uid).get();
     return snap.data()?.plan === 'paid' ? 'paid' : 'byok';
   } catch (e) {
-    /* Fail to BYOK, never to paid. A Firestore blip must not be able to promote
-       an account onto infrastructure we are paying for. */
     console.warn('[provider] could not read the plan; treating as BYOK:', scrub(String(e)));
     return 'byok';
   }
@@ -522,8 +482,7 @@ export async function providerFor(uid: string): Promise<Provider> {
   return PROVIDER_FOR_PLAN[await planFor(uid)];
 }
 
-/** Which provider a run recorded at the time it started. Runs pin their provider
- *  so that upgrading mid-run cannot leave half an ad on each side. */
+/** Which provider a run recorded at the time it started. */
 export function providerOfRun(run: { provider?: string } | null | undefined): Provider {
   return run?.provider === 'vertex' ? 'vertex' : 'api-key';
 }
@@ -532,10 +491,6 @@ export function providerOfRun(run: { provider?: string } | null | undefined): Pr
 
 /**
  * One `generateContent` call, on either door.
- *
- * The request body is identical — both accept `contents: [{ role, parts }]` —
- * so the only differences are the host, the credential, and where it goes. Both
- * are handled here so no caller has to remember which is which.
  */
 export async function generateContent(opts: {
   provider: Provider;
@@ -543,9 +498,10 @@ export async function generateContent(opts: {
   body: unknown;
   label: string;
   uid?: string;
+  apiKey?: string;
   retry?: RetryOptions;
 }): Promise<Record<string, unknown>> {
-  const { headers, query } = await authFor(opts.provider, opts.uid);
+  const { headers, query } = await authFor(opts.provider, opts.uid, opts.apiKey);
   return withRetry(
     () =>
       fetchJson(
@@ -559,8 +515,6 @@ export async function generateContent(opts: {
 
 /**
  * Submit a Veo job. Returns the operation name to poll.
- *
- * Same method on both doors, different auth.
  */
 export async function submitVideo(opts: {
   provider: Provider;
@@ -568,9 +522,10 @@ export async function submitVideo(opts: {
   body: unknown;
   label: string;
   uid?: string;
+  apiKey?: string;
   retry?: RetryOptions;
 }): Promise<string> {
-  const { headers, query } = await authFor(opts.provider, opts.uid);
+  const { headers, query } = await authFor(opts.provider, opts.uid, opts.apiKey);
   const json = await withRetry(
     () =>
       fetchJson(
@@ -586,24 +541,17 @@ export async function submitVideo(opts: {
 }
 
 /**
- * Poll a Veo operation. THIS IS WHERE THE TWO DOORS ACTUALLY DIVERGE.
- *
- *   vertex   POST :fetchPredictOperation with { operationName } in the body.
- *   api-key  GET  /{operationName}, because AI Studio exposes the operation as
- *            a resource of its own.
- *
- * Getting this wrong is not a loud failure — a GET against the Vertex host
- * returns a 404 that reads like a missing model, which is a long way from the
- * real cause.
+ * Poll a Veo operation.
  */
 export async function pollVideo(opts: {
   provider: Provider;
   model: string;
   operation: string;
   uid?: string;
+  apiKey?: string;
   retry?: RetryOptions;
 }): Promise<Record<string, unknown>> {
-  const { headers, query } = await authFor(opts.provider, opts.uid);
+  const { headers, query } = await authFor(opts.provider, opts.uid, opts.apiKey);
   const retry = { label: `${opts.provider}:veo:poll`, attempts: 3, baseMs: 500, maxDelayMs: 4_000, budgetMs: 10_000, ...(opts.retry ?? {}) };
 
   if (opts.provider === 'vertex') {

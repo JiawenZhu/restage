@@ -272,6 +272,8 @@ export function PromptComposer({
     try {
       const headers: Record<string, string> = { 'content-type': 'application/json' };
       if (user) headers.authorization = `Bearer ${await user.getIdToken()}`;
+      const localKey = typeof window !== 'undefined' ? localStorage.getItem('rs-gemini-key') : null;
+      if (localKey) headers['x-gemini-api-key'] = localKey;
       const res = await fetch('/api/refine', {
         method: 'POST',
         headers,

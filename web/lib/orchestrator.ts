@@ -18,10 +18,11 @@ if (typeof window !== 'undefined') {
 import { randomUUID } from 'node:crypto';
 import { adminDb, adminStorage } from './firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
-import { critique, generateFrame, planRun, verifyIdentity, writeScript } from './gemini';
+import { castPerson, critique, generateFrame, planRun, verifyIdentity, writeScript } from './gemini';
 import { providerOfRun, type Provider } from './provider';
-import type { Aspect, LookBible, PlanStep, ShotKind } from './types';
+import type { Aspect, CastingNote, LookBible, PlanStep, ShotKind } from './types';
 import { objectShotDirection, personShotDirection } from './look';
+import { styleForRun } from './style';
 
 /** One retry. A second failure keeps both attempts visible and moves on, because
  *  a loop that retries forever is a bill, not a feature. */
@@ -133,6 +134,23 @@ async function resolveImageInput(u: string): Promise<{ mimeType: string; data: B
     return { mimeType: contentType, data: Buffer.from(arrayBuf) };
   }
   throw new Error('image must be a valid data URL or HTTP URL');
+}
+
+/**
+ * The run's casting note, resolved once and then read from the run document.
+ *
+ * It is written by executeRun before the first shot and lives on the run beside
+ * the look bible, which is the same shape of thing for the room. Every later
+ * path — a redo of one card, a rebuild after the sequence changed — reads it
+ * back rather than deriving its own, so a shot regenerated an hour later is held
+ * to exactly the description the original shots were held to.
+ *
+ * Returns null for runs planned before casting existed. Those keep working and
+ * behave as they always did; there is nothing to migrate.
+ */
+function castingOfRun(run: Record<string, unknown> | undefined | null): CastingNote | null {
+  const c = run?.casting as CastingNote | undefined;
+  return c && typeof c.age === 'string' ? c : null;
 }
 
 /*
@@ -436,10 +454,55 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
     // Buffer.from produces here and what the image call returns, and the only
     // thing either end cares about is the bytes.
     let parentImage: { data: Uint8Array; mimeType: string } = avatar;
-    /* The first product shot, kept as the anchor for later product and detail
-       shots so the item itself stays consistent. A reference, not a base to
-       edit — which is what keeps these shallow. */
+    /*
+     * The first accepted PRODUCT shot, kept as the anchor for later ones so the
+     * item itself stays consistent. A reference, not a base to edit — which is
+     * what keeps these shallow.
+     *
+     * It existed and was read, and nothing ever ASSIGNED it, so the comment that
+     * used to sit here described a mechanism that had never run once. Every
+     * product shot was generated from a clean prompt with no sight of the bottle
+     * the ad had already shown.
+     */
     let productAnchor: { data: Uint8Array; mimeType: string } | null = null;
+    /* From the frame ADOPTED, not the first generated: a discarded attempt is on
+       the canvas as a visible dead end and must not become the reference. */
+    const rememberAnchor = (kind: ShotKind, image: { data: Uint8Array; mimeType: string }) => {
+      if (kind === 'product') productAnchor ??= image;
+    };
+
+    /*
+     * The template's own world — its light, its camera, and whether it is a
+     * photograph at all.
+     *
+     * Every template already declared this and none of it reached the shots:
+     * it went to the planner, which wrote words, and then one global recipe
+     * lit and framed all sixteen identically. See lib/style.ts.
+     */
+    const style = styleForRun(args.templateId);
+
+    /*
+     * The person, described once, before any shot is taken.
+     *
+     * This is the look bible for the face — see CastingNote. Derived here rather
+     * than in planRun because it is read off the enrolment captures, which the
+     * planner never sees, and because it must be on the run document before the
+     * first shot: everything that regenerates a frame later reads it back from
+     * there instead of deriving its own.
+     *
+     * A failure is not fatal. The casting note makes shots agree with each
+     * other; without it they are generated exactly as they were before it
+     * existed, which is worse but is not broken. Collapsing a whole run because
+     * one describing call failed would trade a real ad for a better one.
+     */
+    let casting: CastingNote | null = null;
+    try {
+      casting = await castPerson([avatar, ...extraViews], provider, uid);
+      await touch({ casting });
+      console.log('[orchestrator]', runId, 'cast:', casting.age, '·', casting.skin.slice(0, 60));
+    } catch (e) {
+      console.warn('[orchestrator]', runId, 'could not read the casting note:', e);
+    }
 
     for (const step of steps) {
       // Typed rather than `string`: an unhandled status would otherwise render
@@ -507,13 +570,16 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
 
           const refs = isPerson
             ? [avatar, ...extraViews]
-            : productAnchor
-              ? [productAnchor]
+            : (kind === 'product' || kind === 'detail') && productAnchor
+              ? /* A detail shot is usually a macro OF the product, so it needs
+                   the same anchor a second product shot would — otherwise the
+                   ad closes on a close-up of a bottle it has not shown. */
+                [productAnchor]
               : [];
 
           const prompt = isPerson
-            ? `${personShotDirection(look)}\n\nTHE SHOT: ${step.instruction}${retryNote}`
-            : `${objectShotDirection(kind, look)}\n\n` +
+            ? `${personShotDirection(look, casting, style)}\n\nTHE SHOT: ${step.instruction}${retryNote}`
+            : `${objectShotDirection(kind, look, style)}\n\n` +
               (refs.length
                 ? 'The image provided shows this product as it has already appeared in this ad. Match it exactly.\n'
                 : '') +
@@ -732,6 +798,7 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
           if (!unsatisfactory) {
             parentId = nodeRef.id;
             parentImage = { data: frame.bytes, mimeType: frame.mimeType };
+            rememberAnchor(kind, parentImage);
             landed = true;
             await markStep(attempt > 0 ? 'retried' : 'done');
             /*
@@ -765,6 +832,11 @@ export async function executeRun(runId: string, args: StartArgs): Promise<void> 
             if (usable) {
               parentId = nodeRef.id;
               parentImage = { data: frame.bytes, mimeType: frame.mimeType };
+              /* Anchor on it too. It is imperfect — that is what "partial"
+                 means — but it is in the ad, and the anchor's job is to match
+                 what the viewer will actually see, not what we wish had come
+                 out. An anchor that disagrees with the cut is worse than none. */
+              rememberAnchor(kind, parentImage);
               await touch({ thumbUrl: url });
             }
             landed = true;
@@ -889,9 +961,14 @@ export async function regenerateNode(args: {
       const isPerson = kind === 'person';
       const look = (run.look ?? null) as LookBible | null;
 
+      /* The same casting note the original shots were held to, so a redo cuts
+         together with the ones on either side of it rather than coming back at
+         a different apparent age. Read from the run, never re-derived: a fresh
+         reading would drift, which is the whole defect. */
+      const style = styleForRun(run.templateId as string | undefined);
       const prompt = isPerson
-        ? `${personShotDirection(look)}\n\nTHE SHOT: ${args.instruction}`
-        : `${objectShotDirection(kind, look)}\n\nTHE SHOT: ${args.instruction}`;
+        ? `${personShotDirection(look, castingOfRun(run), style)}\n\nTHE SHOT: ${args.instruction}`
+        : `${objectShotDirection(kind, look, style)}\n\nTHE SHOT: ${args.instruction}`;
 
       const frame = await generateFrame({
         prompt,
@@ -990,6 +1067,11 @@ export async function rebuildStaleSteps(runId: string, uid: string, only?: strin
   if (!rootUrl) throw new Error('the source avatar is missing');
   const avatar = await resolveImageInput(rootUrl);
 
+  /* Whatever the shots being replaced were held to, so a rebuilt step still
+     belongs to the same shoot as the ones around it. */
+  const casting = castingOfRun(run);
+  const style = styleForRun(run.templateId as string | undefined);
+
   await runRef.update({ status: 'running', updatedAt: Date.now() });
 
   void (async () => {
@@ -1013,8 +1095,8 @@ export async function rebuildStaleSteps(runId: string, uid: string, only?: strin
            re-editing the parent, so a rebuilt step inherited whatever the parent
            had drifted to. */
         const prompt = isPerson
-          ? `${personShotDirection(look)}\n\nTHE SHOT: ${instruction}`
-          : `${objectShotDirection(kind, look)}\n\nTHE SHOT: ${instruction}`;
+          ? `${personShotDirection(look, casting, style)}\n\nTHE SHOT: ${instruction}`
+          : `${objectShotDirection(kind, look, style)}\n\nTHE SHOT: ${instruction}`;
 
         const frame = await generateFrame({
           prompt,

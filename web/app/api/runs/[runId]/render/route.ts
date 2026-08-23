@@ -16,8 +16,10 @@ import {
 } from '@/lib/gemini';
 import { lastFrameOf, segmentsFor, stitch } from '@/lib/stitch';
 import { lineageOf, shotPlan, type LineageNode } from '@/lib/lineage';
-import { motionDirection, objectMotionDirection } from '@/lib/look';
+import { SOFT_SEED_NOTE, motionDirection, objectMotionDirection } from '@/lib/look';
+import { DEFAULT_STYLE } from '@/lib/style';
 import type { LookBible, ShotKind } from '@/lib/types';
+import { styleForRun } from '@/lib/style';
 import { canFinish, finishAd } from '@/lib/finishAd';
 import { timeCaptions, wavDurationSeconds } from '@/lib/captions';
 import { putVideo, signedVideoUrl, videoKey } from '@/lib/r2';
@@ -109,6 +111,9 @@ function buildCinematicUgcVideoPrompt(
      got the portrait recipe — including the ones with no person in them. */
   kind: ShotKind = 'person',
   look?: LookBible | null,
+  /* The template's world. Without it every clip was lit and framed by the one
+     global recipe, whatever template the user picked — see lib/style.ts. */
+  style = DEFAULT_STYLE,
 ): string {
   /*
    * DISTANCE, not just movement.
@@ -137,8 +142,11 @@ function buildCinematicUgcVideoPrompt(
        attention on a resolution it cannot produce. */
     'Photorealistic UGC video clip, 24fps.',
     `${goal}. ${label ? `Scene focus: ${label}.` : ''}`,
-    kind === 'person' ? motionDirection() : objectMotionDirection(kind, look),
-    ...(kind === 'person' ? [`Camera: ${cameraMovement}.`] : []),
+    kind === 'person' ? motionDirection(style) : objectMotionDirection(kind, look, style),
+    /* The default style already carries framing; a template's carries its own.
+       This line is the aspect-ratio-specific handheld feel, and it only applies
+       when nothing more specific was chosen. */
+    ...(kind === 'person' && style === DEFAULT_STYLE ? [`Camera: ${cameraMovement}.`] : []),
     /* The artefact rules that used to live here — "Absolutely NO exaggerated
        facial grimacing, NO jaw stretching, NO facial shape deformation" — are
        in VIDEO_NEGATIVE_PROMPT now. Naming a defect in the positive prompt is
@@ -410,6 +418,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
              the identity direction earns its place. */
           isSequence ? (shots.some((sh) => sh.shot === 'person') ? 'person' : shots[0].shot) : shots[0].shot,
           (run.look ?? null) as LookBible | null,
+          styleForRun(run.templateId as string | undefined),
         );
 
         /*
@@ -524,7 +533,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
           seg.label ?? frame.label,
           run.aspect,
           seg.continues
-            ? 'This continues the same unbroken shot from the frame given. Do not cut, restart, or reframe.'
+            ? 'This continues the same unbroken shot from the frame given. Do not cut, restart, or reframe.' +
+              /* Only a person needs the seed explained. A macro of a label has
+                 no age to drift, and the note would just be words about a face
+                 that is not in the frame. */
+              (seg.shot === 'person' ? ` ${SOFT_SEED_NOTE}` : '')
             : undefined,
           seg.shot,
           (run.look ?? null) as LookBible | null,
@@ -538,6 +551,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
           prompt,
           firstFrame: seed,
           aspect: run.aspect,
+          /* Decides the negative prompt. Without it every clip is rendered as
+             though it were a person shot, which is precisely how a bottle got a
+             stranger's face — see videoNegativeFor. */
+          shot: seg.shot,
         });
 
         /*

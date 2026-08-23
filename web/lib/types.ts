@@ -52,6 +52,41 @@ export interface LookBible {
   product: string;
 }
 
+/**
+ * The person, described once, so every shot of them agrees.
+ *
+ * LookBible does this for the room and it is why the SETTING holds across shots
+ * that never see each other. There was no equivalent for the person, so
+ * everything the enrolment captures under-determine — apparent age above all —
+ * was re-decided from scratch on every shot. An ad came back opening on a woman
+ * in her twenties and closing on a visibly older one, and every frame in it
+ * passed the identity check, correctly: age is carried by skin, and skin was the
+ * one facial property no constraint named.
+ *
+ * Read off the ENROLMENT CAPTURES, not off the first generated frame. Reading it
+ * from a frame would make the ad self-consistent around whatever the first shot
+ * happened to do; reading it from the photographs makes it consistent AND right.
+ *
+ * Deliberately TEXT and not a reference image. The obvious fix is to hand later
+ * shots a frame from earlier in the ad, and it works — and it also carries the
+ * staging with it. Measured: shots one and three came back as the same seated
+ * pose in the same crop, differing only in expression, because a reference image
+ * cannot show a face without also showing a composition. A sentence has no
+ * composition to copy.
+ */
+export interface CastingNote {
+  /** e.g. "mid-thirties". A range, because a number invites splitting hairs. */
+  age: string;
+  /** Lines, pores, evenness — the properties that actually encode age. */
+  skin: string;
+  /** Colour, length, how it is worn. */
+  hair: string;
+  /** Including "none", which is the common and easily-lost answer. */
+  makeup: string;
+  /** Glasses, freckles, a mole — whatever a stranger would describe first. */
+  distinctive: string;
+}
+
 export interface PlanStep {
   stepNo: number;
   /** What this shot is of. Absent on runs planned before shot lists existed. */

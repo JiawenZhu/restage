@@ -46,9 +46,30 @@ const GOAL =
   'A creator in her own sunlit kitchen shows how a few drops of a facial oil ' +
   'absorb in seconds, ending on her looking genuinely pleased with her skin.';
 
-const { planRun, generateFrame, submitRender, pollRender, downloadRendered } = await import('../lib/gemini');
+const { castPerson, planRun, generateFrame, submitRender, pollRender, downloadRendered } = await import('../lib/gemini');
 const { stitch } = await import('../lib/stitch');
 const { personShotDirection, objectShotDirection } = await import('../lib/look');
+
+/*
+ * Wait out a quota window instead of losing the ad to one.
+ *
+ * The image quota is a short refill bucket, and this script spends three image
+ * generations and three Veo renders before it has a file. Dying on the last one
+ * throws away everything before it, which is the expensive kind of failure —
+ * Veo renders are the single costliest call in the product.
+ */
+async function patiently<T>(what: string, fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const exhausted = /exhaust|quota|429|RESOURCE_EXHAUSTED/i.test(e instanceof Error ? e.message : String(e));
+      if (!exhausted || attempt >= 5) throw e;
+      console.log(`  … ${what}: quota window full, waiting 90s (${attempt + 1}/5)`);
+      await new Promise((r) => setTimeout(r, 90_000));
+    }
+  }
+}
 
 const P = 'vertex' as const;
 
@@ -58,10 +79,24 @@ const views = (['front', 'left', 'right'] as const).map((a) => ({
 }));
 console.log(`reference: ${views.length} angles from public/img (the site persona)`);
 
+/*
+ * Cast her once, exactly as executeRun does.
+ *
+ * The hero is the page's evidence, so it has to be made the way a customer's ad
+ * is made — including this. Without it the ad drifts in apparent age from shot
+ * to shot, which on a landing page whose claim is "your ads do not look
+ * generated" is the one defect that disproves the headline directly underneath
+ * it. See CastingNote.
+ */
+console.log('\ncasting…');
+const casting = await patiently('casting', () => castPerson(views, P, UID));
+console.log(`  age:  ${casting.age}`);
+console.log(`  skin: ${casting.skin.slice(0, 90)}…`);
+
 /* ── plan ──────────────────────────────────────────────────────────────────── */
 console.log('\nplanning…');
 let t = Date.now();
-const { steps, look } = await planRun(GOAL, '9:16', SECONDS, undefined, undefined, P, UID);
+const { steps, look } = await patiently('plan', () => planRun(GOAL, '9:16', SECONDS, undefined, undefined, P, UID));
 console.log(`  ${steps.length} shots in ${Date.now() - t}ms · ${look?.location?.slice(0, 70)}`);
 
 /* Keep the strongest three and make sure a person is among them — the hero has
@@ -76,16 +111,18 @@ const frames: { bytes: Buffer; mimeType: string; shot: string; label: string }[]
 for (const s of chosen) {
   const isPerson = s.shot === 'person';
   const prompt = isPerson
-    ? `${personShotDirection(look)}\n\nTHE SHOT: ${s.instruction}`
+    ? `${personShotDirection(look, casting)}\n\nTHE SHOT: ${s.instruction}`
     : `${objectShotDirection(s.shot, look)}\n\nTHE SHOT: ${s.instruction}`;
   t = Date.now();
-  const f = await generateFrame({
-    prompt,
-    aspect: '9:16',
-    refs: isPerson ? views : [],
-    provider: P,
-    uid: UID,
-  });
+  const f = await patiently(`frame ${s.stepNo}`, () =>
+    generateFrame({
+      prompt,
+      aspect: '9:16',
+      refs: isPerson ? views : [],
+      provider: P,
+      uid: UID,
+    }),
+  );
   console.log(`  frame ${s.stepNo} [${s.shot}] ${(f.bytes.length / 1024).toFixed(0)}KB in ${Date.now() - t}ms`);
   frames.push({ ...f, shot: s.shot, label: s.label });
 }
@@ -96,14 +133,18 @@ const clips: Buffer[] = [];
 for (const [i, f] of frames.entries()) {
   const motion = f.shot === 'person' ? motionDirection() : objectMotionDirection(f.shot as never, look);
   t = Date.now();
-  const { operation } = await submitRender({
-    prompt: `Photorealistic UGC video clip, 24fps. ${GOAL} Scene focus: ${f.label}. ${motion}`,
-    firstFrame: { data: f.bytes, mimeType: f.mimeType },
-    aspect: '9:16',
-    durationSeconds: 8,
-    provider: P,
-    uid: UID,
-  });
+  const { operation } = await patiently(`clip ${i + 1}`, () =>
+    submitRender({
+      prompt: `Photorealistic UGC video clip, 24fps. ${GOAL} Scene focus: ${f.label}. ${motion}`,
+      firstFrame: { data: f.bytes, mimeType: f.mimeType },
+      aspect: '9:16',
+      durationSeconds: 8,
+      // Face-free shots must say so, or Veo puts a person in the bottle shot.
+      shot: f.shot as never,
+      provider: P,
+      uid: UID,
+    }),
+  );
   let uri: string | null = null;
   for (let k = 0; k < 90; k++) {
     await new Promise((r) => setTimeout(r, 5000));
@@ -126,6 +167,16 @@ const dest = new URL('../public/hero-ad.mp4', import.meta.url);
 writeFileSync(dest, out);
 console.log(`\n✅ public/hero-ad.mp4 — ${(out.length / 1024 / 1024).toFixed(1)}MB, ${frames.length} shots`);
 
-/* A poster, so the card is never empty while the video loads. */
-writeFileSync(new URL('../public/hero-poster.jpg', import.meta.url), frames[frames.length - 1].bytes);
-console.log('✅ public/hero-poster.jpg');
+/*
+ * A poster, so the card is never empty while the video loads.
+ *
+ * THE PERSON SHOT, not the last frame. This took frames[length - 1], which was
+ * fine while the plan happened to end on the person — and the next run planned
+ * scene / person / detail, so the poster became a macro of a drop of oil on a
+ * counter. The card sits directly beside three enrolment portraits under the
+ * words "your face — not a stock actor", and it showed no face at all until the
+ * video started playing.
+ */
+const poster = frames.find((f) => f.shot === 'person') ?? frames[frames.length - 1];
+writeFileSync(new URL('../public/hero-poster.jpg', import.meta.url), poster.bytes);
+console.log(`✅ public/hero-poster.jpg (${poster.shot})`);

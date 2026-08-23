@@ -1,4 +1,5 @@
 import type { ShotKind } from './types';
+import type { TemplateModules } from './modules';
 
 export interface CreativeTemplate {
   id: string;
@@ -21,6 +22,22 @@ export interface CreativeTemplate {
   keywords: string[];
   gradient: string;
   icon: string;
+  /*
+   * What this template changes about how its shots are made.
+   *
+   * Every key is optional and falls back to the registry in lib/modules.ts, so
+   * a template that only wants harder light writes one line. Anything not set
+   * here is inherited, and changing an inherited rule for ALL templates is a
+   * one-line edit to that module's fallback rather than sixteen edits here.
+   *
+   * Three modules are deliberately absent from this type — identity, optics and
+   * anatomy. They are what keep the ad a picture of the actual user, and a
+   * template may not trade the user's face for a look.
+   *
+   * When this is omitted, styleForTemplate derives light and camera from
+   * lightingAndColor / cameraMotion, which is how the original sixteen work.
+   */
+  modules?: TemplateModules;
   presetSteps: {
     label: string;
     instruction: string;
@@ -98,7 +115,7 @@ export const CREATIVE_TEMPLATES: CreativeTemplate[] = [
         shot: 'detail',
         label: 'Label in Full Sun',
         instruction:
-          'Push in macro across the product\'s lettering and surface finish in direct sunlight, shadow inside every letter jet black, fine gray dust settled in the seams.',
+          'Push in macro across the product\'s embossed seam and surface finish in direct sunlight, shadow inside every ridge jet black, fine gray dust settled in the seams.',
         rationale:
           'Sun with no air to soften it renders type and material harder than any studio light, and the dust caught in the seams sells that the product was really taken out there.',
       },
@@ -158,7 +175,7 @@ export const CREATIVE_TEMPLATES: CreativeTemplate[] = [
         shot: 'detail',
         label: 'Halftone Ink Macro',
         instruction:
-          'Push in macro on the lettering across the label until the individual CMYK print dots and a hairline magenta misregistration are visible in the ink.',
+          'Push in macro across the printed colour field of the label until the individual CMYK print dots and a hairline magenta misregistration are visible in the ink.',
         rationale:
           'Real four-color printing only shows its dots this close, and that is the distance where an imitation comic look usually falls apart into smooth digital gradients.',
       },
@@ -244,7 +261,7 @@ export const CREATIVE_TEMPLATES: CreativeTemplate[] = [
         instruction:
           'Macro on the product label with hard venetian-blind shadow bars raking diagonally across it, dust drifting through the shafts of light.',
         rationale:
-          'Striping the lettering with blinds forces a slow read of the product name and does it with the room\'s own light, so no graphic overlay is needed.',
+          'Striping the label with blinds forces a slow read of the product form and does it with the room\'s own light, so no graphic overlay is needed.',
       },
       {
         shot: 'person',
@@ -294,7 +311,7 @@ export const CREATIVE_TEMPLATES: CreativeTemplate[] = [
         shot: 'detail',
         label: 'Label In Macro',
         instruction:
-          'Fill the frame with the product\'s lettering and surface texture in macro, mustard and powder-blue reflections sliding across it under soft warm grain.',
+          'Fill the frame with the product\'s label grain and surface texture in macro, mustard and powder-blue reflections sliding across it under soft warm grain.',
         rationale:
           'This is the closest anyone gets to handling the thing — printed edge, weave, finish — and it is the shot that answers whether the product is actually nice.',
       },
@@ -520,9 +537,9 @@ export const CREATIVE_TEMPLATES: CreativeTemplate[] = [
       },
       {
         shot: 'detail',
-        label: 'Lettering In Raking Sun',
+        label: 'Surface In Raking Sun',
         instruction:
-          'Push in macro on the front of the product, surface grain and lettering edge-lit by the low sun, with a crimson banner rippling out of focus behind and spilling red into the highlights.',
+          'Push in macro on the front of the product, surface grain and the embossed label edge lit by the low sun, with a crimson banner rippling out of focus behind and spilling red into the highlights.',
         rationale:
           'This is the only frame where the name can actually be read, and the moving red behind stops a static macro from looking like a catalogue photo.',
       },
@@ -598,7 +615,7 @@ export const CREATIVE_TEMPLATES: CreativeTemplate[] = [
         shot: 'detail',
         label: 'Label Under Neon',
         instruction:
-          'Track macro across the product\'s lettering and surface texture with electric yellow light raking edge to edge and cyan particles drifting out of focus behind.',
+          'Track macro across the product\'s label grain and surface texture with electric yellow light raking edge to edge and cyan particles drifting out of focus behind.',
         rationale:
           'Close enough to read the name and judge the finish, which is what a viewer needs settled before being asked to want the thing.',
       },
@@ -666,7 +683,7 @@ export const CREATIVE_TEMPLATES: CreativeTemplate[] = [
         shot: 'detail',
         label: 'Label Under Neon',
         instruction:
-          'Push in macro on the product label, catching lettering, seams, and beads of rain with a hard cel-shaded highlight tracing the edge.',
+          'Push in macro on the product label, catching the label grain, seams, and beads of rain with a hard cel-shaded highlight tracing the edge.',
         rationale:
           'Neon flattens everything at distance, so macro is the only place the label is legible and the finish reads as a real object under stylized light.',
       },
@@ -822,7 +839,7 @@ export const AD_FORMAT_TEMPLATES: CreativeTemplate[] = [
         shot: 'detail',
         label: 'Tissue parting',
         instruction:
-          'Go macro on tissue paper folding back inside the box, with printed lettering on the inner lid just readable at the edge of frame.',
+          'Go macro on tissue paper folding back inside the box, with the embossed pattern on the inner lid catching light at the edge of frame.',
         rationale:
           'Packaging texture is how a cheap product and an expensive one tell themselves apart on camera.',
       },
@@ -846,7 +863,7 @@ export const AD_FORMAT_TEMPLATES: CreativeTemplate[] = [
         shot: 'detail',
         label: 'Label, sharp',
         instruction:
-          'Fill the frame with the product label, lettering crisp, steadied by fingertips at the edge.',
+          'Fill the frame with the product label, its surface grain and edge crisp, steadied by fingertips at the edge.',
         rationale:
           'Nobody goes looking for a product whose name they could not read.',
       },
@@ -896,7 +913,7 @@ export const AD_FORMAT_TEMPLATES: CreativeTemplate[] = [
         instruction:
           'Stand the product on the mark in the same flat light, steadied upright by one hand, label square to the lens and sharp.',
         rationale:
-          'Somewhere in the middle a viewer asks what did this. This is the one frame that answers it, and the only one where the lettering has to be readable.',
+          'Somewhere in the middle a viewer asks what did this. This is the one frame that answers it, and the only one where the product itself has to be seen up close.',
       },
       {
         shot: 'detail',
@@ -967,7 +984,7 @@ export const AD_FORMAT_TEMPLATES: CreativeTemplate[] = [
         shot: 'detail',
         label: 'Label, close',
         instruction:
-          'Macro on the front of the product: lettering and surface finish sharp, everything behind it thrown out of focus.',
+          'Macro on the front of the product: surface grain and finish sharp, everything behind it thrown out of focus.',
         rationale:
           'Spoken claims get discounted, and a viewer who cannot read the name has nothing to go searching for afterwards.',
       },

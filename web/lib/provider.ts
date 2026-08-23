@@ -292,12 +292,55 @@ export function scrub(message: string): string {
  */
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
+/*
+ * The key that user API keys are encrypted with at rest.
+ *
+ * This briefly had two fallbacks, and both of them quietly turned "encrypted"
+ * into "obfuscated":
+ *
+ *   FIREBASE_SERVICE_ACCOUNT_JSON.slice(0, 32) — the first 32 characters of a
+ *   service-account JSON are '{"type": "service_account","pr'. That is the same
+ *   string in every Firebase project on earth. It looks like a secret because it
+ *   comes from a secret; it carries essentially no entropy.
+ *
+ *   'restage-studio-byok-key-secret-2026' — a literal, in the repository, in
+ *   every built image. Anyone who can read either can decrypt every key we hold.
+ *
+ * What makes this worse than a normal weak default is that the modal tells the
+ * user "verified & securely encrypted for your account!" while it happens. A
+ * silent fallback here converts that sentence into a false statement, and the
+ * thing being protected is a credential that bills to the user's own card.
+ *
+ * So: a real secret, or nothing. Refusing to store a key we cannot protect is
+ * the correct failure, and it is a loud one — a 500 from /api/account/key with
+ * the variable named — rather than a save that appears to work.
+ *
+ * Local development keeps a working default because there is nothing at risk
+ * there and needing a secret to run the app is how people end up committing
+ * one. It warns each time so it cannot be mistaken for a configured system.
+ */
+let warnedAboutDevSecret = false;
+
 function encryptionKey(): Buffer {
-  const secret =
-    process.env.RESTAGE_KEY_SECRET ||
-    process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.slice(0, 32) ||
-    'restage-studio-byok-key-secret-2026';
-  return scryptSync(secret, 'restage.provider.v1', 32);
+  const secret = process.env.RESTAGE_KEY_SECRET;
+  if (secret && secret.length >= 16) return scryptSync(secret, 'restage.provider.v1', 32);
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'RESTAGE_KEY_SECRET is not set (or is shorter than 16 characters), so a user-supplied API ' +
+        'key cannot be encrypted. Set it on the server — storing someone else\'s billable ' +
+        'credential under a key that ships inside the image is not an acceptable alternative.',
+    );
+  }
+
+  if (!warnedAboutDevSecret) {
+    warnedAboutDevSecret = true;
+    console.warn(
+      '[provider] RESTAGE_KEY_SECRET is not set. Using a development-only encryption key — ' +
+        'saved API keys on this machine are NOT meaningfully protected.',
+    );
+  }
+  return scryptSync('restage.local.development.only', 'restage.provider.v1', 32);
 }
 
 export function encryptSecret(plain: string): string {
@@ -345,8 +388,31 @@ export function forgetUserKey(uid: string): void {
  * The key to spend for this user.
  */
 export async function apiKeyFor(uid?: string, overrideKey?: string): Promise<string> {
-  if (overrideKey && looksLikeGoogleKey(overrideKey)) {
-    return overrideKey.trim();
+  /*
+   * A key the caller supplied wins — but a MALFORMED one is an error, not a
+   * shrug.
+   *
+   * This read `if (overrideKey && looksLikeGoogleKey(overrideKey))`, so a key
+   * that failed the shape test fell straight through to GEMINI_API_KEY: the
+   * house key. The user has pasted a credential, been shown a working app, and
+   * is spending our quota on the belief that they are spending their own. Both
+   * halves of that are bad, and neither is visible to anybody.
+   *
+   * It is a live risk rather than a theoretical one because the shape test is a
+   * guess about Google's formats. It already had to be widened once, when keys
+   * starting 'AQ.' appeared alongside 'AIza'. The next format Google ships will
+   * fail it too, and this branch decides whether that reads as "check your key"
+   * or as a silent transfer of the bill.
+   */
+  if (overrideKey?.trim()) {
+    const trimmed = overrideKey.trim();
+    if (!looksLikeGoogleKey(trimmed)) {
+      throw new Error(
+        'That does not look like a Google AI Studio API key. Keys begin with "AIza" or "AQ." — ' +
+          'get one free at aistudio.google.com/apikey.',
+      );
+    }
+    return trimmed;
   }
 
   if (uid) {

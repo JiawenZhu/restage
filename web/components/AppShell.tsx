@@ -124,6 +124,10 @@ export function AppShell({
           <Link href="/library" className="rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle">
             Library
           </Link>
+          <Link href="/portfolio" className="rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle flex items-center gap-1">
+            <span>Portfolio</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+          </Link>
           <Link href="/avatars" className="rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle">
             Avatars
           </Link>
@@ -234,6 +238,7 @@ export function AppShell({
           {[
             ['/studio', 'New run'],
             ['/library', 'Library'],
+            ['/portfolio', 'UGC Portfolio'],
             ['/avatars', 'Avatars'],
           ].map(([href, label]) => (
             <Link

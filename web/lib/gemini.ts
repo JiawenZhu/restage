@@ -17,8 +17,8 @@ if (typeof window !== 'undefined') {
 }
 
 import { getTemplateById } from './templates';
-import { VIDEO_NEGATIVE_PROMPT } from './look';
-import type { LookBible, ShotKind } from './types';
+import { videoNegativeFor } from './look';
+import type { CastingNote, LookBible, ShotKind } from './types';
 import { fetchJson, HttpError, withRetry } from './backoff';
 import {
   MODELS,
@@ -138,6 +138,13 @@ export interface RenderRequest {
   aspect: Aspect;
   /** Clip length. The fast Veo model's ceiling is 8s; see MAX_CLIP_SECONDS. */
   durationSeconds?: number;
+  /*
+   * What the shot is OF, which decides the negative prompt — see
+   * videoNegativeFor. Defaulting to 'person' is the safe direction: it only
+   * ever omits the face-exclusion terms, so a caller that forgets gets today's
+   * behaviour rather than a person shot with the face suppressed out of it.
+   */
+  shot?: ShotKind;
   /** Which door. Omitted means DEFAULT_PROVIDER — see the note at the top. */
   provider?: Provider;
   /** Whose key, on the BYOK door. */
@@ -262,7 +269,7 @@ export async function submitRender(req: RenderRequest): Promise<{ operation: str
           aspectRatio: req.aspect,
           durationSeconds: seconds,
           resolution: veoResolution(seconds),
-          negativePrompt: VIDEO_NEGATIVE_PROMPT,
+          negativePrompt: videoNegativeFor(req.shot ?? 'person'),
         },
       },
       label: 'veo:submit',
@@ -514,7 +521,8 @@ decision you make:
 
   person  — the creator is in frame.
   product — the item is the subject. Hands may hold or steady it. No face, no head.
-  detail  — macro. Texture, lettering, a mechanism, the thing turning. Nobody.
+  detail  — macro. Texture, material, a mechanism, the thing turning. Nobody.
+            Not lettering: packaging in this ad carries no printing.
   scene   — the place. Establishing, atmosphere, b-roll. Nobody in frame.
 
 AT MOST HALF THE SHOTS MAY BE 'person', and about a third is better. This is not a
@@ -531,6 +539,14 @@ Order it like an edit, not a checklist: open on something that earns attention,
 put a human beat where the ad needs warmth or credibility, put the detail where a
 viewer would want a closer look, and land the payoff last.
 
+CAUSAL ORDER. The shots are cut in the order you write them, so the world has to
+move forwards through them and never backwards. Whatever the product does to
+something, it is undone in no later shot: unopened comes before poured, poured
+before applied, applied before the result. If the ad has a before-and-after, the
+before is a genuine before. A viewer who sees the finished skin in shot two and
+the untouched skin in shot five has watched time run backwards, and that reads as
+a mistake even when every individual shot is beautiful.
+
 For each shot write:
 - shot: one of the four kinds above
 - label: 2-4 words for a thumbnail caption ("Steam rising", "Label close", "First
@@ -546,7 +562,14 @@ These shots are photographed independently, so nothing is inherited between them
 The look is the contract that makes them read as one afternoon in one place:
 location, wardrobe, light, palette, and the product itself described concretely
 enough that every shot of it agrees. Be specific — "a pale oak kitchen counter
-with a window to the left" is usable; "a modern kitchen" is not.`;
+with a window to the left" is usable; "a modern kitchen" is not.
+
+Two things the look must fix, because independent shots get them wrong otherwise:
+- WHICH SIDE things are on. "A window to the LEFT of the counter" — the shots are
+  filmed separately and will otherwise put it on a different side each time.
+- The product carries NO printing. Describe it by shape, colour, material and
+  closure — "a small amber glass dropper bottle with a matte black cap and a
+  blank cream label". Never invent a brand name or any wording on it.`;
 
 export interface PlannedShot {
   stepNo: number;
@@ -620,7 +643,7 @@ export async function planRun(
    * genuinely needs the same treatment.
    */
   const tasteContext =
-    avoid && avoid.length
+    Array.isArray(avoid) && avoid.length
       ? `\n\nThis person has previously rejected frames produced by these instructions:\n` +
         avoid.slice(0, 8).map((a) => `  - ${a}`).join('\n') +
         `\nTreat that as evidence about their taste. Prefer different choices where the goal allows, ` +
@@ -819,7 +842,28 @@ export async function critique(args: {
                       (args.subject && args.subject !== 'person'
                         ? `This shot is a ${args.subject} shot: there is deliberately NO PERSON in the frame. ` +
                           'Do not treat the absence of a face as a defect — it is the brief. Set faceMatches true ' +
-                          'and continuityHeld true, and judge only whether the described photograph was made well.'
+                          'and continuityHeld true, and judge only whether the described photograph was made well.\n' +
+                          /*
+                           * The other half of that sentence, which was missing, and
+                           * the gap reached the live landing page.
+                           *
+                           * The hero's middle shot is a `product` step — a dropper
+                           * bottle — and the finished clip is dominated by a
+                           * woman's face in profile, a DIFFERENT woman from the
+                           * shot after it. Nothing rejected it: this instruction
+                           * disarmed the only face gate there is by handing the
+                           * critic faceMatches:true, and the orchestrator's own
+                           * wrongFace test begins `isPerson &&`, so it cannot fire
+                           * on an object shot either. A face-free shot was the one
+                           * kind of shot where a face could appear unchallenged.
+                           *
+                           * Routed through `failed` rather than a new schema field
+                           * on purpose — the orchestrator already retries a failed
+                           * verdict, so this needs no new plumbing to act on.
+                           */
+                          'A face that IS present, however, is a hard failure. If any human face, head ' +
+                          'or recognisable portrait appears anywhere in AFTER, return verdict "failed" ' +
+                          'and say so in notes — no matter how well the rest of the photograph was made.'
                         : args.isContinuation
                           ? 'AFTER is an edit of BEFORE and must be continuous with it. Judge the edit, the identity, and the continuity.'
                           : 'AFTER is its own photograph, not an edit of BEFORE. Set continuityHeld true and leave ' +
@@ -953,6 +997,86 @@ export async function verifyIdentity(
   if (!text) throw new Error('identity check returned nothing');
   const parsed = JSON.parse(text) as IdentityCheck & { featuresA: string; featuresB: string };
   return { differences: parsed.differences, samePerson: parsed.samePerson };
+}
+
+/* ── casting ──────────────────────────────────────────────────────────────── */
+
+const CASTING_SYSTEM = `You are a casting director writing the one-paragraph note
+that goes to a photographer who will shoot this person but has not met them.
+
+You are looking at enrolment photographs of a real person from several angles.
+Describe ONLY what is visible. This note exists so that shots taken hours apart
+agree with each other, so vagueness is the failure mode: "young woman" tells the
+photographer nothing and lets every shot land somewhere different.
+
+AGE AND SKIN ARE THE POINT. They are the properties that drift when they are not
+written down, and drifting age reads to a viewer as a different person. Give an
+age as a decade or half-decade range. For skin, say what is actually there —
+where there are fine lines and where there are not, how even the tone is, how
+much texture is visible. Both directions matter: an unrecorded line gets erased
+just as easily as an absent one gets invented.
+
+Be accurate rather than flattering. This is not copy; nobody outside the
+pipeline will ever read it, and a description that quietly shaves ten years off
+produces shots the person will not recognise as themselves.`;
+
+/**
+ * Read the person off their enrolment captures, once per run.
+ *
+ * @see CastingNote for why this is text rather than a reference frame.
+ */
+export async function castPerson(
+  views: { data: Buffer | Uint8Array; mimeType: string }[],
+  provider: Provider = DEFAULT_PROVIDER,
+  uid?: string,
+  apiKey?: string,
+): Promise<CastingNote> {
+  const { headers, query } = await authFor(provider, uid, apiKey);
+  const json = await withRetry(
+    () =>
+      fetchJson(
+        `${baseFor(provider)}/models/${MODELS[provider].judge}:generateContent${query}`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: CASTING_SYSTEM }] },
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  ...views.map((v) => ({
+                    inlineData: { mimeType: v.mimeType, data: Buffer.from(v.data).toString('base64') },
+                  })),
+                  { text: 'Write the casting note for this person.' },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0,
+              responseSchema: {
+                type: 'object',
+                properties: {
+                  age: { type: 'string' },
+                  skin: { type: 'string' },
+                  hair: { type: 'string' },
+                  makeup: { type: 'string' },
+                  distinctive: { type: 'string' },
+                },
+                required: ['age', 'skin', 'hair', 'makeup', 'distinctive'],
+                propertyOrdering: ['age', 'skin', 'hair', 'makeup', 'distinctive'],
+              },
+            },
+          }),
+        },
+        scrub,
+      ),
+    { label: 'casting' },
+  );
+  const text = firstText(json);
+  if (!text) throw new Error('casting returned nothing');
+  return JSON.parse(text) as CastingNote;
 }
 
 /* ── prompt refinement ────────────────────────────────────────────────────── */
@@ -1109,7 +1233,7 @@ Then say what each shot is OF:
 
   person   the creator is in frame — a face is visible
   product  the item is the subject; hands may hold it, no face
-  detail   macro — texture, lettering, a mechanism
+  detail   macro — texture, material, a mechanism
   scene    the place, nobody in it
 
 Judge that from what the instruction actually describes, not from where the shot

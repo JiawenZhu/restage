@@ -6,6 +6,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from '@/lib/auth-context';
 import { AuthModal } from './AuthModal';
 import { ApiKeyModal } from './ApiKeyModal';
+import { PricingModal } from './PricingModal';
 
 export function AppShell({
   children,
@@ -22,6 +23,8 @@ export function AppShell({
   const { user, loading, logout } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const [pricingModalOpen, setPricingModalOpen] = useState(false);
+  const [isWelcomePrompt, setIsWelcomePrompt] = useState(false);
   const [keyMask, setKeyMask] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
@@ -41,22 +44,41 @@ export function AppShell({
     return () => window.removeEventListener('rs-key-changed', checkKey);
   }, []);
 
+  /* Post-login check: If user logs in and has no API key configured, prompt them automatically. */
   useEffect(() => {
     if (!user) return;
+    let active = true;
+
     (async () => {
       try {
         const token = await user.getIdToken();
         const res = await fetch('/api/account/key', {
           headers: { authorization: `Bearer ${token}` },
         });
+        if (!active) return;
+
+        let hasAccountKey = false;
         if (res.ok) {
           const data = await res.json();
           if (data.keyPreview) {
+            hasAccountKey = true;
             setKeyMask(data.keyPreview);
           }
         }
+
+        const localKey = typeof window !== 'undefined' ? localStorage.getItem('rs-gemini-key') : null;
+        const dismissed = typeof window !== 'undefined' ? sessionStorage.getItem('rs-key-prompt-dismissed') : null;
+
+        if (!hasAccountKey && (!localKey || localKey.length < 20) && !dismissed) {
+          setIsWelcomePrompt(true);
+          setApiKeyModalOpen(true);
+        }
       } catch {}
     })();
+
+    return () => {
+      active = false;
+    };
   }, [user]);
 
   const openSignIn = () => {
@@ -105,6 +127,16 @@ export function AppShell({
           <Link href="/avatars" className="rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle">
             Avatars
           </Link>
+          <button
+            type="button"
+            onClick={() => setPricingModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle transition-colors"
+          >
+            <span>Pricing</span>
+            <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent-ink">
+              $5/mo
+            </span>
+          </button>
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
@@ -123,7 +155,10 @@ export function AppShell({
           {/* Gemini API Key Button */}
           <button
             type="button"
-            onClick={() => setApiKeyModalOpen(true)}
+            onClick={() => {
+              setIsWelcomePrompt(false);
+              setApiKeyModalOpen(true);
+            }}
             className="flex items-center gap-1.5 rounded-lg border border-line bg-subtle/80 px-2.5 py-1.5 text-xs font-semibold text-ink-2 hover:border-accent/50 hover:bg-subtle hover:text-ink transition-all"
             title="Configure your Google Gemini API Key"
           >
@@ -214,6 +249,20 @@ export function AppShell({
             type="button"
             onClick={() => {
               setNavOpen(false);
+              setPricingModalOpen(true);
+            }}
+            className="flex items-center gap-2 rounded-md px-2 py-2.5 text-[14px] font-medium text-ink-2 hover:bg-subtle text-left"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
+            Pricing ($5/mo Cloud Storage)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setNavOpen(false);
+              setIsWelcomePrompt(false);
               setApiKeyModalOpen(true);
             }}
             className="flex items-center gap-2 rounded-md px-2 py-2.5 text-[14px] font-medium text-accent-ink hover:bg-subtle text-left"
@@ -236,7 +285,21 @@ export function AppShell({
 
       <ApiKeyModal
         open={apiKeyModalOpen}
-        onClose={() => setApiKeyModalOpen(false)}
+        onClose={() => {
+          setApiKeyModalOpen(false);
+          setIsWelcomePrompt(false);
+        }}
+        onOpenPricing={() => setPricingModalOpen(true)}
+        isWelcomePrompt={isWelcomePrompt}
+      />
+
+      <PricingModal
+        open={pricingModalOpen}
+        onClose={() => setPricingModalOpen(false)}
+        onOpenApiKey={() => {
+          setIsWelcomePrompt(false);
+          setApiKeyModalOpen(true);
+        }}
       />
     </div>
   );

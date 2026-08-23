@@ -42,16 +42,19 @@ const STEPS = [
  */
 const PLANS = [
   {
-    name: 'Free while in beta',
-    price: 'Free',
-    meta: 'Everything below, at no cost',
+    name: 'Creator Membership',
+    price: '$5',
+    meta: '/ month (billed monthly or $50/yr)',
     features: [
-      'Enrol your face once and reuse it',
-      'The full plan, version tree and critic verdicts',
-      '9:16 and 16:9, up to 8-second clips',
-      'Every attempt kept — including the discarded ones',
+      'Bring Your Own Gemini Key (0% AI compute markup)',
+      'Cloudflare R2 high-speed video storage & download URLs',
+      'Multi-angle face likeness profiles (enrol once, reuse forever)',
+      'Unlimited storyboards, version trees, & critic retries',
+      'Multi-shot video stitching with audio muxing & styled captions',
+      'Veo 3.1 & Gemini Omni video in 9:16 vertical & 16:9 landscape',
+      'AES-256-GCM encrypted server-side key security',
     ],
-    cta: 'Start free',
+    cta: 'Start with Restage — $5/mo',
     featured: true,
   },
 ];
@@ -424,11 +427,14 @@ export default function Landing() {
               <p className="mt-1 text-sm text-ink-3">{p.meta}</p>
               <ul className="mt-6 flex flex-col gap-2.5 text-[14.5px] text-ink-2">
                 {p.features.map((f) => (
-                  <li key={f}>{f}</li>
+                  <li key={f} className="flex items-start gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-ok shrink-0 mt-1">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span>{f}</span>
+                  </li>
                 ))}
               </ul>
-              {/* This was a div. Every pricing CTA on the page was unclickable —
-                  the one control a visitor is most likely to reach for. */}
               <Link
                 href="/enroll"
                 className={`mt-7 block rounded-[9px] py-3 text-center text-sm font-semibold ${p.featured ? 'bg-accent-strong text-white' : 'border border-line-strong'}`}
@@ -438,17 +444,27 @@ export default function Landing() {
             </div>
           ))}
 
-          {/* What is not free yet, said plainly rather than priced with a
-              placeholder. */}
-          <div className="rounded-2xl border border-dashed border-line-strong p-8">
-            <p className="text-[15px] font-bold">Later</p>
-            <p className="mt-3.5 text-[17px] font-medium leading-snug text-ink-2">
-              Team seats, shared avatars, longer stitched clips and API delivery.
-            </p>
-            <p className="mt-4 text-sm leading-relaxed text-ink-3">
-              None of it is built yet, so none of it is priced. While Restage is in beta everything that
-              works is free.
-            </p>
+          {/* BYOK & Cloud Storage Explainer Card */}
+          <div className="flex flex-col justify-between rounded-2xl border border-line bg-panel/70 p-8">
+            <div>
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-[11px] font-bold text-accent-ink border border-accent/20">
+                BYOK PHILOSOPHY
+              </div>
+              <p className="mt-4 text-[18px] font-bold text-ink">Why only $5/month?</p>
+              <p className="mt-2.5 text-sm leading-relaxed text-ink-2">
+                Traditional AI video platforms charge $30–$80/month and markup your generation credits by 500%.
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-ink-3">
+                Restage connects directly to your free Google Gemini API key. We only charge a flat $5/month for high-speed Cloudflare R2 video storage, avatar likeness database, and multi-shot timeline stitching.
+              </p>
+            </div>
+
+            <div className="mt-6 border-t border-line pt-4 text-xs text-ink-3 flex items-center gap-2">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-ok shrink-0">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              <span>Cancel anytime with 1 click · No hidden credit limits</span>
+            </div>
           </div>
         </div>
       </section>

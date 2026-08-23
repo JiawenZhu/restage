@@ -22,6 +22,7 @@ import type { LookBible, ShotKind } from './types';
 import { fetchJson, HttpError, withRetry } from './backoff';
 import {
   MODELS,
+  apiKeyFor,
   authFor,
   baseFor,
   generateContent,
@@ -342,9 +343,13 @@ export async function downloadRendered(
   const headers: Record<string, string> = {};
   if (provider === 'vertex' && videoUri.includes('googleapis.com')) {
     headers['Authorization'] = `Bearer ${await vertexToken()}`;
-  } else if (provider === 'api-key' && videoUri.includes('googleapis.com') && !videoUri.includes('key=')) {
-    const { query } = await authFor('api-key', uid, apiKey);
-    videoUri = `${videoUri}${query}`;
+  } else if (provider === 'api-key') {
+    const resolvedKey = await apiKeyFor(uid, apiKey);
+    headers['x-goog-api-key'] = resolvedKey;
+    if (videoUri.includes('googleapis.com') && !videoUri.includes('key=')) {
+      const sep = videoUri.includes('?') ? '&' : '?';
+      videoUri = `${videoUri}${sep}key=${encodeURIComponent(resolvedKey)}`;
+    }
   }
 
   const res = await fetch(videoUri, { headers });

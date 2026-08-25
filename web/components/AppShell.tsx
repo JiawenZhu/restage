@@ -133,8 +133,9 @@ export function AppShell({
             className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium text-ink-2 hover:bg-subtle transition-colors"
           >
             <span>Pricing</span>
-            <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent-ink">
-              $5/mo
+            <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent-ink flex items-center gap-1">
+              <span className="line-through opacity-60 decoration-danger decoration-[1.5px]">$5</span>
+              <span>$0/mo</span>
             </span>
           </button>
         </nav>
@@ -256,7 +257,7 @@ export function AppShell({
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
-            Pricing ($5/mo Cloud Storage)
+            <span>Pricing (<span className="line-through opacity-60 decoration-danger decoration-[1.5px] mr-1">$5</span>$0/mo Free Beta)</span>
           </button>
           <button
             type="button"

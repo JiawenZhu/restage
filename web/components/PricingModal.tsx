@@ -90,16 +90,22 @@ export function PricingModal({ open, onClose, onOpenApiKey }: PricingModalProps)
         {/* Pricing Card */}
         <div className="mt-6 rounded-2xl border-2 border-accent bg-panel p-6 shadow-[0_16px_40px_-20px_rgba(57,135,229,0.35)]">
           <div className="flex items-baseline justify-between">
-            <div>
-              <span className="text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">
+            <div className="flex items-baseline gap-2.5">
+              <span className="text-2xl font-bold tracking-tight text-ink-3 line-through decoration-danger decoration-[3px] sm:text-3xl">
                 {annual ? '$50' : '$5'}
               </span>
-              <span className="ml-2 text-sm font-medium text-ink-3">
-                {annual ? '/ year ($4.16/mo)' : '/ month'}
+              <span className="text-4xl font-extrabold tracking-tight text-accent sm:text-5xl">
+                $0
+              </span>
+              <span className="ml-1 text-xs font-semibold text-ok bg-ok/20 px-2 py-0.5 rounded-md">
+                100% FREE
+              </span>
+              <span className="ml-1 text-xs font-medium text-ink-3">
+                {annual ? '/ year (Hackathon Beta)' : '/ month (Hackathon Beta)'}
               </span>
             </div>
             <span className="rounded-full bg-accent-strong px-2.5 py-0.5 text-[11px] font-bold tracking-wide text-white">
-              FLAT RATE
+              HACKATHON OFFER
             </span>
           </div>
 
@@ -113,10 +119,10 @@ export function PricingModal({ open, onClose, onOpenApiKey }: PricingModalProps)
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 2l-2 2m-1-1l-2 2m-2-2l-2 2m-2-2l-2 2M3 21l9-9m3.5-3.5a4.95 4.95 0 1 0-7-7 4.95 4.95 0 0 0 7 7z" />
               </svg>
-              Why Bring Your Own Key (BYOK)?
+              Why Bring Your Own Key (BYOK) + $0 Hackathon Access?
             </div>
             <p className="mt-1 text-ink-3 leading-relaxed">
-              Google provides generous free AI generation quotas directly via Google AI Studio. Instead of marking up credits by 500% like other tools, you use your own key for $0 AI compute markup and only pay $5/mo for our cloud storage & rendering pipeline.
+              Google provides generous free AI generation quotas directly via Google AI Studio. During the Hackathon evaluation period, we are waiving our standard $5/month cloud storage fee so judges and creators can test Restage 100% free ($0).
             </p>
           </div>
 
@@ -152,7 +158,7 @@ export function PricingModal({ open, onClose, onOpenApiKey }: PricingModalProps)
                 disabled={loading}
                 className="w-full rounded-xl bg-primary py-3 text-center text-sm font-bold text-primary-ink shadow-lg transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                {loading ? 'Setting up Cloud Access…' : annual ? 'Start Annual Membership ($50/year)' : 'Start Membership ($5/month)'}
+                {loading ? 'Activating Free Cloud Access…' : 'Activate Free Hackathon Access ($0)'}
               </button>
             )}
           </div>

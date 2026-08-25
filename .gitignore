@@ -41,3 +41,9 @@ web/public/templates/.generating
 *.tsbuildinfo
 *.log
 firebase-debug.log
+
+# Hackathon submission video production assets and renders
+hackathon-video/
+*.wav
+probe/
+

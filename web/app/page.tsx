@@ -43,8 +43,9 @@ const STEPS = [
 const PLANS = [
   {
     name: 'Creator Membership',
-    price: '$5',
-    meta: '/ month (billed monthly or $50/yr)',
+    originalPrice: '$5',
+    price: '$0',
+    meta: '/ month · Free during Hackathon & Beta ($5/mo value)',
     features: [
       'Bring Your Own Gemini Key (0% AI compute markup)',
       'Cloudflare R2 high-speed video storage & download URLs',
@@ -54,7 +55,7 @@ const PLANS = [
       'Veo 3.1 & Gemini Omni video in 9:16 vertical & 16:9 landscape',
       'AES-256-GCM encrypted server-side key security',
     ],
-    cta: 'Start with Restage — $5/mo',
+    cta: 'Start with Restage — Free ($0)',
     featured: true,
   },
 ];
@@ -417,13 +418,21 @@ export default function Landing() {
             >
               {p.featured && (
                 <span className="absolute -top-[11px] left-8 rounded-chip bg-accent-strong px-3 py-1 text-[11px] font-bold tracking-[0.07em] text-white">
-                  FOR CREATORS
+                  LIMITED TIME: $0 (WAS $5/MO)
                 </span>
               )}
               <p className="text-[15px] font-bold">{p.name}</p>
-              <p className="tnum mt-3.5 text-[44px] font-black tracking-[-0.04em]">
-                {p.price}
-              </p>
+              <div className="mt-3.5 flex items-baseline gap-2.5">
+                <span className="tnum text-[32px] font-bold tracking-[-0.04em] text-ink-3 line-through decoration-danger decoration-[3px]">
+                  {p.originalPrice}
+                </span>
+                <span className="tnum text-[48px] font-black tracking-[-0.04em] text-accent">
+                  {p.price}
+                </span>
+                <span className="rounded-md bg-ok/20 px-2 py-0.5 text-xs font-bold text-ok">
+                  100% OFF
+                </span>
+              </div>
               <p className="mt-1 text-sm text-ink-3">{p.meta}</p>
               <ul className="mt-6 flex flex-col gap-2.5 text-[14.5px] text-ink-2">
                 {p.features.map((f) => (
@@ -448,14 +457,16 @@ export default function Landing() {
           <div className="flex flex-col justify-between rounded-2xl border border-line bg-panel/70 p-8">
             <div>
               <div className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-[11px] font-bold text-accent-ink border border-accent/20">
-                BYOK PHILOSOPHY
+                HACKATHON LAUNCH OFFER
               </div>
-              <p className="mt-4 text-[18px] font-bold text-ink">Why only $5/month?</p>
+              <p className="mt-4 text-[18px] font-bold text-ink">
+                Free $0 Access <span className="text-xs font-normal text-ink-3 line-through">(Standard $5/mo)</span>
+              </p>
               <p className="mt-2.5 text-sm leading-relaxed text-ink-2">
                 Traditional AI video platforms charge $30–$80/month and markup your generation credits by 500%.
               </p>
               <p className="mt-3 text-sm leading-relaxed text-ink-3">
-                Restage connects directly to your free Google Gemini API key. We only charge a flat $5/month for high-speed Cloudflare R2 video storage, avatar likeness database, and multi-shot timeline stitching.
+                Restage connects directly to your free Google Gemini API key. During the Hackathon evaluation period, we are waiving our standard $5/month cloud storage and timeline processing fee — enjoy 100% free ($0) access!
               </p>
             </div>
 
@@ -463,7 +474,7 @@ export default function Landing() {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-ok shrink-0">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
-              <span>Cancel anytime with 1 click · No hidden credit limits</span>
+              <span>No credit card required · Free during Hackathon evaluation</span>
             </div>
           </div>
         </div>

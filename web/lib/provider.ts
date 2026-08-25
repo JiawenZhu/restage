@@ -430,8 +430,15 @@ export async function apiKeyFor(uid?: string, overrideKey?: string): Promise<str
     }
   }
 
+  if (uid) {
+    throw new Error(
+      'Please configure your Google Gemini API key to start generating. Get one free at aistudio.google.com/apikey.',
+    );
+  }
+
+  // Internal CLI / background maintenance scripts only (when no user is present)
   const ours = process.env.GEMINI_API_KEY;
-  if (ours) return ours.trim();
+  if (ours && process.env.NODE_ENV !== 'production') return ours.trim();
 
   throw new Error(
     'No Gemini API key is configured. Please provide your Google AI Studio API key (get one free at aistudio.google.com/apikey).',

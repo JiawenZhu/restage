@@ -47,3 +47,4 @@ hackathon-video/
 *.wav
 probe/
 
+.firebase/

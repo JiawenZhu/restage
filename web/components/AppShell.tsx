@@ -69,7 +69,7 @@ export function AppShell({
         const localKey = typeof window !== 'undefined' ? localStorage.getItem('rs-gemini-key') : null;
         const dismissed = typeof window !== 'undefined' ? sessionStorage.getItem('rs-key-prompt-dismissed') : null;
 
-        if (!hasAccountKey && (!localKey || localKey.length < 20) && !dismissed) {
+        if (!hasAccountKey && (!localKey || localKey.length < 20)) {
           setIsWelcomePrompt(true);
           setApiKeyModalOpen(true);
         }

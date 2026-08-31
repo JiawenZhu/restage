@@ -267,5 +267,3 @@ gcloud run deploy restage \
 ## License
 
 This project is open-source and licensed under the [MIT License](LICENSE).
-
-Copyright (c) 2026 Jiawen Zhu
